@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-09-12 — Platform Audit: Dashboard + DB Fixes
+
+### Dashboard (dashboard/index.html)
+- **Error handling:** `reviewAction()` and `modalAction()` now wrapped in try/catch — approval failures show an error toast instead of silently doing nothing
+- **Bulk approve/reject:** Review tab now has Select mode — checkbox per clip, "Approve Selected" / "Reject Selected" bulk bar, same UX pattern as Library bulk actions
+- **Date on video cards:** `created_at` (YYYY-MM-DD) now visible in video card metadata row in Library views
+- **Date filter expanded:** Added "Last 90 days" and "Custom Range" options to the date filter chip panel; custom range shows from/to date pickers
+- **Analytics stubs fixed:** "Collect metrics now" and "Run content autopsy" buttons no longer show fake "success" — they explain what's needed to activate the feature
+- **Clip created_at in review:** Review cards now show clip creation date
+
+### Database (engine/database.py)
+- **FK cascade fix:** `_delete_video_cascade()` now checks remaining videos for the job before deleting the job record — previously, two videos sharing the same `job_id` caused the second deletion to fail with `FOREIGN KEY constraint failed`, silently rolling back the transaction (KI-012)
+
+### Data
+- All 20 test videos, clips, jobs, candidates, and related records purged
+- 15 creators preserved
+
 ## 2026-09-12 — Clipping Engine V2
 
 ### Transcription

@@ -685,14 +685,22 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <section id="tab-review" class="active">
   <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap">
     <p style="color:#555;font-size:13px;margin:0">All generated clips — play, approve or reject, then download.</p>
-    <div style="display:flex;gap:8px;margin-left:auto">
+    <div style="display:flex;gap:8px;margin-left:auto;flex-wrap:wrap">
       <select id="review-filter" onchange="loadReview()" style="background:#111;border:1px solid #333;color:#aaa;padding:5px 10px;border-radius:6px;font-size:12px">
         <option value="">All clips</option>
         <option value="REVIEW">Pending review</option>
         <option value="PUBLISH">Approved</option>
         <option value="REJECT">Rejected</option>
       </select>
+      <button class="btn btn-outline btn-sm" id="review-sel-btn" onclick="toggleReviewSelectMode()">Select</button>
     </div>
+  </div>
+  <!-- Bulk bar -->
+  <div id="review-bulk-bar" style="display:none;align-items:center;gap:8px;background:#0d1a0d;border:1px solid #16a34a;border-radius:8px;padding:8px 14px;margin-bottom:12px;flex-wrap:wrap">
+    <span id="review-sel-count" style="font-size:12px;color:#4ade80">0 selected</span>
+    <button class="btn btn-success btn-sm" onclick="bulkReviewAction('approve')">✓ Approve Selected</button>
+    <button class="btn btn-danger btn-sm" onclick="bulkReviewAction('reject')">✕ Reject Selected</button>
+    <button class="btn btn-outline btn-sm" onclick="clearReviewSelection()">Cancel</button>
   </div>
   <div id="review-list"><div class="empty">Loading…</div></div>
 </section>
@@ -1328,11 +1336,15 @@ function closePlayer() {
 
 async function modalAction(action) {
   if (!_currentClipId) return;
-  await api(`/review/${_currentClipId}/${action}`, {method:'POST'});
-  toast('Clip ' + action + 'd', action==='approve'?'success':'error');
-  closePlayer();
-  loadReview();
-  loadOverview();
+  try {
+    await api(`/review/${_currentClipId}/${action}`, {method:'POST'});
+    toast('Clip ' + action + 'd', action==='approve'?'success':'error');
+    closePlayer();
+    loadReview();
+    loadOverview();
+  } catch(e) {
+    toast('Action failed: ' + e.message, 'error');
+  }
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayer(); });
 
@@ -1753,7 +1765,7 @@ let _addCollTargets = [];       // video_ids pending add-to-collection
 let _editingCreatorId = null;
 let _editingCollId = null;
 let _fcPanelOpen = false;
-let _libFilters = { status: '', platform: '', sort: 'newest', virality_min: null, virality_max: null, date_range: '' };
+let _libFilters = { status: '', platform: '', sort: 'newest', virality_min: null, virality_max: null, date_range: '', date_from: '', date_to: '' };
 
 async function loadLibrary() {
   await refreshSidebarCounts();
@@ -2103,6 +2115,7 @@ function renderVideoCards(videos, container, creatorId) {
           <span>${platform}</span>
           ${dur ? `<span>${dur}</span>` : ''}
           ${clips ? `<span>${clips} clip${clips!==1?'s':''}</span>` : ''}
+          ${v.created_at ? `<span style="color:#333;font-size:10px">${(v.created_at||'').substring(0,10)}</span>` : ''}
         </div>
         <div class="vc-actions">
           ${clips ? `<button class="btn btn-outline btn-sm" onclick="showVideoClips('${v.job_id||v.id}','${_esc(title)}')">Clips (${clips})</button>` : ''}
@@ -2397,15 +2410,21 @@ function _applyFilterParams(params) {
   if (_libFilters.virality_max != null) params.set('virality_max', _libFilters.virality_max);
   if (_libFilters.date_range) {
     const today = new Date();
-    const fmt = d => d.toISOString().split('T')[0];
+    const isoDate = d => d.toISOString().split('T')[0];
     if (_libFilters.date_range === 'today') {
-      params.set('date_from', fmt(today)); params.set('date_to', fmt(today));
+      params.set('date_from', isoDate(today)); params.set('date_to', isoDate(today));
     } else if (_libFilters.date_range === '7d') {
       const d = new Date(today); d.setDate(d.getDate()-7);
-      params.set('date_from', fmt(d)); params.set('date_to', fmt(today));
+      params.set('date_from', isoDate(d)); params.set('date_to', isoDate(today));
     } else if (_libFilters.date_range === '30d') {
       const d = new Date(today); d.setDate(d.getDate()-30);
-      params.set('date_from', fmt(d)); params.set('date_to', fmt(today));
+      params.set('date_from', isoDate(d)); params.set('date_to', isoDate(today));
+    } else if (_libFilters.date_range === '90d') {
+      const d = new Date(today); d.setDate(d.getDate()-90);
+      params.set('date_from', isoDate(d)); params.set('date_to', isoDate(today));
+    } else if (_libFilters.date_range === 'custom') {
+      if (_libFilters.date_from) params.set('date_from', _libFilters.date_from);
+      if (_libFilters.date_to) params.set('date_to', _libFilters.date_to);
     }
   }
 }
@@ -2420,7 +2439,7 @@ function renderFilterChips() {
     youtube:'YouTube', local:'Upload',
     newest:'Newest first', oldest:'Oldest first', virality:'Highest virality',
     clips:'Most clips', duration:'Longest first', creator:'By creator', retention:'Highest retention',
-    today:'Today', '7d':'Last 7 days', '30d':'Last 30 days',
+    today:'Today', '7d':'Last 7 days', '30d':'Last 30 days', '90d':'Last 90 days', custom:'Custom range',
   };
   // Sort chip (always visible)
   html += `<span class="fc-chip fc-sort" title="Sort order">
@@ -2436,8 +2455,13 @@ function renderFilterChips() {
     html += `<span class="fc-chip">Score: ${lo}–${hi}
       <span class="fc-x" onclick="clearFilter('virality')">×</span></span>`;
   }
-  if (f.date_range) html += `<span class="fc-chip">Date: ${labelMap[f.date_range]||f.date_range}
-    <span class="fc-x" onclick="clearFilter('date_range')">×</span></span>`;
+  if (f.date_range) {
+    const dateLabel = f.date_range === 'custom'
+      ? `${f.date_from||'?'} → ${f.date_to||'?'}`
+      : (labelMap[f.date_range]||f.date_range);
+    html += `<span class="fc-chip">Date: ${dateLabel}
+      <span class="fc-x" onclick="clearFilter('date_range')">×</span></span>`;
+  }
   // Clear all (if any non-sort filter active)
   const hasExtra = f.status || f.platform || f.virality_min != null || f.virality_max != null || f.date_range;
   if (hasExtra) html += `<span class="fc-chip" style="color:#f87171;border-color:#3a1010;cursor:pointer" onclick="clearAllFilters()">Clear all</span>`;
@@ -2482,12 +2506,18 @@ function openFcPanel(ev, mode) {
         style="width:70px" onchange="setFilter('virality_max',this.value?parseFloat(this.value):null)">
     </div>
     <label>Date added</label>
-    <select onchange="setFilter('date_range',this.value)">
+    <select id="fc-date-range-sel" onchange="setDateRangeFilter(this.value)">
       <option value="">All time</option>
       <option value="today"${f.date_range==='today'?' selected':''}>Today</option>
       <option value="7d"${f.date_range==='7d'?' selected':''}>Last 7 days</option>
       <option value="30d"${f.date_range==='30d'?' selected':''}>Last 30 days</option>
-    </select>`;
+      <option value="90d"${f.date_range==='90d'?' selected':''}>Last 90 days</option>
+      <option value="custom"${f.date_range==='custom'?' selected':''}>Custom range</option>
+    </select>
+    <div id="fc-custom-dates" style="display:${f.date_range==='custom'?'block':'none'}">
+      <label>From</label><input type="date" value="${f.date_from||''}" onchange="setFilter('date_from',this.value);reloadCurrentView()">
+      <label>To</label><input type="date" value="${f.date_to||''}" onchange="setFilter('date_to',this.value);reloadCurrentView()">
+    </div>`;
   }
   const panel = document.createElement('div');
   panel.className = 'fc-panel';
@@ -2510,9 +2540,26 @@ function setFilter(key, value) {
   reloadCurrentView();
 }
 
+function setDateRangeFilter(value) {
+  _libFilters.date_range = value;
+  // Reset custom dates when switching away from custom
+  if (value !== 'custom') {
+    _libFilters.date_from = '';
+    _libFilters.date_to = '';
+  }
+  const customDiv = document.getElementById('fc-custom-dates');
+  if (customDiv) customDiv.style.display = value === 'custom' ? 'block' : 'none';
+  renderFilterChips();
+  if (value !== 'custom') reloadCurrentView();
+}
+
 function clearFilter(key) {
   if (key === 'virality') {
     _libFilters.virality_min = null; _libFilters.virality_max = null;
+  } else if (key === 'date_range') {
+    _libFilters.date_range = '';
+    _libFilters.date_from = '';
+    _libFilters.date_to = '';
   } else {
     _libFilters[key] = '';
   }
@@ -2522,7 +2569,7 @@ function clearFilter(key) {
 
 function clearAllFilters() {
   _libFilters = { status:'', platform:'', sort: _libFilters.sort||'newest',
-                  virality_min:null, virality_max:null, date_range:'' };
+                  virality_min:null, virality_max:null, date_range:'', date_from:'', date_to:'' };
   renderFilterChips();
   reloadCurrentView();
 }
@@ -2960,9 +3007,14 @@ async function loadReview() {
     const decChip = chip(c.decision || 'PENDING');
     const approved = c.decision === 'PUBLISH';
     const rejected = c.decision === 'REJECT';
+    const isSelected = _reviewSelected.has(c.id);
+    const selCb = _reviewSelectMode
+      ? `<div class="vc-checkbox show ${isSelected?'checked':''}" onclick="toggleReviewSelect('${c.id}',this)" style="position:relative;flex-shrink:0;margin-right:4px">${isSelected?'✓':''}</div>`
+      : '';
     return `
       <div class="review-card" id="rcard-${c.id}">
-        <div style="background:#0d0d0d;border-radius:8px;width:80px;height:142px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid #222;overflow:hidden" onclick="openPlayer('${c.id}',true)">
+        ${selCb}
+        <div style="background:#0d0d0d;border-radius:8px;width:80px;height:142px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid #222;overflow:hidden" onclick="${_reviewSelectMode?`toggleReviewSelect('${c.id}',document.querySelector('#rcard-${c.id} .vc-checkbox'))`:`openPlayer('${c.id}',true)`}">
           <span style="font-size:24px;color:#444">▶</span>
         </div>
         <div style="flex:1;min-width:0">
@@ -2974,14 +3026,13 @@ async function loadReview() {
           <div style="font-size:12px;color:#666;display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px">
             <span>Hook <strong style="color:#ccc">${Math.round(c.hook_score||0)}</strong></span>
             <span>Viral <strong style="color:#ccc">${Math.round(c.viral_score||0)}</strong></span>
+            ${c.created_at ? `<span style="color:#444">${(c.created_at||'').substring(0,10)}</span>` : ''}
           </div>
           <div class="actions" style="flex-wrap:wrap;gap:6px">
-            <button class="btn btn-primary btn-sm" onclick="openPlayer('${c.id}',true)">▶ Play</button>
-            ${!approved ? `<button class="btn btn-success btn-sm" onclick="reviewAction('${c.id}','approve')">✓ Approve</button>` : ''}
-            ${!rejected ? `<button class="btn btn-danger btn-sm" onclick="reviewAction('${c.id}','reject')">✕ Reject</button>` : ''}
-            <a href="${API}/clips/${c.id}/download" download="clip_${i+1}.mp4">
-              <button class="btn btn-outline btn-sm">↓ Download</button>
-            </a>
+            ${!_reviewSelectMode ? `<button class="btn btn-primary btn-sm" onclick="openPlayer('${c.id}',true)">▶ Play</button>` : ''}
+            ${!approved && !_reviewSelectMode ? `<button class="btn btn-success btn-sm" onclick="reviewAction('${c.id}','approve')">✓ Approve</button>` : ''}
+            ${!rejected && !_reviewSelectMode ? `<button class="btn btn-danger btn-sm" onclick="reviewAction('${c.id}','reject')">✕ Reject</button>` : ''}
+            ${!_reviewSelectMode ? `<a href="${API}/clips/${c.id}/download" download="clip_${i+1}.mp4"><button class="btn btn-outline btn-sm">↓ Download</button></a>` : ''}
           </div>
         </div>
       </div>`;
@@ -2989,10 +3040,78 @@ async function loadReview() {
 }
 
 async function reviewAction(id, action) {
-  await api(`/review/${id}/${action}`, {method:'POST'});
-  toast('Clip ' + action + 'd', action==='approve'?'success':'error');
+  try {
+    await api(`/review/${id}/${action}`, {method:'POST'});
+    toast('Clip ' + action + 'd', action==='approve'?'success':'error');
+    if (_reviewSelectMode) _reviewSelected.delete(id);
+    loadReview();
+    loadOverview();
+  } catch(e) {
+    toast('Action failed: ' + e.message, 'error');
+  }
+}
+
+// ── Review select mode ─────────────────────────────────────────────────────────
+let _reviewSelectMode = false;
+let _reviewSelected = new Set();
+
+function toggleReviewSelectMode() {
+  _reviewSelectMode = !_reviewSelectMode;
+  _reviewSelected.clear();
+  const btn = document.getElementById('review-sel-btn');
+  btn.classList.toggle('active', _reviewSelectMode);
+  btn.textContent = _reviewSelectMode ? 'Cancel' : 'Select';
+  updateReviewBulkBar();
   loadReview();
-  loadOverview();
+}
+
+function clearReviewSelection() {
+  _reviewSelectMode = false;
+  _reviewSelected.clear();
+  const btn = document.getElementById('review-sel-btn');
+  btn.classList.remove('active');
+  btn.textContent = 'Select';
+  updateReviewBulkBar();
+  loadReview();
+}
+
+function toggleReviewSelect(id, cbEl) {
+  if (_reviewSelected.has(id)) {
+    _reviewSelected.delete(id);
+    cbEl.classList.remove('checked'); cbEl.textContent = '';
+  } else {
+    _reviewSelected.add(id);
+    cbEl.classList.add('checked'); cbEl.textContent = '✓';
+  }
+  updateReviewBulkBar();
+}
+
+function updateReviewBulkBar() {
+  const bar = document.getElementById('review-bulk-bar');
+  const n = _reviewSelected.size;
+  if (n > 0 && _reviewSelectMode) {
+    bar.style.display = 'flex';
+    document.getElementById('review-sel-count').textContent = `${n} selected`;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+async function bulkReviewAction(action) {
+  if (!_reviewSelected.size) return;
+  const ids = [..._reviewSelected];
+  const word = action === 'approve' ? 'Approving' : 'Rejecting';
+  toast(`${word} ${ids.length} clip${ids.length!==1?'s':''}…`, 'info');
+  try {
+    await Promise.all(ids.map(id => api(`/review/${id}/${action}`, {method:'POST'})));
+    toast(`${ids.length} clip${ids.length!==1?'s':''} ${action}d`, 'success');
+    _reviewSelected.clear();
+    updateReviewBulkBar();
+    loadReview();
+    loadOverview();
+  } catch(e) {
+    toast('Bulk action failed: ' + e.message, 'error');
+  }
 }
 
 // ── Jobs ──────────────────────────────────────────────────────────────────────
@@ -3332,13 +3451,12 @@ async function loadAnalytics() {
       </table></div>`
     : '<div class="empty">No analytics yet — publish clips and collect metrics first</div>';
 }
-async function collectAnalytics() {
-  await api('/analytics/collect',{method:'POST'}).catch(e=>toast(e.message,'error'));
-  toast('Metrics collected','success'); loadAnalytics();
+function collectAnalytics() {
+  toast('Analytics collection is not active — publish clips and enter metrics manually via the Publishing Center', 'info');
 }
-async function runAutopsy() {
-  const r = await api('/learning/autopsy',{method:'POST'}).catch(e=>({error:e.message}));
-  document.getElementById('autopsy-result').textContent = JSON.stringify(r,null,2);
+function runAutopsy() {
+  document.getElementById('autopsy-result').textContent =
+    'Content autopsy requires published clips with recorded engagement data.\nPublish clips via the Publishing Center, then enter views/likes to enable this.';
 }
 
 // ── OAuth ─────────────────────────────────────────────────────────────────────

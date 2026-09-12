@@ -43,6 +43,9 @@ See `docs/PRODUCTION_READINESS.md` for full assessment.
 | Publishing Center | ✓ Working | Full manual publishing workflow: create publications, edit metadata, mark ready, mark published, record external URL, bulk actions, download ZIP, manual metrics entry, series order warning |
 | Add to Publishing (clip modal) | ✓ Working | Platform selector + "Add to Publishing Center" button in clip player; also "+ Publish" on each clip card in Library views |
 | Clip delete | ✓ Working | DELETE /clips/{id} — removes rendered files, captions, publication drafts; available per-clip in Library clip list views |
+| Bulk approve/reject clips | ✓ Working | Review tab Select mode — checkboxes + bulk bar; calls /review/{id}/approve|reject in parallel |
+| Date display on video cards | ✓ Working | created_at (YYYY-MM-DD) shown in Library video card metadata |
+| Date filter: 90d + custom range | ✓ Working | Filter chip panel now includes Last 90 Days and Custom Range (from/to date pickers) |
 | Performance metrics entry | ✓ Working | POST /publications/{id}/metrics — manual views/likes/comments/shares entry from Mark Published modal and edit modal |
 | Performance timing | ✓ Working | `GET /jobs/{id}/timing`, `GET /performance/summary` — per-stage wall-clock data persisted in `pipeline_timings` |
 

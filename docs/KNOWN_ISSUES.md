@@ -106,6 +106,14 @@ python server.py
 
 ---
 
+## ~~KI-012 — Two videos sharing same job_id causes FK cascade failure on delete~~ FIXED 2026-09-12
+
+When two `videos` records point to the same `job_id`, calling `_delete_video_cascade` on the first video deletes the job. Deleting the second video then raises `sqlite3.IntegrityError: FOREIGN KEY constraint failed` when trying to delete the same (already-gone) job, rolling back the entire transaction.
+
+Fixed in `engine/database.py:_delete_video_cascade` — now checks `COUNT(*)` of remaining videos for the job before issuing `DELETE FROM jobs`. Only deletes the job if this is the last referencing video.
+
+---
+
 ## KI-010 — Retryable vs non-retryable errors not distinguished
 
 **Symptom:** All pipeline failures use the same retry logic (max 3 attempts). Invalid video format will be retried 3 times before giving up, wasting time.

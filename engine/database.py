@@ -1158,7 +1158,12 @@ def _delete_video_cascade(conn, video_id: str, delete_clips: bool = True):
             try: os.remove(p)
             except Exception: pass
     conn.execute("DELETE FROM videos WHERE id=?", (video_id,))
-    conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+    # Only delete job if no other videos reference it (shared job_id guard)
+    remaining = conn.execute(
+        "SELECT COUNT(*) FROM videos WHERE job_id=?", (job_id,)
+    ).fetchone()[0]
+    if remaining == 0:
+        conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
 
 
 def get_job_series(job_id: str) -> list:
