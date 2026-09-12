@@ -1,0 +1,38 @@
+# ── Generated media & user content ──────────────────────────────────────
+output/
+
+# ── Database (contains user data, not for version control) ───────────────
+db/engine.sqlite
+db/engine.sqlite-wal
+db/engine.sqlite-shm
+
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+.Python
+
+# ── Node ──────────────────────────────────────────────────────────────────
+node_modules/
+
+# ── Logs ──────────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── Environment secrets ───────────────────────────────────────────────────
+.env
+
+# ── pip install artifacts ─────────────────────────────────────────────────
+=*
+
+# ── OS ────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
