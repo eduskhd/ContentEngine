@@ -55,12 +55,18 @@ class EngineConfig:
     generate_series: bool = True
     deduplicate_iou_threshold: float = 0.5
     smart_cut_window: float = 12.0
+    # Candidate quality gates
+    intro_skip_ratio: float = 0.03       # skip first 3% of video (title cards, intros)
+    outro_skip_ratio: float = 0.03       # skip last 3% of video (outros, CTAs)
+    min_candidate_composite: float = 15.0  # drop candidates scoring below this
+    # Caption quality
+    caption_min_word_confidence: float = 0.30  # whisper probability threshold for captions
     skills_dir: str = r"C:\Users\edupo\.claude\skills"
     output_dir: str = r"C:\Users\edupo\Desktop\ContentEngine\output"
     db_path: str = r"C:\Users\edupo\Desktop\ContentEngine\db\engine.sqlite"
     ffmpeg_path: str = FFMPEG_PATH
     ffprobe_path: str = FFPROBE_PATH
-    whisper_model: str = "base"
+    whisper_model: str = "small"  # upgraded from "base" — better word timestamps
 
 
 CONFIG = EngineConfig()

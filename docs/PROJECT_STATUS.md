@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-10 (Phase 2.5 Production Readiness)
+Last updated: 2026-09-12 (Clipping Engine V2)
 
 ## Readiness classification: INTERNAL ALPHA READY
 
@@ -12,8 +12,8 @@ See `docs/PRODUCTION_READINESS.md` for full assessment.
 |------|--------|-------|
 | INGEST (URL) | ✓ Working | yt-dlp, auto-detects platform and creator |
 | INGEST (local upload) | ✓ Working | Saves as `{job_id}_{original_filename}.mp4`, extracts real title |
-| TRANSCRIPTION | ✓ Working | faster-whisper primary, openai-whisper fallback; video-only files skip gracefully |
-| CANDIDATE DETECTION | ✓ Working | Semantic-first: sentence segmentation → peak detection → smart boundaries → IoU dedup; position-based fallback for no-audio |
+| TRANSCRIPTION | ✓ Working | faster-whisper "small" model + VAD filter; openai-whisper fallback; video-only files skip gracefully |
+| CANDIDATE DETECTION | ✓ Working | Dual-pass (sentence-peak + sliding-window); intro/outro skip zones; min composite gate (15.0); position-based fallback for no-audio |
 | VISUAL ANALYSIS | ✓ Working | Shot detection, motion, face presence |
 | AUDIO ANALYSIS | ✓ Working | Skipped for video-only files |
 | PLATFORM FIT | ✓ Working | Scores per platform (TikTok, Instagram, YouTube) |
@@ -23,7 +23,7 @@ See `docs/PRODUCTION_READINESS.md` for full assessment.
 | CLIP GENERATION | ✓ Working | ffmpeg cut, exact timestamps |
 | REFRAME 9:16 | ✓ Working | Smart crop to vertical, 1080×1920 |
 | CAPTION BURN-IN | ✓ Working | ASS format, word-level karaoke highlight, 3 presets |
-| QA/GATE | ✓ Working | FAIL CLOSED: technical_qa=FAIL or visual_qa=FAIL → REJECT |
+| QA/GATE | ✓ Working | FAIL CLOSED: technical_qa=FAIL or visual_qa=FAIL → REJECT; technical_qa now set from actual file probe |
 
 ## Dashboard features
 

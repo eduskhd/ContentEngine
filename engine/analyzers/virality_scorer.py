@@ -50,7 +50,8 @@ SCORE_TIERS = [
 
 
 def score_virality(job_id: str, candidates_data: list[dict],
-                   words: list[dict] = None) -> list[dict]:
+                   words: list[dict] = None,
+                   video_duration: float = 0.0) -> list[dict]:
     """Compute enhanced virality scores. Returns sorted list (highest first)."""
 
     # Attempt LLM analysis (no-op if API key missing or package not installed)
@@ -169,8 +170,10 @@ def score_virality(job_id: str, candidates_data: list[dict],
             ) * 100.0
 
         # ── Importance score ───────────────────────────────────────────────────
-        total_duration = cand.get("end_s", 30.0)
-        position_bonus = max(0.0, 1.0 - (start_s / max(total_duration * 3, 1)) * 0.5)
+        # Use actual video duration for position bonus; earlier clips score higher.
+        # Fall back to a rough estimate if video_duration wasn't passed.
+        vdur = video_duration if video_duration > 0 else max(end_s * 3, end_s + 60.0)
+        position_bonus = max(0.0, 1.0 - (start_s / max(vdur, 1)) * 0.5)
         importance_score = (
             semantic_interest * 0.50 +
             position_bonus    * 0.30 +

@@ -161,3 +161,35 @@ Non-obvious choices recorded here so future sessions don't relitigate them.
 **Decision:** `GET /jobs` now accepts `limit` (default 100, max 500), `offset`, and `status` query parameters. `GET /review/pending` accepts `limit` (default 50) and `offset`.
 
 **Why:** These endpoints previously returned all records with no limit. At 500+ jobs, returning all would cause latency and memory pressure. The dashboard JS already calls these endpoints on load — adding pagination prevents load degradation as the library grows.
+
+---
+
+## D-021 — Whisper "small" over "base" for word timestamps
+
+**Decision:** `CONFIG.whisper_model = "small"` (was "base").
+
+**Why:** "base" produces adequate transcription text but imprecise word-level timestamps, which directly hurts smart-cut boundary quality. "small" is ~40-50% slower in cold transcription (~420s vs ~300s) but produces significantly tighter word timestamps. The transcript cache (path-based) means this cost is paid once per source file — subsequent jobs on the same video use cached words instantly. The quality improvement to candidate detection and caption sync is worth the cold-start overhead for a private tool.
+
+---
+
+## D-022 — Intro/outro skip zones (3% each end)
+
+**Decision:** Candidates whose sentence-peak falls entirely within the first 3% or last 3% of the video are discarded before scoring.
+
+**Why:** The first 3% typically contains title cards, intro animations, and "welcome" preamble. The last 3% typically contains outro overlays, CTAs, and subscribe reminders. These produce well-detected "hook phrases" (e.g., "Today we're going to...") that score high but make terrible standalone clips. The 3% ratio is calibrated for videos ≥ 5 minutes; for shorter videos it's only a few seconds and causes minimal loss.
+
+---
+
+## D-023 — Caption confidence threshold (0.30)
+
+**Decision:** Words with whisper `probability < 0.30` are excluded from captions (`CONFIG.caption_min_word_confidence`). They remain in the full transcript list used for candidate detection.
+
+**Why:** Low-probability words are whisper's uncertain guesses, often garbled phonemes at word boundaries or background noise. Showing them as captions looks broken to viewers. The transcript list keeps them because their timing may still contribute useful structural information (pause detection, pacing). Captions only need the words that are actually correct.
+
+---
+
+## D-024 — Technical QA is real, visual QA stays PENDING
+
+**Decision:** `technical_qa` in `render_clip.py` is now set by `_check_technical_qa()` (file size, video stream, duration, fps). `visual_qa` stays "PENDING".
+
+**Why:** Technical QA can be determined by probing the output file with ffprobe — zero cost, fully automated. Visual QA (checking for black frames, motion quality, composition) requires frame-level analysis which would add meaningful latency to the render step. Since the existing QA module (`engine/qa/video_qa.py`) runs separately in step 12, visual QA is deferred there. The FAIL CLOSED rule applies to `technical_qa=FAIL` → REJECT, as before.

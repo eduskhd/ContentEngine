@@ -110,7 +110,16 @@ def _run_whisper(audio_path: str) -> list[dict]:
 
 def _run_faster_whisper(audio_path: str) -> list[dict]:
     model = _get_model()
-    segments_gen, _ = model.transcribe(audio_path, word_timestamps=True)
+    # VAD filter removes silence segments, reducing hallucinations.
+    # Falls back gracefully on older faster-whisper versions that lack the parameter.
+    try:
+        segments_gen, _ = model.transcribe(
+            audio_path,
+            word_timestamps=True,
+            vad_filter=True,
+        )
+    except TypeError:
+        segments_gen, _ = model.transcribe(audio_path, word_timestamps=True)
     segments = []
     for seg in segments_gen:
         words = [

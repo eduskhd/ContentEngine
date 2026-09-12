@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-09-12 — Clipping Engine V2
+
+### Transcription
+- **Model upgrade:** `whisper_model = "small"` (was "base") — better word-level timestamps (~40-50% slower cold, same warm cache hit)
+- **VAD filter:** `vad_filter=True` added to faster-whisper call — removes silence segments, reduces hallucinations on noisy audio; graceful fallback on older faster-whisper versions
+
+### Candidate Detection
+- **Intro/outro skip zones:** Candidates from first 3% or last 3% of video are discarded (`intro_skip_ratio=0.03`, `outro_skip_ratio=0.03`) — prevents title cards and CTAs from becoming clips
+- **Minimum composite score gate:** Candidates scoring below 15.0 composite are dropped before DB persist (`min_candidate_composite=15.0`)
+- **Sliding window unified:** smart-cut window in sliding-window pass now uses `CONFIG.smart_cut_window` (12s) instead of hardcoded 8s — consistent boundary quality with sentence-peak pass
+
+### Semantic Analysis
+- **Hook detection window:** `first_words = w_in[:15]` (was `[:10]`) — catches hook phrases in slower-paced content and podcast-style openings
+
+### Virality Scoring
+- **Position bonus bug fix:** `score_virality()` now accepts `video_duration` parameter; position bonus uses actual video duration instead of `cand["end_s"]` — clips in the middle/end of a long video were incorrectly penalized
+- Pipeline passes `video_duration=duration_s` to `score_virality`
+
+### Caption Quality
+- **Word confidence filter:** `caption_min_word_confidence=0.30` — words with whisper probability < 0.3 are excluded from caption output; prevents garbled/uncertain transcription from appearing on screen
+
+### Auto QA
+- **Technical QA now real:** `_check_technical_qa()` helper added to `render_clip.py` — sets `technical_qa=PASS/FAIL` based on actual probe of rendered file; checks file size, video stream presence, duration deviation (>40% = FAIL), fps ≥ 10; was always "PENDING" before
+- **QA notes:** `qa_notes` column now stores structured dict with error or warning details
+
+### New Skill
+- **`/clipping-engine`:** Project skill added at `.claude/skills/clipping-engine/SKILL.md` — structured audit and improvement guide for the clipping pipeline
+
 ## 2026-09-11 — Viral Detection v2
 
 ### New: LLM-based viral analysis (`engine/analyzers/llm_analyzer.py`)

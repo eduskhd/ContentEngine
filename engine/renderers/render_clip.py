@@ -158,6 +158,9 @@ def _render_one(
         "clip_end": end_s,
     }
 
+    # Technical QA: verify the rendered file is valid
+    technical_qa, qa_notes = _check_technical_qa(meta, out_path, duration)
+
     # Create DB record (short lock)
     with db.db() as conn:
         clip_id = str(__import__("uuid").uuid4())
@@ -178,7 +181,7 @@ def _render_one(
                 meta.get("fps", 30.0),
                 meta.get("duration", duration),
                 meta.get("size", 0),
-                "PENDING", "PENDING", "{}", "{}",
+                technical_qa, "PENDING", json.dumps(qa_notes), "{}",
                 "PENDING", 0.0,
                 json.dumps(caption_data),
                 json.dumps(caption_settings),
@@ -233,6 +236,41 @@ def _run_ffmpeg(
     ]
     result = subprocess.run(cmd, capture_output=True, timeout=300)
     return result.returncode == 0
+
+
+def _check_technical_qa(meta: dict, out_path: str, expected_duration: float) -> tuple[str, dict]:
+    """Return (technical_qa, qa_notes) based on probed output file metadata."""
+    import os as _os
+    notes = {}
+
+    file_size = meta.get("size", 0)
+    if file_size == 0:
+        try:
+            file_size = _os.path.getsize(out_path)
+        except OSError:
+            file_size = 0
+
+    if file_size == 0:
+        return "FAIL", {"error": "empty output file", "size": 0}
+
+    if not meta.get("width") or not meta.get("height"):
+        return "FAIL", {"error": "no video stream detected"}
+
+    actual_duration = meta.get("duration", 0.0)
+    if actual_duration > 0 and expected_duration > 0:
+        deviation = abs(actual_duration - expected_duration) / expected_duration
+        if deviation > 0.15:
+            notes["duration_warning"] = (
+                f"expected {expected_duration:.1f}s, got {actual_duration:.1f}s"
+            )
+            if deviation > 0.40:
+                return "FAIL", {"error": f"duration mismatch: {notes['duration_warning']}"}
+
+    fps = meta.get("fps", 0.0)
+    if fps > 0 and fps < 10.0:
+        return "FAIL", {"error": f"fps too low: {fps:.1f}"}
+
+    return "PASS", notes
 
 
 def _compute_crop_filter(src_w: int, src_h: int) -> str:

@@ -90,6 +90,23 @@ These skills are scoped to ContentEngine and versioned with the repository.
 
 ---
 
+### clipping-engine
+
+| Field | Value |
+|-------|-------|
+| **Type** | Project skill |
+| **Purpose** | Deep audit and improvement of the clipping pipeline — all 10 areas |
+| **Source** | `.claude/skills/clipping-engine/SKILL.md` |
+| **When to use** | When clip quality degrades, after ingesting new video types, after pipeline changes |
+| **Scope** | Project |
+| **Command** | `/clipping-engine` |
+
+**Covers:** Transcription quality, candidate detection (dual-pass, intro/outro zones), smart cutting, semantic scoring, virality ensemble, caption quality, reframe, auto QA, render speed, LLM cost.  
+**V2 baseline:** All 8 improvements from 2026-09-12 documented in skill as reference.  
+**Cycle:** AUDIT → DIAGNOSE → IMPLEMENT → VERIFY
+
+---
+
 ### secure-dependencies
 
 | Field | Value |
@@ -153,6 +170,9 @@ Changes touching: URLs, file upload, FFmpeg, auth, storage, API security
 Library UX changes (filters, bulk actions, collections)
   → /library-ux
   → /clipper-qa
+
+Clip quality degraded / new video type / pipeline changes
+  → /clipping-engine
 
 Before milestone release / exposing to new users
   → /production-readiness

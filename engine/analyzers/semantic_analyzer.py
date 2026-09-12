@@ -321,7 +321,7 @@ def analyze_segment(words: list[dict], start_s: float, end_s: float) -> dict:
     emotion_score = min(1.0, raw_emotion * 0.13 + support_emotion * 0.07)
 
     # ── Hook strength ──────────────────────────────────────────────────────────
-    first_words = " ".join(w["word"] for w in w_in[:10]).lower()
+    first_words = " ".join(w["word"] for w in w_in[:15]).lower()
     hook_hits = sum(1 for p in HOOK_PHRASES if p in text)
     hook_in_opening = sum(1 for p in HOOK_PHRASES if p in first_words)
     cliffhanger_hits = sum(1 for p in CLIFFHANGER_WORDS if p in text)

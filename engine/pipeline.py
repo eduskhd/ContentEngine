@@ -191,7 +191,7 @@ def process_video(
         # ── STEP 7: VIRALITY SCORING ──────────────────────────────────────────
         console.print("[7/12] Computing virality ensemble...")
         timer.start("virality_scoring")
-        scored = score_virality(job_id, candidate_rows, words)
+        scored = score_virality(job_id, candidate_rows, words, video_duration=duration_s)
         timer.end(top_score=round(scored[0]["virality_score"], 1) if scored else 0)
         if scored:
             console.print(f"  Top score: {scored[0]['virality_score']:.1f} | "

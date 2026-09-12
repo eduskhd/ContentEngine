@@ -103,6 +103,7 @@ Project skills live in `.claude/skills/`. Full documentation: `docs/CLAUDE_SKILL
 **After URL ingestion, file upload, FFmpeg, auth, or storage changes:** use `video-security`  
 **Before milestone releases or before exposing to new users:** use `production-readiness`  
 **After Library UX changes (filters, bulk actions, collections):** use `library-ux`  
-**When adding dependencies or before production milestones:** use `secure-dependencies`
+**When adding dependencies or before production milestones:** use `secure-dependencies`  
+**When clip quality degrades or after pipeline changes:** use `clipping-engine`
 
 Do not run all skills after every change — each skill has a defined trigger context.

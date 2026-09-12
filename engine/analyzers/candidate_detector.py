@@ -24,11 +24,17 @@ def detect_candidates(job_id: str, video_id: str, words: list[dict],
     if no_audio:
         return _position_based_candidates(job_id, video_id, duration_s, max_cands)
 
+    # Intro/outro skip zones: avoid title cards, CTAs, fade-outs
+    intro_cutoff = duration_s * CONFIG.intro_skip_ratio
+    outro_cutoff = duration_s * (1.0 - CONFIG.outro_skip_ratio)
+
     # Pass 1: sentence-peak candidates (existing approach, improved)
-    sentence_windows = _sentence_peak_candidates(words, duration_s, max_cands * 2)
+    sentence_windows = _sentence_peak_candidates(words, duration_s, max_cands * 2,
+                                                  intro_cutoff, outro_cutoff)
 
     # Pass 2: sliding-window candidates (catches story arcs and slow burns)
-    sliding_windows = _sliding_window_candidates(words, duration_s, max_cands)
+    sliding_windows = _sliding_window_candidates(words, duration_s, max_cands,
+                                                  intro_cutoff, outro_cutoff)
 
     # Merge and deduplicate across passes
     all_windows = sentence_windows + sliding_windows
@@ -40,9 +46,11 @@ def detect_candidates(job_id: str, video_id: str, words: list[dict],
     # Diversity-aware selection: ensure we don't just output clones of the same moment
     selected = _select_diverse(deduplicated, max_cands)
 
-    # Persist to DB
+    # Persist to DB — drop candidates below minimum quality floor
     cids = []
     for final_start, final_end, score, breakdown, sem, ret in selected:
+        if score < CONFIG.min_candidate_composite:
+            continue
         cid = db.create_candidate(job_id, video_id, final_start, final_end, score, breakdown)
         db.update_candidate(cid,
             smart_start=final_start,
@@ -57,8 +65,12 @@ def detect_candidates(job_id: str, video_id: str, words: list[dict],
 # ── Pass 1: sentence-peak detection ───────────────────────────────────────────
 
 def _sentence_peak_candidates(words: list[dict], duration_s: float,
-                               max_windows: int) -> list[tuple]:
+                               max_windows: int,
+                               intro_cutoff: float = 0.0,
+                               outro_cutoff: float = None) -> list[tuple]:
     """Score individual sentences; expand context around top ones."""
+    if outro_cutoff is None:
+        outro_cutoff = duration_s
     sentences = _segment_sentences(words)
     if not sentences:
         return []
@@ -69,6 +81,9 @@ def _sentence_peak_candidates(words: list[dict], duration_s: float,
             continue
         s_start = sent[0]["start"]
         s_end = sent[-1]["end"]
+        # Skip sentences entirely within intro/outro zones
+        if s_end <= intro_cutoff or s_start >= outro_cutoff:
+            continue
         sem = analyze_segment(sent, s_start, s_end)
         sentence_score = (
             sem["hook_strength"]     * 0.35 +
@@ -115,13 +130,17 @@ def _sentence_peak_candidates(words: list[dict], duration_s: float,
 # ── Pass 2: sliding-window detection ──────────────────────────────────────────
 
 def _sliding_window_candidates(words: list[dict], duration_s: float,
-                                max_windows: int) -> list[tuple]:
+                                max_windows: int,
+                                intro_cutoff: float = 0.0,
+                                outro_cutoff: float = None) -> list[tuple]:
     """Score overlapping fixed-width windows to catch story arcs and slow burns.
 
     Generates windows of ~35s with 50% overlap. These complement sentence-peak
     candidates by finding moments that are good overall but don't have a single
     peak sentence.
     """
+    if outro_cutoff is None:
+        outro_cutoff = duration_s
     if duration_s < 25.0:
         return []
 
@@ -129,10 +148,14 @@ def _sliding_window_candidates(words: list[dict], duration_s: float,
     step = window_size * 0.5  # 50% overlap
 
     raw_windows = []
-    t = 0.0
+    t = max(0.0, intro_cutoff)  # start after intro zone
     while t + window_size <= duration_s + step:
         w_start = round(t, 2)
         w_end = round(min(t + window_size, duration_s), 2)
+
+        # Skip windows that fall in the outro zone
+        if w_start >= outro_cutoff:
+            break
 
         if w_end - w_start < CONFIG.min_clip_duration:
             t += step
@@ -151,9 +174,9 @@ def _sliding_window_candidates(words: list[dict], duration_s: float,
             t += step
             continue
 
-        # Refine boundaries with smart cuts
-        smart_s = find_smart_start(words, w_start, window_s=8.0)
-        smart_e = find_smart_end(words, w_end, window_s=8.0)
+        # Refine boundaries using same smart-cut window as sentence-peak pass
+        smart_s = find_smart_start(words, w_start, window_s=CONFIG.smart_cut_window)
+        smart_e = find_smart_end(words, w_end, window_s=CONFIG.smart_cut_window)
         final_start = max(0.0, smart_s)
         final_end = min(duration_s, smart_e)
 

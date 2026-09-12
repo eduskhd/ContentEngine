@@ -663,15 +663,15 @@ async def re_render_captions(clip_id: str):
     """Re-burn captions into the clip using current caption_settings."""
     from engine.captions.renderer import burn_captions_ass
 
-    caption_data, caption_settings = dbmod.get_clip_captions(clip_id)
-    if not caption_data:
-        raise HTTPException(400, "No caption data for this clip")
-
     conn = dbmod.get_db()
     row = conn.execute("SELECT * FROM clips WHERE id=?", [clip_id]).fetchone()
     conn.close()
     if not row:
         raise HTTPException(404, "Clip not found")
+
+    caption_data, caption_settings = dbmod.get_clip_captions(clip_id)
+    if not caption_data:
+        raise HTTPException(400, "No caption data for this clip")
 
     source = row["output_path"]
     if not source or not Path(source).exists():

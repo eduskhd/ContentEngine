@@ -2044,8 +2044,8 @@ async function showFailed() {
   el.innerHTML = failed.map(j => `<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
     <div style="flex:1">
       <div style="font-size:13px;font-weight:500;color:#ccc;margin-bottom:4px">${_esc(j.source_title||j.source_url||j.id.substring(0,8))}</div>
-      <div style="font-size:12px;color:#f87171;margin-bottom:2px">${j.error||'Unknown error'}</div>
-      <div style="font-size:12px;color:#444">${j.creator||''} · ${fmt(j.created_at)}</div>
+      <div style="font-size:12px;color:#f87171;margin-bottom:2px">${_esc(j.error||'Unknown error')}</div>
+      <div style="font-size:12px;color:#444">${_esc(j.creator||'')} · ${fmt(j.created_at)}</div>
     </div>
     ${chip('failed')}
     <button class="btn btn-outline btn-sm" onclick="retryJob('${j.id}')">Retry</button>

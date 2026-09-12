@@ -3,6 +3,7 @@ Extract and group caption words for a specific clip window.
 
 All timestamps in the returned data are normalized to clip-start = 0.0.
 """
+from engine.config import CONFIG
 
 _BREAK_CHARS = frozenset(".,!?;:")
 
@@ -17,6 +18,7 @@ def extract_clip_words(
     Timestamps are normalized so clip_start → 0.0.
     """
     clip_dur = clip_end - clip_start
+    min_confidence = CONFIG.caption_min_word_confidence
     result = []
     for w in all_words:
         ws = float(w.get("start", 0))
@@ -25,6 +27,9 @@ def extract_clip_words(
             continue
         text = w.get("word", "").strip()
         if not text:
+            continue
+        # Drop low-confidence transcription guesses from captions
+        if float(w.get("probability", 1.0)) < min_confidence:
             continue
         result.append({
             "word": text,
