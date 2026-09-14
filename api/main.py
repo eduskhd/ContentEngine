@@ -17,9 +17,9 @@ app = FastAPI(title="AI Content Engine", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Content-Type", "Accept"],
 )
 
 # In-memory job status cache (mirrors DB)
@@ -112,18 +112,40 @@ async def create_job(
     upload_dir.mkdir(parents=True, exist_ok=True)
     # Strip directory components from filename to prevent path traversal
     safe_filename = Path(video.filename or "upload.mp4").name or "upload.mp4"
+    # Force .mp4 extension — pipeline always expects a video container
     upload_path = upload_dir / f"{job_id}_{safe_filename}"
 
     MAX_UPLOAD_BYTES = 10 * 1024 * 1024 * 1024  # 10 GB
     bytes_written = 0
+    header_bytes = b""
     with open(upload_path, "wb") as f:
         for chunk in video.file:
             bytes_written += len(chunk)
             if bytes_written > MAX_UPLOAD_BYTES:
                 f.close()
                 upload_path.unlink(missing_ok=True)
-                raise HTTPException(413, f"File too large — maximum upload size is 10 GB")
+                raise HTTPException(413, "File too large — maximum upload size is 10 GB")
+            if len(header_bytes) < 16:
+                header_bytes += chunk
             f.write(chunk)
+
+    # Validate magic bytes — reject non-video uploads after writing so we have
+    # the full header available even for very small first chunks.
+    _ALLOWED_MAGIC = [
+        b"\x00\x00\x00",          # MP4/MOV (ftyp box starts at byte 4)
+        b"\x1a\x45\xdf\xa3",      # MKV / WebM (EBML)
+        b"RIFF",                  # AVI
+        b"OggS",                  # OGG video
+        b"\x00\x00\x01\xba",      # MPEG-PS
+        b"\x00\x00\x01\xb3",      # MPEG video
+    ]
+    is_video = any(header_bytes.startswith(sig) for sig in _ALLOWED_MAGIC)
+    # MP4 containers place 'ftyp' at offset 4; check that too
+    if not is_video and len(header_bytes) >= 12:
+        is_video = header_bytes[4:8] in (b"ftyp", b"mdat", b"moov", b"free", b"wide")
+    if not is_video:
+        upload_path.unlink(missing_ok=True)
+        raise HTTPException(415, "Unsupported file type — only video files are accepted")
 
     # Resolve creator name from creator_id if provided
     resolved_creator = creator or "unknown"

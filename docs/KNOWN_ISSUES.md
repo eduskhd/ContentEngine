@@ -4,6 +4,31 @@ Issues here are real but do not block the core pipeline (VIDEO → CLIPS → DOW
 
 ---
 
+## KI-SEC-001 — No authentication on any API endpoint (by design for private tool)
+
+**Status:** Accepted risk — private single-user tool, now bound to 127.0.0.1.
+All 80+ REST endpoints are unauthenticated. Any process running on the same machine with localhost access can read, modify, or delete all data. If the tool is ever exposed on a network (e.g. via SSH tunnel, reverse proxy, or 0.0.0.0 binding), add token-based auth via FastAPI's `APIKeyHeader` dependency.
+
+**Mitigations applied:** binding changed to 127.0.0.1; CORS restricted to localhost origins.
+
+---
+
+## KI-SEC-002 — Dynamic SQL column-name interpolation in update_* helpers
+
+**File:** `engine/database.py` — `update_video`, `update_candidate`, `update_clip`, `update_job`, `update_creator`, `update_publication`.
+**Risk:** Column names come from Python `**kwargs` keys and are interpolated directly into the SQL string (e.g. `f"UPDATE videos SET {','.join(sets)} WHERE id=?"`). Currently all callers use hardcoded key names or allowlist-filtered dicts, so there is no direct user-controlled injection path. But if a future endpoint passes user input as kwargs keys without filtering, SQLi becomes possible.
+**Recommendation:** Add a column allowlist inside each `update_*` function before building the query.
+
+---
+
+## KI-SEC-003 — Admin and health endpoints expose operational details without auth
+
+**Endpoints:** `GET /health`, `GET /admin/status`, `GET /admin/orphans`.
+**Risk:** Returns worker status, recent job errors, disk usage, DB record counts. No sensitive user data exposed, but useful for reconnaissance on a networked deployment.
+**Mitigation:** Acceptable for localhost-only tool. Add auth if ever network-exposed.
+
+---
+
 ## ~~KI-000 — "database is locked" crashes pipeline~~ FIXED 2026-09-08
 
 SQLite connections now use `timeout=30` + `PRAGMA busy_timeout=30000`. `caption_burner.py` and `reframer.py` no longer hold DB connections while ffmpeg runs. `db.init_db()` removed from `process_video()`.

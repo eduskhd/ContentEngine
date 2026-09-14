@@ -1620,7 +1620,7 @@ async function reRender() {
   }
 }
 
-function _esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function _esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 const sc = v => {
@@ -1904,7 +1904,7 @@ async function showCreatorsGrid() {
     }
     html += '</div>';
     el.innerHTML = html;
-  } catch(e) { el.innerHTML = `<div class="empty">Error loading: ${e.message}</div>`; }
+  } catch(e) { el.innerHTML = `<div class="empty">Error loading: ${_esc(e.message)}</div>`; }
 }
 
 // ── Creator detail ────────────────────────────────────────────────────────────
@@ -2112,7 +2112,7 @@ function renderVideoCards(videos, container, creatorId) {
         <div class="vc-title" title="${_esc(title)}">${_esc(title)}</div>
         <div class="vc-meta">
           ${chip(status)}
-          <span>${platform}</span>
+          <span>${_esc(platform)}</span>
           ${dur ? `<span>${dur}</span>` : ''}
           ${clips ? `<span>${clips} clip${clips!==1?'s':''}</span>` : ''}
           ${v.created_at ? `<span style="color:#333;font-size:10px">${(v.created_at||'').substring(0,10)}</span>` : ''}
@@ -3125,7 +3125,7 @@ async function loadJobs() {
         return `<tr>
           <td>${monoId(j.id)}</td>
           <td style="font-size:12px;color:#555;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-              title="${src}">${srcDisplay || '—'}</td>
+              title="${_esc(src)}">${_esc(srcDisplay) || '—'}</td>
           <td>${chip(j.status)}</td>
           <td>${clips}</td>
           <td style="color:#444;font-size:12px">${fmt(j.created_at)}</td>

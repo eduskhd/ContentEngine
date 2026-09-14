@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-09-14 — Security Audit: 7 fixes applied
+
+### Networking
+- **Host binding hardened:** `server.py` now binds to `127.0.0.1` instead of `0.0.0.0`. The server is no longer reachable from other devices on the same LAN.
+- **CORS restricted:** `allow_origins=["*"]` replaced with explicit localhost origins (`http://localhost:8000`, `http://127.0.0.1:8000`). Wildcard allowed any website to call the API cross-origin.
+
+### File Upload
+- **Magic-bytes validation added to `POST /jobs`:** Uploaded files are now checked against known video container signatures (MP4/ftyp, MKV/WebM, AVI, OGG, MPEG). Non-video files are rejected with HTTP 415 and the partial upload is deleted. Previously only file size was checked.
+
+### Dashboard XSS (7 vector fixes)
+- **`_esc()` strengthened:** Now escapes `>` and `'` in addition to `&`, `<`, `"` — prevents attribute breakout via apostrophe and unescaped close-bracket.
+- **Jobs table `src`/`srcDisplay`:** Source URL was embedded raw into `title=""` attribute and cell text. Both now pass through `_esc()`.
+- **Error message `e.message`:** API error messages were injected into `innerHTML` unescaped. Now escaped.
+- **Video card `platform` field:** `source_platform` was embedded into `innerHTML` without escaping. Now escaped.
+
+### Findings NOT fixed — see pending section in audit report
+
 ## 2026-09-12 — Platform Audit: Dashboard + DB Fixes
 
 ### Dashboard (dashboard/index.html)
