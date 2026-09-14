@@ -269,6 +269,7 @@ def _build_breakdown(sem: dict, ret: dict, start: float, end: float,
         "story_structure": sem["story_structure"],
         "content_type":   sem.get("content_type", "other"),
         "reasons":        sem["reasons"],
+        "lang":           sem.get("lang", "en"),
     }
 
 

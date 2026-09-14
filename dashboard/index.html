@@ -490,6 +490,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <header>
   <h1>AI Content Engine</h1>
   <span class="badge badge-review" id="mode-badge">REVIEW</span>
+  <span id="llm-badge" style="font-size:10px;padding:2px 8px;border-radius:99px;font-weight:700;letter-spacing:.5px;background:#1a1a1a;color:#444;display:none">LLM</span>
   <span style="margin-left:auto;font-size:12px;color:#444" id="server-status">connecting…</span>
 </header>
 
@@ -1720,6 +1721,17 @@ async function loadOverview() {
     const badge = document.getElementById('mode-badge');
     badge.textContent = health.mode;
     badge.className = 'badge ' + (health.mode==='AUTO'?'badge-auto':'badge-review');
+    const llmBadge = document.getElementById('llm-badge');
+    llmBadge.style.display = '';
+    if (health.llm_enabled) {
+      llmBadge.textContent = '✦ LLM ON';
+      llmBadge.style.background = '#052e16';
+      llmBadge.style.color = '#4ade80';
+    } else {
+      llmBadge.textContent = 'LLM OFF';
+      llmBadge.style.background = '#1a1a1a';
+      llmBadge.style.color = '#555';
+    }
 
     document.getElementById('s-total').textContent = clips.length;
     document.getElementById('s-publish').textContent = clips.filter(c=>c.prepublish_decision==='PUBLISH').length;

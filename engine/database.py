@@ -546,9 +546,19 @@ def create_video(job_id, path, duration_s, fps, width, height, size_bytes):
     return vid
 
 
+_VIDEO_COLS = frozenset({
+    "path", "duration_s", "fps", "width", "height", "size_bytes",
+    "rights_verified", "transcript", "audio_path",
+    "creator_slug", "video_slug", "source_url", "source_platform", "source_title",
+    "words_json", "proxy_path", "creator_id", "thumbnail_path",
+})
+
+
 def update_video(video_id, **kwargs):
     sets, vals = [], []
     for k, v in kwargs.items():
+        if k not in _VIDEO_COLS:
+            raise ValueError(f"update_video: unknown column '{k}'")
         sets.append(f"{k}=?")
         vals.append(v if not isinstance(v, (dict, list)) else json.dumps(v))
     vals.append(video_id)
@@ -571,9 +581,21 @@ def create_candidate(job_id, video_id, start_s, end_s, score=0.0, score_breakdow
     return cid
 
 
+_CANDIDATE_COLS = frozenset({
+    "start_s", "end_s", "score", "score_breakdown",
+    "virality_score", "hook_score", "visual_score", "audio_score",
+    "platform_scores", "status",
+    "emotion_score", "retention_score", "importance_score",
+    "hook_time", "virality_reasons", "smart_start", "smart_end",
+    "series_id", "series_part",
+})
+
+
 def update_candidate(candidate_id, **kwargs):
     sets, vals = [], []
     for k, v in kwargs.items():
+        if k not in _CANDIDATE_COLS:
+            raise ValueError(f"update_candidate: unknown column '{k}'")
         sets.append(f"{k}=?")
         vals.append(v if not isinstance(v, (dict, list)) else json.dumps(v))
     vals.append(candidate_id)
@@ -597,9 +619,19 @@ def create_clip(job_id, candidate_id):
     return clid
 
 
+_CLIP_COLS = frozenset({
+    "output_path", "captioned_path", "width", "height", "fps", "duration_s", "file_size",
+    "technical_qa", "visual_qa", "qa_notes", "platform_fit_scores",
+    "prepublish_decision", "prepublish_score",
+    "caption_data", "caption_settings", "review_notes",
+})
+
+
 def update_clip(clip_id, **kwargs):
     sets, vals = [], []
     for k, v in kwargs.items():
+        if k not in _CLIP_COLS:
+            raise ValueError(f"update_clip: unknown column '{k}'")
         sets.append(f"{k}=?")
         vals.append(v if not isinstance(v, (dict, list)) else json.dumps(v))
     vals.append(clip_id)
@@ -792,9 +824,17 @@ def get_creator(creator_id: str) -> dict | None:
         return d
 
 
+_CREATOR_COLS = frozenset({
+    "name", "display_name", "handle", "avatar_color",
+    "platform", "channel_url", "external_channel_id", "is_favorite",
+})
+
+
 def update_creator(creator_id: str, **kwargs):
     sets, vals = [], []
     for k, v in kwargs.items():
+        if k not in _CREATOR_COLS:
+            raise ValueError(f"update_creator: unknown column '{k}'")
         sets.append(f"{k}=?")
         vals.append(v)
     sets.append("updated_at=?"); vals.append(now())
@@ -1297,9 +1337,18 @@ def get_publication(pub_id: str) -> dict | None:
         return _pub_row_to_dict(row) if row else None
 
 
+_PUBLICATION_COLS = frozenset({
+    "status", "title", "caption", "hashtags", "platform_overrides",
+    "scheduled_at", "published_at", "external_post_id", "external_url",
+    "error_message", "retry_count", "next_retry_at", "publication_order", "notes",
+})
+
+
 def update_publication(pub_id: str, **kwargs):
     sets, vals = [], []
     for k, v in kwargs.items():
+        if k not in _PUBLICATION_COLS:
+            raise ValueError(f"update_publication: unknown column '{k}'")
         sets.append(f"{k}=?")
         vals.append(v if not isinstance(v, (dict, list)) else json.dumps(v))
     sets.append("updated_at=?"); vals.append(now())

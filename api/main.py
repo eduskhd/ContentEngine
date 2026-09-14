@@ -81,6 +81,11 @@ async def health():
     except Exception:
         checks["disk_free_gb"] = "unknown"
 
+    # LLM availability
+    import os as _os
+    llm_enabled = bool(_os.environ.get("ANTHROPIC_API_KEY", "").strip())
+    checks["llm"] = "enabled" if llm_enabled else "disabled"
+
     all_ok = all(v in ("ok",) or v.endswith("alive") or v.replace(".", "").isdigit()
                  for k, v in checks.items() if k != "disk_warning")
     status = "ok" if checks["database"] == "ok" else "degraded"
@@ -89,6 +94,7 @@ async def health():
         "status": status,
         "mode": CONFIG.mode,
         "version": "1.0.0",
+        "llm_enabled": llm_enabled,
         "checks": checks,
     }
 
@@ -329,6 +335,18 @@ async def create_job_from_url(
         validate_url(url)
     except ValueError as exc:
         raise HTTPException(400, f"URL not allowed: {exc}")
+
+    # Idempotency: if a running or completed job already exists for this URL, return it
+    with dbmod.db() as conn:
+        existing = conn.execute("""
+            SELECT j.id, j.status FROM jobs j
+            LEFT JOIN videos v ON v.job_id = j.id
+            WHERE (v.source_url = ? OR j.source_path = ?)
+              AND LOWER(j.status) NOT IN ('failed')
+            ORDER BY j.created_at DESC LIMIT 1
+        """, (url, url)).fetchone()
+    if existing:
+        return {"job_id": existing["id"], "status": existing["status"].lower(), "duplicate": True}
 
     job_id = str(uuid.uuid4())
     resolved_creator = creator or "unknown"

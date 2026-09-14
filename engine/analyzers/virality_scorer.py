@@ -40,6 +40,30 @@ VIRALITY_WEIGHTS_LLM = {
     "short_form_fit":      0.03,
 }
 
+_VIRALITY_REASON_TRANSLATIONS_ES = {
+    "Question-based hook":       "Hook de pregunta",
+    "Shock/surprise hook":       "Hook de impacto",
+    "Revelation hook":           "Hook de revelación",
+    "Comedy hook":               "Hook cómico",
+    "Conflict-driven":           "Impulsado por conflicto",
+    "Educational hook":          "Hook educativo",
+    "Relatable moment":          "Momento identificable",
+    "Transformation story":      "Historia de transformación",
+    "Strong opening hook":       "Hook de apertura potente",
+    "Good hook":                 "Buen hook",
+    "High emotional intensity":  "Alta intensidad emocional",
+    "Emotional content":         "Contenido emocional",
+    "Works independently":       "Funciona de forma independiente",
+    "High audio energy":         "Alta energía de audio",
+    "Strong visual reaction":    "Fuerte reacción visual",
+    "Clear payoff":              "Desenlace claro",
+    "Ideal short-form duration": "Duración ideal para short-form",
+    "Good short-form length":    "Buena duración para short-form",
+    "High shareability":         "Alta capacidad de difusión",
+    "Exceptional viral potential": "Potencial viral excepcional",
+    "Strong viral signals":      "Fuertes señales virales",
+}
+
 SCORE_TIERS = [
     (90, "Exceptional"),
     (80, "High Potential"),
@@ -183,12 +207,14 @@ def score_virality(job_id: str, candidates_data: list[dict],
         # ── Reasons ────────────────────────────────────────────────────────────
         heuristic_reasons = bd.get("reasons", [])
         llm_reasons = llm.get("reasons", []) if llm else []
+        lang = bd.get("lang", "en")
         reasons = _build_virality_reasons(
             virality_score, semantic_interest, hook_strength, emotional_intensity,
             standalone_value, audio_energy, visual_reaction, payoff_strength,
             shareability, short_form_fit, duration,
             heuristic_reasons, llm_reasons,
             llm.get("hook_type") if llm else None,
+            lang=lang,
         )
 
         virality_score   = round(min(100.0, max(0.0, virality_score)), 2)
@@ -235,7 +261,7 @@ def _get_tier(score: float) -> str:
 def _build_virality_reasons(virality, semantic, hook, emotion, standalone,
                              audio, visual, payoff, shareability, short_form,
                              duration, heuristic_reasons, llm_reasons,
-                             hook_type=None) -> list[str]:
+                             hook_type=None, lang="en") -> list[str]:
     # LLM reasons are more precise — start with those
     reasons = list(llm_reasons) if llm_reasons else list(heuristic_reasons)
 
@@ -252,43 +278,53 @@ def _build_virality_reasons(virality, semantic, hook, emotion, standalone,
             "transformation": "Transformation story",
         }
         label = hook_type_labels.get(hook_type)
+        if lang == "es" and label:
+            label = _VIRALITY_REASON_TRANSLATIONS_ES.get(label, label)
         if label and label not in reasons:
             reasons.insert(0, label)
 
+    _r = _VIRALITY_REASON_TRANSLATIONS_ES if lang == "es" else {}
+
+    strong_hook_label = _r.get("Strong opening hook", "Strong opening hook")
+    good_hook_label   = _r.get("Good hook", "Good hook")
     if hook >= 0.7 and not any("hook" in r.lower() for r in reasons):
-        reasons.insert(min(1, len(reasons)), "Strong opening hook")
+        reasons.insert(min(1, len(reasons)), strong_hook_label)
     elif hook >= 0.5 and not any("hook" in r.lower() for r in reasons):
-        reasons.append("Good hook")
+        reasons.append(good_hook_label)
 
-    if emotion >= 0.6 and not any("emotion" in r.lower() or "intense" in r.lower() for r in reasons):
-        reasons.append("High emotional intensity")
-    elif emotion >= 0.4 and not any("emotion" in r.lower() for r in reasons):
-        reasons.append("Emotional content")
+    hi_emotion_label = _r.get("High emotional intensity", "High emotional intensity")
+    emotion_label    = _r.get("Emotional content", "Emotional content")
+    if emotion >= 0.6 and not any("emotion" in r.lower() or "intense" in r.lower() or "intensidad" in r.lower() for r in reasons):
+        reasons.append(hi_emotion_label)
+    elif emotion >= 0.4 and not any("emotion" in r.lower() or "emocional" in r.lower() for r in reasons):
+        reasons.append(emotion_label)
 
-    if standalone >= 0.7 and "Works independently" not in reasons:
-        reasons.append("Works independently")
+    standalone_label = _r.get("Works independently", "Works independently")
+    if standalone >= 0.7 and standalone_label not in reasons:
+        reasons.append(standalone_label)
 
     if audio >= 0.75:
-        reasons.append("High audio energy")
+        reasons.append(_r.get("High audio energy", "High audio energy"))
 
     if visual >= 0.75:
-        reasons.append("Strong visual reaction")
+        reasons.append(_r.get("Strong visual reaction", "Strong visual reaction"))
 
-    if payoff >= 0.5 and not any("payoff" in r.lower() or "arc" in r.lower() for r in reasons):
-        reasons.append("Clear payoff")
+    payoff_label = _r.get("Clear payoff", "Clear payoff")
+    if payoff >= 0.5 and not any("payoff" in r.lower() or "arc" in r.lower() or "desenlace" in r.lower() for r in reasons):
+        reasons.append(payoff_label)
 
     if 25 <= duration <= 45:
-        reasons.append("Ideal short-form duration")
+        reasons.append(_r.get("Ideal short-form duration", "Ideal short-form duration"))
     elif 45 < duration <= 60:
-        reasons.append("Good short-form length")
+        reasons.append(_r.get("Good short-form length", "Good short-form length"))
 
-    if shareability >= 0.65 and not any("share" in r.lower() for r in reasons):
-        reasons.append("High shareability")
+    if shareability >= 0.65 and not any("share" in r.lower() or "difusión" in r.lower() for r in reasons):
+        reasons.append(_r.get("High shareability", "High shareability"))
 
     if virality >= 85:
-        reasons.append("Exceptional viral potential")
+        reasons.append(_r.get("Exceptional viral potential", "Exceptional viral potential"))
     elif virality >= 70:
-        reasons.append("Strong viral signals")
+        reasons.append(_r.get("Strong viral signals", "Strong viral signals"))
 
     # Deduplicate preserving order
     seen = set()

@@ -39,6 +39,8 @@ Scoring guidance:
 - 20–39: weak; probably not compelling as a standalone clip
 - 0–19: filler content; no viral signal
 
+If the transcript content is in Spanish, return all 'reasons' strings in Spanish.
+
 Respond ONLY with the raw JSON array. No markdown, no explanation, no preamble."""
 
 
