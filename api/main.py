@@ -730,6 +730,71 @@ async def re_render_captions(clip_id: str):
     return {"status": "rendered", "clip_id": clip_id, "output": out_path}
 
 
+@app.post("/clips/{clip_id}/retranscribe")
+async def retranscribe_clip(clip_id: str):
+    """Rebuild caption_data for a clip from its video's transcript cache.
+
+    Useful for clips created before the caption_data feature was added.
+    If the video transcript cache is missing, re-runs Whisper on the audio.
+    """
+    import os as _os
+    from engine.captions.extractor import extract_clip_words
+
+    conn = dbmod.get_db()
+    clip = conn.execute("SELECT * FROM clips WHERE id=?", [clip_id]).fetchone()
+    conn.close()
+    if not clip:
+        raise HTTPException(404, "Clip not found")
+
+    conn = dbmod.get_db()
+    cand = conn.execute("SELECT * FROM candidates WHERE id=?", [clip["candidate_id"]]).fetchone()
+    conn.close()
+    if not cand:
+        raise HTTPException(404, "Candidate not found")
+
+    start_s, end_s = float(cand["start_s"]), float(cand["end_s"])
+
+    conn = dbmod.get_db()
+    video = conn.execute("SELECT * FROM videos WHERE id=?", [cand["video_id"]]).fetchone()
+    conn.close()
+    if not video:
+        raise HTTPException(404, "Video record not found")
+
+    # Try transcript cache first
+    words = dbmod.get_cached_words(video["id"])
+    source = "cache"
+
+    if words is None:
+        from engine.transcription import _extract_audio, _run_whisper, _flatten_to_words, _has_audio_stream
+        video_path = video["path"]
+        if not video_path or not _os.path.exists(video_path):
+            raise HTTPException(422, "Video file not found on disk — cannot retranscribe")
+        if not _has_audio_stream(video_path):
+            raise HTTPException(422, "Video has no audio stream")
+        audio_path = _extract_audio(video_path, video["id"])
+        segments = _run_whisper(audio_path)
+        words = _flatten_to_words(segments)
+        dbmod.save_words_cache(video["id"], words)
+        source = "transcribed"
+
+    clip_words = extract_clip_words(words, start_s, end_s)
+    caption_data = {
+        "words": clip_words,
+        "has_audio": len(clip_words) > 0,
+        "clip_start": start_s,
+        "clip_end": end_s,
+    }
+
+    dbmod.update_clip_captions(clip_id, caption_data=caption_data)
+
+    return {
+        "clip_id": clip_id,
+        "words_count": len(clip_words),
+        "has_audio": caption_data["has_audio"],
+        "source": source,
+    }
+
+
 # ── WORKERS ──────────────────────────────────────────────────────────────────
 
 @app.get("/workers/stats")

@@ -1,9 +1,36 @@
 """Background pipeline workers — thread pool polling the SQLite job queue."""
-import threading, time, uuid, logging
+import threading, time, uuid, logging, json
 from engine.pipeline import process_video
 from workers.job_queue import JobQueue
 
 logger = logging.getLogger("pipeline_worker")
+
+_PERMANENT_PATTERNS = [
+    "invalid data found", "no such file or directory", "not found",
+    "permission denied", "unsupported codec", "invalid video",
+    "corrupt", "moov atom not found", "unable to open",
+    "format error", "no video stream", "no streams", "415",
+    "unsupported media", "failed to open", "error opening",
+    "decoder not found", "encoder not found",
+]
+
+_RETRYABLE_PATTERNS = [
+    "out of memory", "oom", "timeout", "connection refused",
+    "network", "database is locked", "disk full",
+    "no space left", "temporary failure",
+]
+
+
+def _classify_pipeline_error(error_str: str) -> str:
+    """Return 'PERMANENT' or 'RETRYABLE' based on error message content."""
+    err = error_str.lower()
+    for p in _RETRYABLE_PATTERNS:
+        if p in err:
+            return "RETRYABLE"
+    for p in _PERMANENT_PATTERNS:
+        if p in err:
+            return "PERMANENT"
+    return "RETRYABLE"
 
 
 class PipelineWorker(threading.Thread):
@@ -56,16 +83,21 @@ class PipelineWorker(threading.Thread):
             logger.info("Job %s completed — %d clips", jid[:8],
                         result.get("stats", {}).get("clips_generated", 0))
         except Exception as e:
-            self._set(jid, status="failed", error=str(e))
-            self.queue.fail(job["id"], str(e))
+            error_str = str(e)
+            error_category = _classify_pipeline_error(error_str)
+            self._set(jid, status="failed", error=error_str)
+            self.queue.fail(job["id"], error_str)
             # Always ensure the jobs table reflects FAILED — process_video may have
             # raised before the pipeline's own except block ran (e.g., duplicate INSERT).
             try:
                 from engine.database import update_job
-                update_job(jid, status="FAILED", error=str(e))
+                update_job(jid, status="FAILED", error=error_str, error_category=error_category)
             except Exception:
                 pass
-            logger.error("Job %s failed: %s", jid[:8], e, exc_info=True)
+            if error_category == "PERMANENT":
+                logger.error("Job %s PERMANENT failure: %s", jid[:8], e)
+            else:
+                logger.error("Job %s failed: %s", jid[:8], e, exc_info=True)
         finally:
             self.active_job = None
 
@@ -115,16 +147,43 @@ class WorkerPool:
             if cur.rowcount:
                 logger.info("Cleaned up %d zombie job(s) from previous session", cur.rowcount)
 
-            # 2. Reset job_queue rows stuck in 'running' so they can be retried.
-            #    If max_attempts not yet exhausted → back to 'queued'.
-            #    If exhausted → mark 'failed' so they don't loop forever.
-            cur2 = conn.execute(
-                "UPDATE job_queue SET status='queued', worker_id=NULL "
-                "WHERE status='running' AND attempts < max_attempts",
-                [],
-            )
-            if cur2.rowcount:
-                logger.info("Reset %d stuck queue entry(s) back to queued", cur2.rowcount)
+            # 2. Reset job_queue rows stuck in 'running' so they can be retried,
+            #    unless the associated jobs entry has error_category='PERMANENT'.
+            conn.row_factory = __import__("sqlite3").Row
+            zombie_rows = conn.execute(
+                "SELECT id, payload FROM job_queue WHERE status='running' AND attempts < max_attempts"
+            ).fetchall()
+            reset_count = 0
+            perm_count = 0
+            for zrow in zombie_rows:
+                try:
+                    payload = json.loads(zrow["payload"])
+                    job_id_ref = payload.get("job_id", "")
+                    jobs_row = conn.execute(
+                        "SELECT error_category FROM jobs WHERE id=?", [job_id_ref]
+                    ).fetchone()
+                    is_permanent = jobs_row and jobs_row["error_category"] == "PERMANENT"
+                except Exception:
+                    is_permanent = False
+
+                if is_permanent:
+                    conn.execute(
+                        "UPDATE job_queue SET status='failed', "
+                        "error='Permanent error — not retrying' WHERE id=?",
+                        [zrow["id"]],
+                    )
+                    perm_count += 1
+                else:
+                    conn.execute(
+                        "UPDATE job_queue SET status='queued', worker_id=NULL WHERE id=?",
+                        [zrow["id"]],
+                    )
+                    reset_count += 1
+
+            if reset_count:
+                logger.info("Reset %d stuck queue entry(s) back to queued", reset_count)
+            if perm_count:
+                logger.info("Skipped %d permanent-error job(s) — not re-queuing", perm_count)
 
             cur3 = conn.execute(
                 "UPDATE job_queue SET status='failed', "

@@ -394,6 +394,7 @@ def init_db():
         # Performance optimization (2026-09-10)
         _add_column_if_missing(conn, "videos", "words_json", "TEXT")
         _add_column_if_missing(conn, "videos", "proxy_path", "TEXT")
+        _add_column_if_missing(conn, "jobs", "error_category", "TEXT")
         # Run migration: link existing videos to creator records
         _migrate_creators(conn)
 
@@ -519,7 +520,7 @@ def create_job(source_path, mode, target_clips, target_platforms, creator, conte
     return jid
 
 
-def update_job(job_id, status=None, error=None, metadata=None):
+def update_job(job_id, status=None, error=None, metadata=None, error_category=None):
     sets, vals = [], []
     if status:
         sets.append("status=?"); vals.append(status)
@@ -527,6 +528,8 @@ def update_job(job_id, status=None, error=None, metadata=None):
         sets.append("error=?"); vals.append(error)
     if metadata is not None:
         sets.append("metadata=?"); vals.append(json.dumps(metadata))
+    if error_category is not None:
+        sets.append("error_category=?"); vals.append(error_category)
     sets.append("updated_at=?"); vals.append(now())
     vals.append(job_id)
     with db() as conn:
