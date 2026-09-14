@@ -115,5 +115,7 @@ class PipelineTimer:
                 "duration_s": s.duration,
                 "status": s.status,
                 "meta": json.dumps(s.meta) if s.meta else "{}",
+                "llm_tokens_used": s.meta.get("llm_tokens_used", 0),
+                "llm_cost_usd": s.meta.get("llm_cost_usd", 0.0),
             })
         return rows

@@ -395,6 +395,8 @@ def init_db():
         _add_column_if_missing(conn, "videos", "words_json", "TEXT")
         _add_column_if_missing(conn, "videos", "proxy_path", "TEXT")
         _add_column_if_missing(conn, "jobs", "error_category", "TEXT")
+        _add_column_if_missing(conn, "pipeline_timings", "llm_tokens_used", "INTEGER DEFAULT 0")
+        _add_column_if_missing(conn, "pipeline_timings", "llm_cost_usd", "REAL DEFAULT 0.0")
         # Run migration: link existing videos to creator records
         _migrate_creators(conn)
 
@@ -478,16 +480,16 @@ def save_pipeline_timings(job_id: str, rows: list[dict]) -> None:
     """Persist timing rows from PipelineTimer.to_rows()."""
     ts = now()
     with db() as conn:
-        conn.executemany(
-            """INSERT INTO pipeline_timings
-               (job_id, stage, start_ts, end_ts, duration_s, status, meta, created_at)
-               VALUES (?,?,?,?,?,?,?,?)""",
-            [
+        for r in rows:
+            conn.execute(
+                """INSERT INTO pipeline_timings
+                   (job_id, stage, start_ts, end_ts, duration_s, status, meta,
+                    llm_tokens_used, llm_cost_usd, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
                 (job_id, r["stage"], r["start_ts"], r["end_ts"],
-                 r["duration_s"], r["status"], r["meta"], ts)
-                for r in rows
-            ]
-        )
+                 r["duration_s"], r["status"], r["meta"],
+                 r.get("llm_tokens_used", 0), r.get("llm_cost_usd", 0.0), ts)
+            )
 
 
 def get_pipeline_timings(job_id: str) -> list[dict]:

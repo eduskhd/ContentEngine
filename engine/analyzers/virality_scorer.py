@@ -83,7 +83,7 @@ def score_virality(job_id: str, candidates_data: list[dict],
     if words:
         try:
             from engine.analyzers.llm_analyzer import analyze_candidates_llm
-            llm_scores = analyze_candidates_llm(candidates_data, words)
+            llm_scores = analyze_candidates_llm(candidates_data, words, job_id=job_id)
             if llm_scores:
                 logger.info("LLM analysis: %d/%d candidates scored",
                             len(llm_scores), len(candidates_data))

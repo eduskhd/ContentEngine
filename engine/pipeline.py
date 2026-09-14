@@ -192,7 +192,14 @@ def process_video(
         console.print("[7/12] Computing virality ensemble...")
         timer.start("virality_scoring")
         scored = score_virality(job_id, candidate_rows, words, video_duration=duration_s)
-        timer.end(top_score=round(scored[0]["virality_score"], 1) if scored else 0)
+        try:
+            from engine.analyzers.llm_analyzer import pop_llm_usage
+            _llm = pop_llm_usage(job_id)
+            timer.end(top_score=round(scored[0]["virality_score"], 1) if scored else 0,
+                      llm_tokens_used=_llm["llm_tokens_used"],
+                      llm_cost_usd=_llm["llm_cost_usd"])
+        except Exception:
+            timer.end(top_score=round(scored[0]["virality_score"], 1) if scored else 0)
         if scored:
             console.print(f"  Top score: {scored[0]['virality_score']:.1f} | "
                           f"window {scored[0]['start_s']:.0f}s-{scored[0]['end_s']:.0f}s")

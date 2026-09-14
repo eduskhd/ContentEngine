@@ -67,6 +67,27 @@ _PRESETS: dict[str, dict] = {
         "background_color": "#60000000",
         "line_spacing": 1.2,
     },
+    "minimal": {
+        "font_family": "Arial",
+        "font_size": 28,
+        "bold": False,
+        "text_color": "#FFFFFF",
+        "highlight_color": "#E0E0E0",
+        "stroke_color": "#000000",
+        "stroke_width": 1,
+        "shadow": False,
+        "glow": False,
+        "glow_color": "#FFFFFF",
+        "position": "lower_third",
+        "max_words": 5,
+        "animation": "fade",
+        "uppercase": False,
+        "margin_v": 160,
+        "margin_h": 80,
+        "background": True,
+        "background_color": "#99000000",
+        "line_spacing": 1.3,
+    },
 }
 
 

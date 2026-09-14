@@ -12,11 +12,43 @@ Falls back to neutral scores (0.5 on each dimension) so the heuristic system car
 import os
 import json
 import logging
+import threading
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 _BATCH_SIZE = 8  # candidates per API call — balances latency vs cost
+
+# ── Token usage tracking ──────────────────────────────────────────────────────
+# Haiku 4.5 pricing: $0.80/1M input, $4.00/1M output (approximate)
+_INPUT_COST_PER_TOKEN  = 0.80  / 1_000_000
+_OUTPUT_COST_PER_TOKEN = 4.00  / 1_000_000
+
+_USAGE_LOCK = threading.Lock()
+_USAGE: dict[str, dict] = {}  # job_id → {input_tokens, output_tokens}
+
+
+def _record_usage(job_id: str, input_tokens: int, output_tokens: int) -> None:
+    if not job_id:
+        return
+    with _USAGE_LOCK:
+        u = _USAGE.setdefault(job_id, {"input_tokens": 0, "output_tokens": 0})
+        u["input_tokens"]  += input_tokens
+        u["output_tokens"] += output_tokens
+
+
+def pop_llm_usage(job_id: str) -> dict:
+    """Return accumulated LLM usage for a job and clear it. Safe to call with no prior LLM use."""
+    with _USAGE_LOCK:
+        u = _USAGE.pop(job_id, {"input_tokens": 0, "output_tokens": 0})
+    total = u["input_tokens"] + u["output_tokens"]
+    cost = u["input_tokens"] * _INPUT_COST_PER_TOKEN + u["output_tokens"] * _OUTPUT_COST_PER_TOKEN
+    return {
+        "input_tokens":  u["input_tokens"],
+        "output_tokens": u["output_tokens"],
+        "llm_tokens_used": total,
+        "llm_cost_usd": round(cost, 6),
+    }
 
 _SYSTEM_PROMPT = """You are a short-form video content analyst. You specialize in identifying moments from transcripts that would perform well as 30–60 second TikTok, YouTube Shorts, or Instagram Reels clips.
 
@@ -47,6 +79,7 @@ Respond ONLY with the raw JSON array. No markdown, no explanation, no preamble."
 def analyze_candidates_llm(
     candidates: list[dict],
     words: list[dict],
+    job_id: str = "",
 ) -> dict[str, dict]:
     """Analyze candidates using LLM. Returns {candidate_id: score_dict}.
 
@@ -93,7 +126,8 @@ def analyze_candidates_llm(
     for i in range(0, len(segments), _BATCH_SIZE):
         batch = segments[i : i + _BATCH_SIZE]
         try:
-            batch_results = _call_api(batch, api_key)
+            batch_results, usage = _call_api(batch, api_key)
+            _record_usage(job_id, usage.get("input_tokens", 0), usage.get("output_tokens", 0))
             for cid, scores in batch_results.items():
                 results[cid] = scores
                 _persist_to_db(cid, scores)
@@ -126,13 +160,17 @@ def _extract_cached(cand: dict) -> Optional[dict]:
     return None
 
 
-def _call_api(batch: list[tuple], api_key: str) -> dict[str, dict]:
-    """Call Claude claude-haiku-4-5-20251001 for a batch and parse results."""
+def _call_api(batch: list[tuple], api_key: str) -> tuple[dict[str, dict], dict]:
+    """Call Claude claude-haiku-4-5-20251001 for a batch and parse results.
+
+    Returns (results, usage) where usage = {input_tokens, output_tokens}.
+    """
+    no_usage = {"input_tokens": 0, "output_tokens": 0}
     try:
         import anthropic
     except ImportError:
         logger.warning("anthropic package not installed — LLM analysis disabled. Run: pip install anthropic")
-        return {cid: _neutral_scores() for cid, *_ in batch}
+        return {cid: _neutral_scores() for cid, *_ in batch}, no_usage
 
     client = anthropic.Anthropic(api_key=api_key)
 
@@ -148,6 +186,11 @@ def _call_api(batch: list[tuple], api_key: str) -> dict[str, dict]:
         system=_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_message}],
     )
+
+    usage = {
+        "input_tokens":  getattr(response.usage, "input_tokens",  0),
+        "output_tokens": getattr(response.usage, "output_tokens", 0),
+    }
 
     raw = response.content[0].text.strip()
 
@@ -168,7 +211,7 @@ def _call_api(batch: list[tuple], api_key: str) -> dict[str, dict]:
             results[cid] = _normalize(parsed[idx])
         else:
             results[cid] = _neutral_scores()
-    return results
+    return results, usage
 
 
 def _normalize(item: dict) -> dict:
