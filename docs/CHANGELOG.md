@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-09-14 — Sprint B/C: 8 feature improvements
+
+### B-002 — Spanish content scoring
+- `engine/analyzers/semantic_analyzer.py`: `_detect_language()` uses Spanish function-word frequency (12% threshold) to auto-detect Spanish transcripts. Full Spanish word banks added (`HOOK_PHRASES_ES`, `EMOTION_WORDS_ES`, `CONFLICT_WORDS_ES`, story structure, payoff, cliffhanger, educational, personal narrative). `_REASON_TRANSLATIONS_ES` translates all 22 reason strings. `analyze_segment()` selects the appropriate bank per language and returns `"lang"` in the result dict.
+- `engine/analyzers/virality_scorer.py`: reads `lang` from `score_breakdown`; all threshold-based reason strings translated via `_VIRALITY_REASON_TRANSLATIONS_ES`. Hook-type labels translated.
+- `engine/analyzers/llm_analyzer.py`: system prompt instructs LLM to return `reasons` in Spanish when transcript is Spanish.
+- `engine/analyzers/candidate_detector.py`: `lang` field propagated through `score_breakdown`.
+
+### B-003 — Dashboard LLM indicator
+- `GET /health` now includes `llm_enabled: bool`. Dashboard shows "✦ LLM ON" (green) or "LLM OFF" (gray) badge next to mode indicator.
+
+### B-004 — Retranscribe endpoint
+- `POST /clips/{id}/retranscribe`: rebuilds `caption_data` for a clip from the video's transcript cache using `extract_clip_words()`. Falls back to re-running Whisper if `words_json` cache is missing. Fixes clips created before the caption_data feature was added.
+
+### B-005 — Permanent error classification
+- `workers/pipeline_worker.py`: `_classify_pipeline_error()` classifies errors as RETRYABLE (network, OOM) or PERMANENT (invalid format, codec errors). PERMANENT errors written to `jobs.error_category`. `_cleanup_zombie_jobs()` skips re-queuing jobs with `error_category=PERMANENT`, preventing retry loops on invalid input files.
+- `engine/database.py`: `jobs.error_category TEXT` column added; `update_job()` accepts `error_category` kwarg.
+
+### C-001 — URL deduplication
+- `POST /jobs/from-url`: returns existing non-failed job with `{job_id, status, duplicate: true}` if same URL already queued/processed.
+
+### C-002 — SQL column allowlists
+- `update_video`, `update_candidate`, `update_clip`, `update_creator`, `update_publication` in `engine/database.py` now validate kwargs against frozenset allowlists, raising `ValueError` on unknown columns.
+
+### C-004 — Minimal caption preset
+- `engine/captions/presets.py`: `"minimal"` preset added (white text, semi-transparent background, no glow, no uppercase, fade animation, 5 words/group). Suitable for corporate or educational content.
+
+### C-005 — LLM token cost logging
+- `engine/analyzers/llm_analyzer.py`: thread-safe per-job token usage accumulator; `pop_llm_usage(job_id)` returns `{llm_tokens_used, llm_cost_usd}`. Pricing: $0.80/1M input, $4.00/1M output (claude-haiku-4-5 estimate).
+- `engine/pipeline.py`: reads LLM usage after virality_scoring and passes to timer stage meta.
+- `engine/timing.py`: `to_rows()` extracts `llm_tokens_used`/`llm_cost_usd` as top-level keys.
+- `engine/database.py`: `pipeline_timings.llm_tokens_used INT`, `pipeline_timings.llm_cost_usd REAL` columns added. Visible via `GET /jobs/{id}/timing`.
+
 ## 2026-09-14 — Security Audit: 7 fixes applied
 
 ### Networking
