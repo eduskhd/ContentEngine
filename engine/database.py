@@ -1,7 +1,7 @@
 import sqlite3
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from contextlib import contextmanager
 
@@ -341,6 +341,30 @@ def init_db():
             FOREIGN KEY (collection_id) REFERENCES collections(id),
             UNIQUE(collection_id, item_type, item_id)
         );
+        CREATE TABLE IF NOT EXISTS clip_evaluations (
+            id TEXT PRIMARY KEY,
+            clip_id TEXT NOT NULL,
+            job_id TEXT DEFAULT '',
+            decision TEXT DEFAULT '',
+            rejection_reasons TEXT DEFAULT '[]',
+            correction_notes TEXT DEFAULT '',
+            edit_time_seconds INTEGER DEFAULT 0,
+            pipeline_version TEXT DEFAULT '',
+            config_snapshot TEXT DEFAULT '{}',
+            created_at TEXT,
+            updated_at TEXT,
+            FOREIGN KEY (clip_id) REFERENCES clips(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS missed_moments (
+            id TEXT PRIMARY KEY,
+            job_id TEXT NOT NULL,
+            video_id TEXT DEFAULT '',
+            start_s REAL NOT NULL,
+            end_s REAL NOT NULL,
+            notes TEXT DEFAULT '',
+            generated_clip_id TEXT,
+            created_at TEXT
+        );
         """)
         # ── Performance indexes ───────────────────────────────────────────────
         # These are safe to CREATE IF NOT EXISTS on every startup.
@@ -361,6 +385,9 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_prepub_clip_id       ON prepublish_decisions(clip_id);
             CREATE INDEX IF NOT EXISTS idx_coll_items_coll     ON collection_items(collection_id);
             CREATE INDEX IF NOT EXISTS idx_coll_items_item     ON collection_items(item_id);
+            CREATE INDEX IF NOT EXISTS idx_clip_evals_clip_id  ON clip_evaluations(clip_id);
+            CREATE INDEX IF NOT EXISTS idx_clip_evals_job_id   ON clip_evaluations(job_id);
+            CREATE INDEX IF NOT EXISTS idx_missed_job_id       ON missed_moments(job_id);
         """)
 
         # Add columns that may not exist in older DB instances
@@ -397,6 +424,49 @@ def init_db():
         _add_column_if_missing(conn, "jobs", "error_category", "TEXT")
         _add_column_if_missing(conn, "pipeline_timings", "llm_tokens_used", "INTEGER DEFAULT 0")
         _add_column_if_missing(conn, "pipeline_timings", "llm_cost_usd", "REAL DEFAULT 0.0")
+        # Quality evaluation sprint (2026-09-15)
+        _add_column_if_missing(conn, "jobs", "pipeline_snapshot", "TEXT")
+        # YouTube upload tables (2026-09-17)
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS yt_upload_sessions (
+            id TEXT PRIMARY KEY,
+            pub_id TEXT NOT NULL,
+            clip_id TEXT NOT NULL,
+            channel_id TEXT NOT NULL,
+            title TEXT,
+            description TEXT,
+            tags TEXT DEFAULT '[]',
+            is_for_kids INTEGER DEFAULT 0,
+            session_url TEXT,
+            status TEXT DEFAULT 'pending',
+            remote_video_id TEXT,
+            remote_process_status TEXT,
+            remote_privacy_status TEXT,
+            bytes_sent INTEGER DEFAULT 0,
+            file_size INTEGER,
+            file_path TEXT,
+            file_hash TEXT,
+            attempts INTEGER DEFAULT 0,
+            last_attempt_at TEXT,
+            error_message TEXT,
+            error_code TEXT,
+            locked_at TEXT,
+            locked_by TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (pub_id) REFERENCES publications(id),
+            FOREIGN KEY (clip_id) REFERENCES clips(id),
+            UNIQUE (pub_id)
+        );
+        CREATE TABLE IF NOT EXISTS yt_oauth_state (
+            state TEXT PRIMARY KEY,
+            code_verifier TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_yt_sessions_status ON yt_upload_sessions(status);
+        CREATE INDEX IF NOT EXISTS idx_yt_sessions_pub_id ON yt_upload_sessions(pub_id);
+        """)
+        _add_column_if_missing(conn, "social_accounts", "channel_name", "TEXT")
         # Run migration: link existing videos to creator records
         _migrate_creators(conn)
 
@@ -502,9 +572,10 @@ def get_pipeline_timings(job_id: str) -> list[dict]:
 
 
 def create_job(source_path, mode, target_clips, target_platforms, creator, content_type,
-               preset_id: str = None):
+               preset_id: str = None, pipeline_snapshot: dict = None):
     jid = preset_id or new_id()
     ts = now()
+    snap_str = json.dumps(pipeline_snapshot or {})
     with db() as conn:
         if preset_id:
             # On retry the row already exists — skip INSERT and return existing id.
@@ -514,10 +585,12 @@ def create_job(source_path, mode, target_clips, target_platforms, creator, conte
         conn.execute(
             """INSERT INTO jobs
                (id, source_path, status, mode, target_clips, target_platforms,
-                creator, content_type, created_at, updated_at, error, metadata)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                creator, content_type, created_at, updated_at, error, metadata,
+                pipeline_snapshot)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (jid, source_path, "QUEUED", mode, target_clips,
-             json.dumps(target_platforms), creator, content_type, ts, ts, None, "{}")
+             json.dumps(target_platforms), creator, content_type, ts, ts, None, "{}",
+             snap_str)
         )
     return jid
 
@@ -1510,3 +1583,250 @@ def _suggest_hashtags(creator, reasons, platform=None):
         if t not in seen:
             seen.add(t); result.append(t)
     return result[:12]
+
+
+# ── Quality evaluation helpers ────────────────────────────────────────────────
+
+def _parse_json_field(value, default):
+    try:
+        return json.loads(value or json.dumps(default))
+    except Exception:
+        return default
+
+
+def upsert_evaluation(clip_id: str, **kwargs) -> str:
+    """Create or update the human quality evaluation for a clip. Returns eval id."""
+    with db() as conn:
+        row = conn.execute(
+            "SELECT id FROM clip_evaluations WHERE clip_id=?", (clip_id,)
+        ).fetchone()
+        ts = now()
+        if row:
+            eval_id = row["id"]
+            sets, vals = [], []
+            for k, v in kwargs.items():
+                sets.append(f"{k}=?")
+                vals.append(json.dumps(v) if isinstance(v, (list, dict)) else v)
+            sets.append("updated_at=?")
+            vals.append(ts)
+            vals.append(eval_id)
+            conn.execute(
+                f"UPDATE clip_evaluations SET {','.join(sets)} WHERE id=?", vals
+            )
+        else:
+            eval_id = new_id()
+            conn.execute("""
+                INSERT INTO clip_evaluations
+                    (id, clip_id, job_id, decision, rejection_reasons, correction_notes,
+                     edit_time_seconds, pipeline_version, config_snapshot, created_at, updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                eval_id, clip_id,
+                kwargs.get("job_id", ""),
+                kwargs.get("decision", ""),
+                json.dumps(kwargs.get("rejection_reasons", [])),
+                kwargs.get("correction_notes", ""),
+                int(kwargs.get("edit_time_seconds", 0)),
+                kwargs.get("pipeline_version", ""),
+                json.dumps(kwargs.get("config_snapshot", {})),
+                ts, ts,
+            ))
+    return eval_id
+
+
+def get_evaluation(clip_id: str) -> dict | None:
+    """Return the evaluation record for a clip, or None if not yet evaluated."""
+    with db() as conn:
+        row = conn.execute(
+            "SELECT * FROM clip_evaluations WHERE clip_id=?", (clip_id,)
+        ).fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    d["rejection_reasons"] = _parse_json_field(d.get("rejection_reasons"), [])
+    d["config_snapshot"] = _parse_json_field(d.get("config_snapshot"), {})
+    return d
+
+
+def list_evaluations(job_id=None, decision=None, from_date=None, to_date=None,
+                     limit=200, offset=0) -> list[dict]:
+    conds, params = [], []
+    if job_id:
+        conds.append("e.job_id=?"); params.append(job_id)
+    if decision:
+        conds.append("e.decision=?"); params.append(decision)
+    if from_date:
+        conds.append("e.created_at>=?"); params.append(from_date)
+    if to_date:
+        conds.append("e.created_at<=?"); params.append(to_date + "T23:59:59")
+    where = ("WHERE " + " AND ".join(conds)) if conds else ""
+    with db() as conn:
+        rows = conn.execute(f"""
+            SELECT e.*,
+                   c.duration_s,
+                   c.prepublish_decision AS clip_decision,
+                   cand.virality_score, cand.hook_score,
+                   v.source_title, v.source_url, v.creator_slug,
+                   j.created_at AS job_created_at,
+                   j.pipeline_snapshot
+            FROM clip_evaluations e
+            JOIN clips c ON c.id = e.clip_id
+            LEFT JOIN candidates cand ON cand.id = c.candidate_id
+            LEFT JOIN jobs j ON j.id = e.job_id
+            LEFT JOIN videos v ON v.job_id = e.job_id
+            {where}
+            ORDER BY e.created_at DESC
+            LIMIT ? OFFSET ?
+        """, params + [limit, offset]).fetchall()
+    result = []
+    for row in rows:
+        d = dict(row)
+        d["rejection_reasons"] = _parse_json_field(d.get("rejection_reasons"), [])
+        d["config_snapshot"] = _parse_json_field(d.get("config_snapshot"), {})
+        d["pipeline_snapshot"] = _parse_json_field(d.get("pipeline_snapshot"), {})
+        result.append(d)
+    return result
+
+
+def add_missed_moment(job_id: str, video_id: str, start_s: float, end_s: float,
+                      notes: str = "") -> str:
+    mid = new_id()
+    with db() as conn:
+        conn.execute("""
+            INSERT INTO missed_moments (id, job_id, video_id, start_s, end_s, notes, created_at)
+            VALUES (?,?,?,?,?,?,?)
+        """, (mid, job_id, video_id or "", start_s, end_s, notes, now()))
+    return mid
+
+
+def list_missed_moments(job_id: str) -> list[dict]:
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM missed_moments WHERE job_id=? ORDER BY start_s ASC",
+            (job_id,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_missed_moment(moment_id: str):
+    with db() as conn:
+        conn.execute("DELETE FROM missed_moments WHERE id=?", (moment_id,))
+
+
+# ── YouTube upload session helpers ────────────────────────────────────────────
+
+_YT_SESSION_ALLOWED_COLS = {
+    "status", "session_url", "remote_video_id", "remote_process_status",
+    "remote_privacy_status", "bytes_sent", "file_size", "file_path", "file_hash",
+    "attempts", "last_attempt_at", "error_message", "error_code",
+    "locked_at", "locked_by", "updated_at",
+}
+
+
+def create_yt_upload_session(
+    pub_id: str, clip_id: str, channel_id: str, title: str,
+    description: str, tags: list, is_for_kids: bool,
+    file_path: str, file_hash: str, file_size: int,
+) -> str:
+    sid = new_id()
+    ts = now()
+    with db() as conn:
+        conn.execute("""
+            INSERT INTO yt_upload_sessions
+            (id, pub_id, clip_id, channel_id, title, description, tags, is_for_kids,
+             file_path, file_hash, file_size, status, bytes_sent, attempts,
+             created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,'pending',0,0,?,?)
+        """, (
+            sid, pub_id, clip_id, channel_id, title or "", description or "",
+            json.dumps(tags or []), 1 if is_for_kids else 0,
+            file_path, file_hash, file_size, ts, ts,
+        ))
+    return sid
+
+
+def get_yt_upload_session_by_pub(pub_id: str) -> dict | None:
+    with db() as conn:
+        row = conn.execute(
+            "SELECT * FROM yt_upload_sessions WHERE pub_id=?", (pub_id,)
+        ).fetchone()
+    if row:
+        r = dict(row)
+        r.pop("session_url", None)  # Never return to callers
+        return r
+    return None
+
+
+def get_yt_upload_session(session_id: str) -> dict | None:
+    with db() as conn:
+        row = conn.execute(
+            "SELECT * FROM yt_upload_sessions WHERE id=?", (session_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def update_yt_upload_session(session_id: str, **kwargs):
+    allowed = {k: v for k, v in kwargs.items() if k in _YT_SESSION_ALLOWED_COLS}
+    if not allowed:
+        return
+    sets = ", ".join(f"{k}=?" for k in allowed)
+    vals = list(allowed.values()) + [session_id]
+    with db() as conn:
+        conn.execute(f"UPDATE yt_upload_sessions SET {sets} WHERE id=?", vals)
+
+
+def claim_yt_upload_session(worker_id: str) -> dict | None:
+    """Atomically claim the next pending session. Returns full row (with session_url)."""
+    threshold = datetime.utcnow() - timedelta(minutes=5)
+    threshold_iso = threshold.isoformat()
+    with db() as conn:
+        row = conn.execute("""
+            SELECT * FROM yt_upload_sessions
+            WHERE status='pending'
+              AND (locked_at IS NULL OR locked_at < ?)
+              AND attempts < 3
+            ORDER BY created_at ASC
+            LIMIT 1
+        """, (threshold_iso,)).fetchone()
+        if not row:
+            return None
+        ts = now()
+        conn.execute(
+            "UPDATE yt_upload_sessions SET locked_at=?, locked_by=?, updated_at=? WHERE id=?",
+            (ts, worker_id, ts, row["id"]),
+        )
+    return dict(row)
+
+
+def list_stale_yt_sessions() -> list[dict]:
+    threshold = datetime.utcnow() - timedelta(minutes=10)
+    threshold_iso = threshold.isoformat()
+    with db() as conn:
+        rows = conn.execute("""
+            SELECT * FROM yt_upload_sessions
+            WHERE status='uploading' AND locked_at < ?
+        """, (threshold_iso,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ── YouTube OAuth state ────────────────────────────────────────────────────────
+
+def save_yt_oauth_state(state: str, code_verifier: str):
+    ts = now()
+    with db() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO yt_oauth_state (state, code_verifier, created_at) VALUES (?,?,?)",
+            (state, code_verifier, ts),
+        )
+
+
+def consume_yt_oauth_state(state: str) -> str | None:
+    """Return code_verifier if state is valid (and delete it). One-time use."""
+    with db() as conn:
+        row = conn.execute(
+            "SELECT code_verifier FROM yt_oauth_state WHERE state=?", (state,)
+        ).fetchone()
+        if row:
+            conn.execute("DELETE FROM yt_oauth_state WHERE state=?", (state,))
+            return row["code_verifier"]
+    return None

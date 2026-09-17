@@ -9,6 +9,8 @@ Usage:
     python server.py --workers 4  # same
 """
 import sys, io, logging
+from dotenv import load_dotenv
+load_dotenv()
 
 # Windows: force UTF-8 on stdout/stderr before any Rich Console objects are created.
 # Without this, pipeline.py's Console() captures cp1252 stdout and crashes on box-drawing
@@ -29,6 +31,7 @@ import uvicorn
 from engine.database import init_db
 from engine.config import CONFIG
 from workers.pipeline_worker import WorkerPool
+from workers.yt_upload_worker import YTUploadWorker
 import api.main as api_module
 
 
@@ -108,6 +111,11 @@ def main():
 
     # 3. Inject pool into API module before uvicorn starts
     api_module.pool = pool
+
+    # 4. Start YouTube upload worker
+    print("[boot] Starting YouTube upload worker...")
+    yt_worker = YTUploadWorker()
+    yt_worker.start()
 
     print("[boot] API server starting on http://localhost:8000")
     print("[boot] Dashboard: http://localhost:8000/dashboard")

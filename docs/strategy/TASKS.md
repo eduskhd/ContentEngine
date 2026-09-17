@@ -46,10 +46,12 @@
 
 ## B — Alto (siguiente sprint)
 
-### B-001 — Publicación a YouTube (OAuth real)
+### B-001 — Publicación a YouTube (OAuth real) ✅ IMPLEMENTADO (2026-09-17)
 - **Impacto:** Cierra el loop completo: ingest → clips → publish. YouTube es la plataforma con API más estable y menos restrictiva.
-- **Qué hacer:** Activar el adaptador `publishers/youtube.py`. Configurar OAuth 2.0 con Google Cloud Console. Añadir UI en dashboard para autenticar y publicar.
-- **Criterio de éxito:** Clip marcado como APPROVED se puede publicar a YouTube Shorts en 1 click
+- **Qué hacer:** ~~Activar el adaptador `publishers/youtube.py`.~~ Implementado con flujo completo: OAuth PKCE, subida resumable, worker en background, UI en dashboard.
+- **Criterio de éxito:** Clip evaluado como "Publicable" puede aprobarse y subirse a YouTube como privado desde el dashboard.
+- **Estado:** Implementado y con tests. Pendiente de prueba real con cuenta Google conectada.
+- **Para activar:** Crear proyecto en Google Cloud Console → activar YouTube Data API v3 → credenciales OAuth para Desktop App → poner `YOUTUBE_CLIENT_ID` y `YOUTUBE_CLIENT_SECRET` en `.env` → conectar desde tab OAuth del dashboard.
 - **Esfuerzo estimado:** 2 semanas
 - **Dependencias:** Google Cloud Console project + OAuth credentials
 - **Riesgo:** Cambios en la API de YouTube. Mitigación: versionar el adaptador.

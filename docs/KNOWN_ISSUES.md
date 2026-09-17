@@ -13,11 +13,9 @@ All 80+ REST endpoints are unauthenticated. Any process running on the same mach
 
 ---
 
-## KI-SEC-002 — Dynamic SQL column-name interpolation in update_* helpers
+## ~~KI-SEC-002 — Dynamic SQL column-name interpolation in update_* helpers~~ FIXED 2026-09-15
 
-**File:** `engine/database.py` — `update_video`, `update_candidate`, `update_clip`, `update_job`, `update_creator`, `update_publication`.
-**Risk:** Column names come from Python `**kwargs` keys and are interpolated directly into the SQL string (e.g. `f"UPDATE videos SET {','.join(sets)} WHERE id=?"`). Currently all callers use hardcoded key names or allowlist-filtered dicts, so there is no direct user-controlled injection path. But if a future endpoint passes user input as kwargs keys without filtering, SQLi becomes possible.
-**Recommendation:** Add a column allowlist inside each `update_*` function before building the query.
+Column allowlists (`frozenset`) are enforced inside `update_video`, `update_candidate`, `update_clip`, `update_creator`, `update_publication` in `engine/database.py`. Unknown column names raise `ValueError` before SQL is built. `update_job` uses fixed parameter names (no dynamic column interpolation).
 
 ---
 
@@ -91,17 +89,13 @@ The SSE generator now falls back to DB when `job_id` is not in `_jobs`. If found
 
 **Partial mitigation:** yt-dlp skips re-download if the output file exists; transcript cache skips re-transcription if the same path was processed before. The second job is fast (warm run), but it still creates duplicate DB records.
 
-**Fix path:** Add a duplicate URL check in `POST /jobs/from-url` — query `jobs` by `source_path` for URL jobs. If a running or completed job exists for the same URL, return that job_id instead of creating a new one.
+**Partial fix (C-001):** `POST /jobs/from-url` now returns the existing non-failed job_id if the same URL was already submitted — prevents duplicate from the URL flow. File upload path (POST /jobs) does not have this deduplication.
 
 ---
 
-## KI-008 — No authentication on any endpoint
+## ~~KI-008 — No authentication on any endpoint~~ Duplicate of KI-SEC-001
 
-**Symptom:** All API endpoints are public. Anyone with network access to port 8000 can read, modify, or delete all data.
-
-**Status:** Accepted for Phase 2.5 (internal tool, localhost). Required before exposing to external users.
-
-**Fix path:** Add API key authentication middleware in `api/main.py` or reverse proxy with auth (nginx + basic auth).
+See KI-SEC-001. Removed as duplicate.
 
 ---
 
@@ -115,13 +109,11 @@ The SSE generator now falls back to DB when `job_id` is not in `_jobs`. If found
 
 ---
 
-## KI-011 — LLM analysis requires ANTHROPIC_API_KEY to be set manually
+## ~~KI-011 — LLM analysis requires ANTHROPIC_API_KEY to be set manually~~ PARTIALLY FIXED (B-003)
 
-**Symptom:** `engine/analyzers/llm_analyzer.py` is silent when no API key is present — the system falls back to heuristic-only scoring without any log message visible in the dashboard.
+`GET /health` now returns `llm_enabled: bool`. The dashboard header shows "✦ LLM ON" (green) or "LLM OFF" (gray) so the user can see at a glance whether LLM analysis is active.
 
-**Impact:** Low — heuristic scores still work. But users may not realize LLM enhancement is disabled.
-
-**Fix path:** Add `llm_enabled: bool` flag to `GET /health` response so the dashboard can show "LLM: enabled/disabled" status.
+**Remaining:** The system falls back to heuristic-only scoring without logging why. Acceptable for a private tool.
 
 **To enable:** Set `ANTHROPIC_API_KEY` in environment before starting server:
 ```powershell

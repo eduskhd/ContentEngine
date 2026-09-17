@@ -1,5 +1,106 @@
 # Changelog
 
+## 2026-09-17 — Publishing Center + YouTube Integration
+
+### New feature: YouTube upload to private with OAuth + resumable upload
+
+Completes the Publishing Center by adding end-to-end YouTube upload of approved clips as private videos.
+
+**New files:**
+- `publishers/yt_auth.py` — OAuth 2.0 + PKCE for installed apps. Token storage at `~/.contentengine/yt_tokens.json` (outside repo/DB). Functions: `get_auth_url`, `exchange_code`, `refresh_access_token`, `get_valid_token`, `save_tokens`, `load_tokens`, `revoke_tokens`, `fetch_channel_info`, `is_connected`.
+- `publishers/yt_upload.py` — Resumable upload engine. Functions: `check_shorts_compatibility`, `compute_file_hash`, `create_resumable_session`, `upload_chunk`, `resume_session`, `poll_video_status`, `classify_error`. `privacyStatus` always forced to `"private"`.
+- `workers/yt_upload_worker.py` — Background upload daemon (`daemon=True`). Atomic session claiming, chunk-by-chunk progress, stale session recovery on restart, retry with backoff, fatal error classification.
+- `tests/test_yt_publishing.py` — 20 mock-based tests (no real uploads). Tests: PKCE, auth URL, session_url not exposed, privacyStatus forced private, duplicate prevention, non-youtube rejection, is_for_kids validation.
+
+**Database (`engine/database.py`):**
+- New table `yt_upload_sessions` — tracks upload state, file hash at approval, resumable session URL (internal), bytes sent, remote video ID, processing/privacy status, retry info.
+- New table `yt_oauth_state` — one-time CSRF state tokens for OAuth flow.
+- New column `social_accounts.channel_name TEXT`.
+- New CRUD helpers: `create_yt_upload_session`, `get_yt_upload_session_by_pub`, `get_yt_upload_session`, `update_yt_upload_session`, `claim_yt_upload_session`, `list_stale_yt_sessions`, `save_yt_oauth_state`, `consume_yt_oauth_state`.
+
+**API (`api/main.py`):**
+- `GET /youtube/status` — connection + channel info, never exposes tokens.
+- `GET /youtube/connect` — generates PKCE + state, stores in `yt_oauth_state`, returns `auth_url`.
+- `GET /oauth/youtube/callback` — validates state (one-time), exchanges code, fetches channel info, returns success page.
+- `POST /youtube/disconnect` — revokes tokens, deletes token file.
+- `POST /publications/{pub_id}/youtube-upload` — validates platform, eval decision (`publish_as_is` required), file existence, YT connection; enqueues session. `is_for_kids` required.
+- `GET /yt-uploads/{session_id}` — poll status (session_url stripped).
+- `POST /yt-uploads/{session_id}/cancel` — cancel if pending.
+- `GET /publications/{pub_id}/yt-upload` — get session for a publication.
+
+**Server (`server.py`):**
+- `YTUploadWorker` started alongside pipeline workers at boot.
+
+**Dashboard (`dashboard/index.html`):**
+- OAuth tab: YouTube card replaced with full status panel showing channel name, Connect/Disconnect buttons, connection status indicator.
+- Publication edit modal: new YouTube Upload section for `youtube_shorts` publications. Shows "Aprobar y subir en privado" button (disabled unless eval=publish_as_is and YT connected), audience selector (made for kids), duration compatibility hint, upload progress bar, link to YouTube Studio on completion, cancel button.
+- `checkYoutubeStatus()` called on page load and on OAuth tab navigation.
+
+**Security:**
+- `session_url` never returned to any client.
+- `privacyStatus` forced server-side; client value ignored.
+- OAuth state validated + consumed atomically (one-time-use).
+- Tokens stored in `~/.contentengine/yt_tokens.json`, never in DB, logs, or API responses.
+- `is_for_kids` required and validated as boolean server-side.
+
+## 2026-09-15 — Quality Evaluation Sprint
+
+### New feature: clip quality evaluation system
+
+Adds a complete human-evaluation workflow to rate pipeline output without touching the pipeline itself.
+
+**Database (`engine/database.py`):**
+- New table `clip_evaluations` — stores decision, rejection reasons, correction notes, edit time, pipeline version, and config snapshot per clip
+- New table `missed_moments` — records good moments the pipeline missed, with start/end timestamps and free-text notes
+- New column `jobs.pipeline_snapshot TEXT` — JSON dict capturing git hash + all CONFIG thresholds at job creation time
+- `create_job()` now accepts optional `pipeline_snapshot` param
+- New CRUD helpers: `upsert_evaluation`, `get_evaluation`, `list_evaluations`, `add_missed_moment`, `list_missed_moments`, `delete_missed_moment`
+
+**API (`api/main.py`):**
+- `_get_pipeline_snapshot()` — captures git hash + all pipeline config fields at request time
+- `POST /jobs/from-url` now accepts `eval_mode: bool` — when True, bypasses idempotency check to allow deliberate re-evaluation with a different config. Previous results preserved.
+- `POST /clips/{clip_id}/evaluate` — create or update evaluation (decision + reasons + notes + timer)
+- `GET /clips/{clip_id}/evaluation` — fetch saved evaluation
+- `GET /evaluations` — list all evaluations with optional filters (job_id, decision, from_date, to_date)
+- `GET /evaluations/export?format=json|csv` — bulk export
+- `POST /jobs/{job_id}/missed-moments` — add a missed moment
+- `GET /jobs/{job_id}/missed-moments` — list missed moments for a job
+- `DELETE /missed-moments/{moment_id}` — remove a missed moment
+- Both `POST /jobs` and `POST /jobs/from-url` now persist `pipeline_snapshot` to DB on job creation
+
+**Dashboard (`dashboard/index.html`):**
+- New "Eval" tab in the clip modal right panel (4th tab after Style/Words/Position)
+- Eval panel includes: 3-state decision (Publicable / Editar / Rechazar), 8 rejection reason toggles, correction notes textarea, start/pause/reset edit-time timer, save button, and missed moments sub-section
+- Timer tracks actual editing time (accumulated seconds), not page-open time. Persists across tab switches within the same clip.
+- Eval state auto-loads from server when a clip is opened; timer resumes from saved value
+- Timer auto-pauses when the clip modal is closed
+- `eval_mode` checkbox in Advanced Options — enables bypass of URL deduplication for controlled re-experiments
+- Export Evaluations JSON/CSV buttons added to the Overview tab
+
+## 2026-09-15 — Full-App Audit: Security, UX, and Code Quality
+
+### Security fixes
+- **`api/main.py` fallback entry point:** `host="0.0.0.0"` → `host="127.0.0.1"` in `__main__` block — prevents accidental network exposure if the API is started directly via `python api/main.py` instead of `server.py`.
+- **XSS: `createJobCard` source unescaped:** `${source}` in `innerHTML` now wrapped in `_esc()` — blocked injection via malicious URL or filename in the job source field.
+- **XSS: analysis job option title:** `<option>` text now uses `_esc(title)` — consistent escaping for server-sourced strings in HTML.
+- **XSS: series title in innerHTML:** Series title in the Analysis tab now uses `_esc()`.
+- **Double-encoding fix in delete modal:** `textContent` + `_esc(name)` was showing raw `&amp;` for creator names with `&`. Fixed to use `name` directly (textContent already prevents XSS, no escaping needed).
+
+### Functional fixes
+- **Nav tab "Clips" → "Review":** The review queue tab was mislabeled "Clips". Now correctly says "Review" to match the section's purpose.
+- **"Minimal" caption preset button added:** The `minimal` preset was added to the backend in C-004 but the 4th preset button was missing from the caption editor UI. Now visible with a ◻ icon.
+- **Preset grid 3-col → 2×2:** Changed `grid-template-columns` from `repeat(3,1fr)` to `repeat(2,1fr)` so all 4 presets display in a clean 2×2 grid without an orphaned button.
+- **Overview "Total Clips" now accurate:** `loadOverview()` was fetching `/clips?limit=20`, so the stat cards showed a max of 20 instead of the real library total. Now fetches `?limit=9999`. The recent-clips table still shows only the 20 most recent (via `.slice(0,20)`).
+
+### UX improvements
+- **Overview table rows clickable:** Each row in the recent-clips table now has `onclick="openPlayer()"` — clicking a row opens the clip player directly.
+- **Post-generate toast navigation hint:** `generateTopClips()` and `generateSeries()` toasts now say "check Review tab" after generating clips, and immediately call `loadReview()` to pre-load the new clips in the background.
+- **Escape key closes all modals:** Previously only the clip player responded to Escape. Now all modals (pub-edit, pub-mark, dc-modal, delete-modal, assign-modal, creator-modal, coll-modal) close on Escape.
+- **Button keyboard focus ring:** `.btn:focus-visible` now shows a 2px blue outline for keyboard navigation — was invisible before.
+
+### Code cleanup
+- Removed dead CSS rule `.nj-pane{}` (empty ruleset with no properties).
+
 ## 2026-09-14 — Sprint B/C: 8 feature improvements
 
 ### B-002 — Spanish content scoring

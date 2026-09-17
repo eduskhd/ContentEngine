@@ -48,6 +48,7 @@ tr:hover td{background:#1c1c1c}
 /* Buttons */
 .btn{border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;transition:opacity .15s}
 .btn:hover{opacity:.85}
+.btn:focus-visible{outline:2px solid #3b82f6;outline-offset:2px}
 .btn-primary{background:#3b82f6;color:#fff}
 .btn-success{background:#16a34a;color:#fff}
 .btn-danger{background:#dc2626;color:#fff}
@@ -133,7 +134,7 @@ input[type=file]{font-size:13px;color:#888}
 .toggle-sw input:checked+.slider{background:#3b82f6}
 .toggle-sw .slider::after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:3px;left:3px;transition:transform .2s}
 .toggle-sw input:checked+.slider::after{transform:translateX(18px)}
-.preset-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.preset-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
 .preset-btn{background:#1a1a1a;border:2px solid #2a2a2a;border-radius:8px;padding:10px 6px;cursor:pointer;text-align:center;transition:border-color .15s}
 .preset-btn:hover{border-color:#444}
 .preset-btn.active{border-color:#3b82f6}
@@ -147,6 +148,42 @@ input[type=file]{font-size:13px;color:#888}
 .rerender-btn{width:100%;margin-top:auto;padding:10px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;transition:opacity .15s}
 .rerender-btn:hover{opacity:.85}
 .rerender-btn:disabled{opacity:.5;cursor:default}
+/* Eval tab */
+.eval-section{margin-bottom:16px}
+.eval-section-label{font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.eval-decision-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.eval-dec-btn{flex:1;min-width:80px;padding:8px 6px;border:2px solid #2a2a2a;border-radius:8px;background:#1a1a1a;color:#aaa;font-size:12px;font-weight:600;cursor:pointer;text-align:center;transition:border-color .15s,color .15s}
+.eval-dec-btn:hover{border-color:#444;color:#ddd}
+.eval-dec-btn.active-publish{border-color:#22c55e;color:#22c55e;background:#0d2a1a}
+.eval-dec-btn.active-edit{border-color:#f59e0b;color:#f59e0b;background:#2a1e00}
+.eval-dec-btn.active-reject{border-color:#ef4444;color:#ef4444;background:#2a0d0d}
+.eval-reasons{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.eval-reason-btn{padding:5px 8px;border:1px solid #2a2a2a;border-radius:6px;background:#1a1a1a;color:#888;font-size:11px;cursor:pointer;text-align:left;transition:border-color .15s,color .15s}
+.eval-reason-btn:hover{border-color:#444;color:#bbb}
+.eval-reason-btn.active{border-color:#ef4444;color:#ef4444;background:#1f0a0a}
+.eval-notes{width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;color:#ddd;font-size:12px;padding:8px;resize:vertical;font-family:inherit;min-height:56px}
+.eval-notes:focus{outline:none;border-color:#3b82f6}
+.eval-timer-row{display:flex;align-items:center;gap:8px}
+.eval-timer-display{font-family:monospace;font-size:18px;font-weight:700;color:#e0e0e0;min-width:56px}
+.eval-timer-btn{padding:5px 10px;border:1px solid #2a2a2a;border-radius:6px;background:#1a1a1a;color:#aaa;font-size:12px;cursor:pointer;transition:border-color .15s}
+.eval-timer-btn:hover{border-color:#555;color:#ddd}
+.eval-save-btn{width:100%;margin-top:auto;padding:10px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;transition:opacity .15s}
+.eval-save-btn:hover{opacity:.85}
+.eval-save-btn:disabled{opacity:.5;cursor:default}
+.eval-saved-badge{display:none;margin-top:6px;text-align:center;font-size:11px;color:#22c55e}
+.missed-list{display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto;margin-bottom:8px}
+.missed-item{display:flex;align-items:center;gap:6px;background:#1a1a1a;border-radius:6px;padding:6px 8px;font-size:12px;color:#aaa}
+.missed-item .mi-ts{font-family:monospace;color:#888;flex:1}
+.missed-item .mi-notes{flex:2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.missed-item .mi-del{background:none;border:none;color:#555;cursor:pointer;font-size:14px;padding:0 4px}
+.missed-item .mi-del:hover{color:#ef4444}
+.missed-add-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.missed-ts-input{width:72px;padding:5px 6px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;color:#ddd;font-size:12px;font-family:monospace}
+.missed-ts-input:focus{outline:none;border-color:#3b82f6}
+.missed-notes-input{flex:1;min-width:80px;padding:5px 8px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;color:#ddd;font-size:12px}
+.missed-notes-input:focus{outline:none;border-color:#3b82f6}
+.missed-add-btn{padding:5px 10px;background:#3b82f6;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap}
+.missed-add-btn:hover{opacity:.85}
 @media(max-width:620px){
   #video-modal .modal-inner{flex-direction:column;max-height:96vh}
   .modal-left{width:100%;flex:0 0 auto;border-right:none;border-bottom:1px solid #1c1c1c;padding:10px}
@@ -419,7 +456,6 @@ input[type=file]{font-size:13px;color:#888}
 .nj-src-btn{flex:1;background:none;border:none;color:#555;padding:9px 16px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s}
 .nj-src-btn.active{background:#2a2a2a;color:#fff;box-shadow:0 1px 4px #0006}
 .nj-src-btn:not(.active):hover{color:#aaa}
-.nj-pane{}
 .nj-field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
 .nj-label{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px}
 .nj-required{color:#f87171;font-size:11px}
@@ -497,7 +533,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <nav>
   <button onclick="showTab('overview',this)">Overview</button>
   <button onclick="showTab('library',this)">Library</button>
-  <button class="active" onclick="showTab('review',this)">Clips <span id="review-count" style="background:#78350f;color:#fbbf24;border-radius:99px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:4px"></span></button>
+  <button class="active" onclick="showTab('review',this)">Review <span id="review-count" style="background:#78350f;color:#fbbf24;border-radius:99px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:4px"></span></button>
   <button onclick="showTab('jobs',this)">Jobs</button>
   <button onclick="showTab('analysis',this)">Analysis</button>
   <button onclick="showTab('upload',this)">+ New Job</button>
@@ -518,7 +554,12 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     <div class="card"><div class="lbl">Active Workers</div><div class="val" id="s-workers">—</div></div>
     <div class="card"><div class="lbl">Jobs</div><div class="val" id="s-jobs">—</div></div>
   </div>
-  <div class="sec-hdr">Recent Clips</div>
+  <div class="sec-hdr" style="display:flex;align-items:center;gap:12px">
+    Recent Clips
+    <span style="flex:1"></span>
+    <a href="/evaluations/export?format=json" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;text-decoration:none">Export Evals JSON</a>
+    <a href="/evaluations/export?format=csv" download="evaluations.csv" class="btn btn-outline btn-sm" style="font-size:11px;text-decoration:none">Export Evals CSV</a>
+  </div>
   <div class="tbl-wrap">
     <table>
       <thead><tr><th>Clip</th><th>Creator</th><th>Hook</th><th>Viral</th><th>Score</th><th>Decision</th><th>Created</th></tr></thead>
@@ -877,6 +918,12 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
             </select>
           </div>
         </div>
+        <div class="nj-field" style="margin-top:10px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#aaa">
+            <input type="checkbox" id="nj-eval-mode" style="width:14px;height:14px;cursor:pointer">
+            <span><strong style="color:#f59e0b">Eval mode</strong> — re-run without dedup (para experimentos de configuración)</span>
+          </label>
+        </div>
       </div>
     </details>
 
@@ -915,9 +962,23 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
       <div style="flex:1"><div style="font-weight:600">Instagram</div><div style="font-size:12px;color:#555">Graph API — Reels</div></div>
       <button class="btn btn-primary btn-sm" onclick="startOAuth('instagram')">Connect</button>
     </div>
-    <div class="card" style="display:flex;align-items:center;gap:14px">
-      <div style="flex:1"><div style="font-weight:600">YouTube</div><div style="font-size:12px;color:#555">Data API v3 — Shorts</div></div>
-      <button class="btn btn-primary btn-sm" onclick="startOAuth('youtube')">Connect</button>
+    <div class="card" style="display:flex;flex-direction:column;gap:10px" id="yt-connect-card">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="flex:1">
+          <div style="font-weight:600">YouTube</div>
+          <div style="font-size:12px;color:#555">Data API v3 — Shorts (private uploads)</div>
+        </div>
+        <div id="yt-connect-status" style="font-size:11px;color:#666">Checking…</div>
+      </div>
+      <div id="yt-channel-info" style="display:none;padding:8px 10px;background:#111;border-radius:6px;font-size:12px;color:#aaa"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" id="yt-connect-btn" onclick="connectYoutube()">Connect</button>
+        <button class="btn btn-outline btn-sm" id="yt-disconnect-btn" style="display:none" onclick="disconnectYoutube()">Disconnect</button>
+      </div>
+      <div style="font-size:11px;color:#444;line-height:1.5">
+        Requires Google Cloud project with YouTube Data API v3 enabled.<br>
+        Set YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET in your .env file.
+      </div>
     </div>
   </div>
   <div id="oauth-result" style="margin-top:14px;font-size:12px;color:#888;white-space:pre-wrap;font-family:monospace;max-width:560px"></div>
@@ -1031,6 +1092,46 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
       <button class="btn btn-danger btn-sm" onclick="deletePubFromModal()">Delete Publication</button>
     </div>
     <div id="pem-status-bar" style="margin-top:12px;font-size:12px;color:#888"></div>
+    <!-- YouTube upload section — shown only for youtube_shorts publications -->
+    <div id="pem-yt-section" style="display:none;margin-top:14px;border-top:1px solid #1e1e1e;padding-top:14px">
+      <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">YouTube Upload</div>
+      <div id="pem-yt-form">
+        <div class="pub-field">
+          <label>Audience (required by YouTube)</label>
+          <div style="display:flex;gap:16px;font-size:12px;color:#aaa;margin-top:2px">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+              <input type="radio" name="yt-for-kids" value="false" checked> Not made for kids
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+              <input type="radio" name="yt-for-kids" value="true"> Made for kids
+            </label>
+          </div>
+        </div>
+        <div id="pem-yt-compat" style="font-size:11px;color:#888;margin-bottom:10px"></div>
+        <div id="pem-yt-eval-warning" style="font-size:11px;color:#fbbf24;margin-bottom:8px;display:none">
+          &#9888; This clip has not been evaluated as "Publish as-is". Upload not available.
+        </div>
+        <div id="pem-yt-noconn-warning" style="font-size:11px;color:#fbbf24;margin-bottom:8px;display:none">
+          &#9888; YouTube not connected. Go to OAuth tab to connect.
+        </div>
+        <button class="btn btn-success" id="pem-yt-upload-btn" onclick="startYtUpload()" disabled>
+          Aprobar y subir en privado
+        </button>
+        <div style="font-size:10px;color:#555;margin-top:5px">
+          Uploads as Private. Requires evaluation decision "Publish as-is".
+        </div>
+      </div>
+      <div id="pem-yt-status" style="display:none">
+        <div id="pem-yt-status-text" style="font-size:12px;color:#aaa"></div>
+        <div style="background:#1a1a1a;border-radius:4px;height:6px;margin-top:8px;overflow:hidden">
+          <div id="pem-yt-progress" style="height:100%;width:0%;background:#4ade80;transition:width .4s"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <a id="pem-yt-link" href="#" target="_blank" style="display:none;font-size:12px;color:#4ade80">Open in YouTube Studio &#8599;</a>
+          <button id="pem-yt-cancel-btn" class="btn btn-outline btn-sm" onclick="cancelYtUpload()" style="display:none">Cancel</button>
+        </div>
+      </div>
+    </div>
     <!-- Metrics section — shown only for published pubs -->
     <div id="pem-metrics-section" style="display:none;margin-top:16px;border-top:1px solid #2a2a2a;padding-top:14px">
       <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Performance Metrics</div>
@@ -1146,6 +1247,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         <button class="cap-tab active" onclick="capTab('style',this)">Style</button>
         <button class="cap-tab" onclick="capTab('words',this)">Words</button>
         <button class="cap-tab" onclick="capTab('position',this)">Position</button>
+        <button class="cap-tab" onclick="capTab('eval',this)">Eval</button>
       </div>
 
       <!-- STYLE panel -->
@@ -1168,6 +1270,9 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           </button>
           <button class="preset-btn" data-preset="glowing_bold" onclick="selectPreset('glowing_bold',this)">
             <div class="picon">🔥</div><div class="pname">Glowing</div>
+          </button>
+          <button class="preset-btn" data-preset="minimal" onclick="selectPreset('minimal',this)">
+            <div class="picon">◻</div><div class="pname">Minimal</div>
           </button>
         </div>
 
@@ -1245,6 +1350,68 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         </div>
       </div>
 
+      <!-- EVAL panel -->
+      <div class="cap-panel" id="cap-eval" style="display:flex;flex-direction:column;gap:0;overflow-y:auto;padding-bottom:8px">
+
+        <!-- Decision -->
+        <div class="eval-section">
+          <div class="eval-section-label">Decision</div>
+          <div class="eval-decision-row">
+            <button class="eval-dec-btn" id="eval-dec-publish" onclick="evalSetDecision('publish_as_is')">✓ Publicable</button>
+            <button class="eval-dec-btn" id="eval-dec-edit" onclick="evalSetDecision('publish_after_edit')">✏ Editar</button>
+            <button class="eval-dec-btn" id="eval-dec-reject" onclick="evalSetDecision('rejected')">✗ Rechazar</button>
+          </div>
+        </div>
+
+        <!-- Rejection reasons -->
+        <div class="eval-section" id="eval-reasons-section">
+          <div class="eval-section-label">Motivos</div>
+          <div class="eval-reasons">
+            <button class="eval-reason-btn" data-reason="seleccion_floja" onclick="evalToggleReason('seleccion_floja',this)">Selección floja</button>
+            <button class="eval-reason-btn" data-reason="falta_contexto" onclick="evalToggleReason('falta_contexto',this)">Falta contexto</button>
+            <button class="eval-reason-btn" data-reason="corte_incompleto" onclick="evalToggleReason('corte_incompleto',this)">Corte incompleto</button>
+            <button class="eval-reason-btn" data-reason="duplicado" onclick="evalToggleReason('duplicado',this)">Duplicado</button>
+            <button class="eval-reason-btn" data-reason="transcripcion" onclick="evalToggleReason('transcripcion',this)">Transcripción</button>
+            <button class="eval-reason-btn" data-reason="captions" onclick="evalToggleReason('captions',this)">Captions</button>
+            <button class="eval-reason-btn" data-reason="encuadre" onclick="evalToggleReason('encuadre',this)">Encuadre</button>
+            <button class="eval-reason-btn" data-reason="otros" onclick="evalToggleReason('otros',this)">Otros</button>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="eval-section">
+          <div class="eval-section-label">Notas</div>
+          <textarea class="eval-notes" id="eval-notes" placeholder="Observaciones opcionales…" rows="3"></textarea>
+        </div>
+
+        <!-- Timer -->
+        <div class="eval-section">
+          <div class="eval-section-label">Tiempo de edición</div>
+          <div class="eval-timer-row">
+            <span class="eval-timer-display" id="eval-timer-display">0:00</span>
+            <button class="eval-timer-btn" id="eval-timer-toggle" onclick="evalTimerToggle()">▶ Start</button>
+            <button class="eval-timer-btn" onclick="evalTimerReset()">↺ Reset</button>
+          </div>
+        </div>
+
+        <!-- Save -->
+        <button class="eval-save-btn" id="eval-save-btn" onclick="evalSave()">Guardar evaluación</button>
+        <div class="eval-saved-badge" id="eval-saved-badge">✓ Guardado</div>
+
+        <!-- Missed moments -->
+        <div class="eval-section" style="margin-top:16px">
+          <div class="eval-section-label">Momentos perdidos</div>
+          <div class="missed-list" id="missed-list"></div>
+          <div class="missed-add-row">
+            <input class="missed-ts-input" id="missed-start" type="number" min="0" step="0.1" placeholder="Inicio s">
+            <input class="missed-ts-input" id="missed-end" type="number" min="0" step="0.1" placeholder="Fin s">
+            <input class="missed-notes-input" id="missed-notes" type="text" placeholder="Notas…" maxlength="200">
+            <button class="missed-add-btn" onclick="evalAddMoment()">+ Añadir</button>
+          </div>
+        </div>
+
+      </div>
+
       <!-- Footer: save + re-render -->
       <div style="padding:12px;border-top:1px solid #1c1c1c;display:flex;gap:8px">
         <button class="btn btn-outline btn-sm" onclick="saveCapSettings()" style="flex:1">Save style</button>
@@ -1275,6 +1442,7 @@ function loadTab(t) {
   ({overview:loadOverview, library:loadLibrary, review:loadReview,
     jobs:loadJobs, analytics:loadAnalytics, publishing:loadPublishing})[t]?.();
   if (t === 'analysis') populateAnalysisJobSelect();
+  if (t === 'oauth') checkYoutubeStatus();
 }
 
 // ── Video player + Caption editor ─────────────────────────────────────────────
@@ -1325,9 +1493,19 @@ async function openPlayer(clipId, showReviewBtns) {
   } catch(e) {
     _capData = null; _capSettings = null; _capGroups = null;
   }
+
+  // Reset and load evaluation state
+  evalReset();
+  evalTimerReset();
+  api(`/clips/${clipId}/evaluation`).then(ev => evalLoad(ev)).catch(() => {});
+  // Load missed moments (need job_id from clip)
+  api(`/clips/${clipId}`).then(c => {
+    if (c.job_id) evalLoadMissedMoments(c.job_id);
+  }).catch(() => {});
 }
 
 function closePlayer() {
+  evalTimerPause();
   const v = document.getElementById('modal-video');
   v.pause(); v.removeEventListener('timeupdate', _onTimeUpdate);
   v.src = '';
@@ -1347,7 +1525,17 @@ async function modalAction(action) {
     toast('Action failed: ' + e.message, 'error');
   }
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayer(); });
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (document.getElementById('video-modal')?.classList.contains('open')) { closePlayer(); return; }
+  if (document.getElementById('pub-edit-modal')?.classList.contains('open')) { closePubModal(); return; }
+  if (document.getElementById('pub-mark-modal')?.classList.contains('open')) { closePubMarkModal(); return; }
+  if (document.getElementById('dc-modal')?.classList.contains('open')) { closeDcModal(); return; }
+  if (document.getElementById('delete-modal')?.classList.contains('open')) { closeDeleteModal(); return; }
+  if (document.getElementById('assign-modal')?.classList.contains('open')) { closeAssignModal(); return; }
+  if (document.getElementById('creator-modal')?.classList.contains('open')) { closeCreatorModal(); return; }
+  if (document.getElementById('coll-modal')?.classList.contains('open')) { closeCollModal(); return; }
+});
 
 // ── Caption tabs ───────────────────────────────────────────────────────────────
 function capTab(name, btn) {
@@ -1355,6 +1543,198 @@ function capTab(name, btn) {
   document.querySelectorAll('.cap-panel').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('cap-' + name).classList.add('active');
+}
+
+// ── Quality Evaluation ─────────────────────────────────────────────────────────
+let _evalDecision = '';
+let _evalReasons = new Set();
+let _evalTimer = { accumulated: 0, startedAt: null, interval: null };
+let _evalMissedJobId = null;
+
+function evalReset() {
+  _evalDecision = '';
+  _evalReasons = new Set();
+  document.querySelectorAll('.eval-dec-btn').forEach(b => b.className = 'eval-dec-btn');
+  document.querySelectorAll('.eval-reason-btn').forEach(b => b.classList.remove('active'));
+  const notes = document.getElementById('eval-notes');
+  if (notes) notes.value = '';
+  const badge = document.getElementById('eval-saved-badge');
+  if (badge) badge.style.display = 'none';
+  _evalMissedJobId = null;
+  const ml = document.getElementById('missed-list');
+  if (ml) ml.innerHTML = '';
+}
+
+function evalLoad(ev) {
+  _evalDecision = ev.decision || '';
+  _evalReasons = new Set(ev.rejection_reasons || []);
+  const notes = document.getElementById('eval-notes');
+  if (notes) notes.value = ev.correction_notes || '';
+  // Accumulated timer from saved value
+  _evalTimer.accumulated = ev.edit_time_seconds || 0;
+  evalTimerRender();
+  // Restore decision buttons
+  document.querySelectorAll('.eval-dec-btn').forEach(b => b.className = 'eval-dec-btn');
+  if (_evalDecision === 'publish_as_is')
+    document.getElementById('eval-dec-publish')?.classList.add('active-publish');
+  else if (_evalDecision === 'publish_after_edit')
+    document.getElementById('eval-dec-edit')?.classList.add('active-edit');
+  else if (_evalDecision === 'rejected')
+    document.getElementById('eval-dec-reject')?.classList.add('active-reject');
+  // Restore reason buttons
+  document.querySelectorAll('.eval-reason-btn').forEach(b => {
+    if (_evalReasons.has(b.dataset.reason)) b.classList.add('active');
+    else b.classList.remove('active');
+  });
+}
+
+function evalSetDecision(d) {
+  _evalDecision = d;
+  document.querySelectorAll('.eval-dec-btn').forEach(b => b.className = 'eval-dec-btn');
+  const map = {
+    publish_as_is: ['eval-dec-publish', 'active-publish'],
+    publish_after_edit: ['eval-dec-edit', 'active-edit'],
+    rejected: ['eval-dec-reject', 'active-reject'],
+  };
+  if (map[d]) {
+    document.getElementById(map[d][0])?.classList.add(map[d][1]);
+  }
+}
+
+function evalToggleReason(reason, btn) {
+  if (_evalReasons.has(reason)) {
+    _evalReasons.delete(reason);
+    btn.classList.remove('active');
+  } else {
+    _evalReasons.add(reason);
+    btn.classList.add('active');
+  }
+}
+
+function evalTimerToggle() {
+  if (_evalTimer.startedAt) {
+    evalTimerPause();
+  } else {
+    evalTimerStart();
+  }
+}
+
+function evalTimerStart() {
+  if (_evalTimer.startedAt) return;
+  _evalTimer.startedAt = Date.now();
+  _evalTimer.interval = setInterval(evalTimerRender, 500);
+  const btn = document.getElementById('eval-timer-toggle');
+  if (btn) btn.textContent = '⏸ Pause';
+}
+
+function evalTimerPause() {
+  if (!_evalTimer.startedAt) return;
+  _evalTimer.accumulated += Math.floor((Date.now() - _evalTimer.startedAt) / 1000);
+  _evalTimer.startedAt = null;
+  clearInterval(_evalTimer.interval);
+  evalTimerRender();
+  const btn = document.getElementById('eval-timer-toggle');
+  if (btn) btn.textContent = '▶ Start';
+}
+
+function evalTimerReset() {
+  evalTimerPause();
+  _evalTimer.accumulated = 0;
+  evalTimerRender();
+}
+
+function evalTimerGetSeconds() {
+  let s = _evalTimer.accumulated;
+  if (_evalTimer.startedAt) s += Math.floor((Date.now() - _evalTimer.startedAt) / 1000);
+  return s;
+}
+
+function evalTimerRender() {
+  const s = evalTimerGetSeconds();
+  const m = Math.floor(s / 60);
+  const sec = String(s % 60).padStart(2, '0');
+  const el = document.getElementById('eval-timer-display');
+  if (el) el.textContent = `${m}:${sec}`;
+}
+
+async function evalSave() {
+  if (!_currentClipId) return;
+  const btn = document.getElementById('eval-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    await api(`/clips/${_currentClipId}/evaluate`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        decision: _evalDecision,
+        rejection_reasons: [..._evalReasons],
+        correction_notes: document.getElementById('eval-notes')?.value || '',
+        edit_time_seconds: evalTimerGetSeconds(),
+      }),
+    });
+    const badge = document.getElementById('eval-saved-badge');
+    if (badge) { badge.style.display = 'block'; setTimeout(() => badge.style.display = 'none', 2500); }
+    loadReview(); loadOverview();
+  } catch(e) {
+    toast('Error al guardar: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar evaluación'; }
+  }
+}
+
+async function evalLoadMissedMoments(jobId) {
+  _evalMissedJobId = jobId;
+  try {
+    const moments = await api(`/jobs/${jobId}/missed-moments`);
+    evalRenderMissedList(moments);
+  } catch(e) {}
+}
+
+function evalRenderMissedList(moments) {
+  const list = document.getElementById('missed-list');
+  if (!list) return;
+  list.innerHTML = moments.map(m => `
+    <div class="missed-item" data-id="${m.id}">
+      <span class="mi-ts">${m.start_s.toFixed(1)}s → ${m.end_s.toFixed(1)}s</span>
+      <span class="mi-notes">${_esc(m.notes || '')}</span>
+      <button class="mi-del" onclick="evalDeleteMoment('${m.id}',this.closest('.missed-item'))" title="Eliminar">×</button>
+    </div>
+  `).join('');
+}
+
+async function evalAddMoment() {
+  if (!_evalMissedJobId) { toast('Abre un clip asociado a un job', 'error'); return; }
+  const startEl = document.getElementById('missed-start');
+  const endEl = document.getElementById('missed-end');
+  const notesEl = document.getElementById('missed-notes');
+  const start_s = parseFloat(startEl?.value);
+  const end_s = parseFloat(endEl?.value);
+  const notes = notesEl?.value.trim() || '';
+  if (isNaN(start_s) || isNaN(end_s) || end_s <= start_s) {
+    toast('Fin debe ser mayor que inicio', 'error'); return;
+  }
+  try {
+    await api(`/jobs/${_evalMissedJobId}/missed-moments`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({start_s, end_s, notes}),
+    });
+    if (startEl) startEl.value = '';
+    if (endEl) endEl.value = '';
+    if (notesEl) notesEl.value = '';
+    evalLoadMissedMoments(_evalMissedJobId);
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function evalDeleteMoment(momentId, el) {
+  try {
+    await api(`/missed-moments/${momentId}`, {method: 'DELETE'});
+    el?.remove();
+  } catch(e) {
+    toast('Error al eliminar', 'error');
+  }
 }
 
 // ── Preset selection ───────────────────────────────────────────────────────────
@@ -1714,7 +2094,7 @@ function updateJobCard(el, data) {
 async function loadOverview() {
   try {
     const [health, clips, jobs, ws] = await Promise.all([
-      api('/health'), api('/clips?limit=20'), api('/jobs'), api('/workers/stats')
+      api('/health'), api('/clips?limit=9999'), api('/jobs'), api('/workers/stats')
     ]);
     document.getElementById('server-status').textContent = '● online';
     document.getElementById('server-status').style.color = '#4ade80';
@@ -1744,9 +2124,9 @@ async function loadOverview() {
     document.getElementById('review-count').textContent = pending || '';
 
     document.getElementById('recent-clips-body').innerHTML = clips.length
-      ? clips.map(c => `<tr>
+      ? clips.slice(0, 20).map(c => `<tr style="cursor:pointer" onclick="openPlayer('${c.id}',false)" title="Play clip">
           <td>${monoId(c.id)}</td>
-          <td style="color:#888;font-size:12px">${c.creator_slug||'—'}</td>
+          <td style="color:#888;font-size:12px">${_esc(c.creator_slug||'—')}</td>
           <td>${sc(c.hook_score)}</td>
           <td>${sc(c.virality_score)}</td>
           <td>${sc(c.prepublish_score||c.virality_score)}</td>
@@ -2814,7 +3194,7 @@ function openDeleteCreatorModal(creatorId, name) {
   _dcCreatorName = name;
   _dcImpact = null;
   _dcOption = 'unassign';
-  document.getElementById('dc-heading').textContent = `Delete "${_esc(name)}"`;
+  document.getElementById('dc-heading').textContent = `Delete "${name}"`;
   document.getElementById('dc-impact').innerHTML =
     '<div style="color:#555;font-size:12px;padding:8px 0">Loading impact…</div>';
   document.getElementById('dc-jobs-warn').style.display = 'none';
@@ -3342,6 +3722,7 @@ async function njSubmit() {
     sourceLabel = url;
     let resp;
     try {
+      const evalMode = document.getElementById('nj-eval-mode')?.checked || false;
       resp = await fetch(`${API}/jobs/from-url`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -3351,6 +3732,7 @@ async function njSubmit() {
           creator_id: creatorId || undefined,
           video_name: videoName || undefined,
           language: language || undefined,
+          eval_mode: evalMode,
         }),
       });
     } catch(e) { toast('Network error: ' + e.message, 'error'); btn.disabled = false; btn.textContent = 'Create Job'; return; }
@@ -3439,7 +3821,7 @@ function createJobCard(jobId, source, status) {
   div.className = 'job-card';
   div.innerHTML = `
     <div class="jid">${jobId.substring(0,8)}</div>
-    <div style="font-size:13px;color:#888;margin-bottom:8px;word-break:break-all">${source}</div>
+    <div style="font-size:13px;color:#888;margin-bottom:8px;word-break:break-all">${_esc(source)}</div>
     <div class="jstatus">${chip(status)}</div>
     <div class="progress-bar"><div class="progress-fill ${status}" style="width:10%"></div></div>
     <div class="job-stats" style="font-size:12px;color:#555;margin-top:8px"></div>`;
@@ -3495,7 +3877,7 @@ async function populateAnalysisJobSelect() {
     completed.map(j=>{
       const title = j.source_title || j.video_slug || j.id.substring(0,8);
       const dt = j.created_at ? j.created_at.substring(0,10) : '';
-      return `<option value="${j.id}" ${j.id===current?'selected':''}>${title} (${dt})</option>`;
+      return `<option value="${j.id}" ${j.id===current?'selected':''}>${_esc(title)} (${dt})</option>`;
     }).join('');
 }
 
@@ -3608,7 +3990,7 @@ function renderSeriesList(series) {
       <div class="series-header">
         <div class="series-score-badge">${score}/100</div>
         <div>
-          <div class="series-title">${s.title||'Narrative Series'} — ${(s.parts||[]).length} parts</div>
+          <div class="series-title">${_esc(s.title||'Narrative Series')} — ${(s.parts||[]).length} parts</div>
           <div class="viral-reasons" style="margin-top:4px">${reasonTags}</div>
         </div>
         <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="generateSeries('${s.id}')">Generate All</button>
@@ -3623,7 +4005,9 @@ async function generateTopClips(n) {
   toast(`Generating top ${n} clips…`, 'success');
   try {
     const r = await api(`/jobs/${_analysisJobId}/generate-top?n=${n}`, {method:'POST'});
-    toast(`Generated ${r.count||0} clips`, 'success');
+    const cnt = r.count || 0;
+    toast(`Generated ${cnt} clip${cnt!==1?'s':''}${cnt>0?' — check Review tab':''}`, 'success');
+    if (cnt > 0) loadReview();
     loadAnalysis(_analysisJobId);
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
@@ -3633,7 +4017,9 @@ async function generateSeries(seriesId) {
   toast('Generating series clips…', 'success');
   try {
     const r = await api(`/jobs/${_analysisJobId}/generate-series/${seriesId}`, {method:'POST'});
-    toast(`Generated ${r.count||0} series clips`, 'success');
+    const cnt = r.count || 0;
+    toast(`Generated ${cnt} series clip${cnt!==1?'s':''}${cnt>0?' — check Review tab':''}`, 'success');
+    if (cnt > 0) loadReview();
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
@@ -3663,6 +4049,8 @@ loadReview();
 _refreshTimer = setInterval(loadReview, 10000);
 // Pre-populate analysis job selector
 populateAnalysisJobSelect();
+// Check YouTube connection status on load
+checkYoutubeStatus();
 
 // ══════════════════════════════════════════════════════════════════════════════
 // PUBLISHING CENTER
@@ -3917,12 +4305,14 @@ async function openPubEdit(pubId) {
         ${p.external_url ? `· <a href="${_esc(p.external_url)}" target="_blank" style="color:#4ade80">Open Post ↗</a>` : ''}`;
     }
     document.getElementById('pub-edit-modal').classList.add('open');
+    loadYtUploadSection(p);
   } catch(e) { toast('Failed to load: ' + e.message, 'error'); }
 }
 
 function closePubModal() {
   document.getElementById('pub-edit-modal').classList.remove('open');
   _pubCurrentPub = null;
+  if (_ytPollInterval) { clearInterval(_ytPollInterval); _ytPollInterval = null; }
 }
 
 async function savePubEdit() {
@@ -4084,6 +4474,205 @@ function changeClipCreator() {
   if (!_currentClipVideoId) return;
   // Reuse the assign modal, targeting the clip's video
   showAssignModal([_currentClipVideoId]);
+}
+
+// ── YouTube Connect ───────────────────────────────────────────────────────────
+
+let _ytStatus = null;
+
+async function checkYoutubeStatus() {
+  try {
+    _ytStatus = await api('/youtube/status');
+    const statusEl = document.getElementById('yt-connect-status');
+    const channelEl = document.getElementById('yt-channel-info');
+    const connectBtn = document.getElementById('yt-connect-btn');
+    const disconnectBtn = document.getElementById('yt-disconnect-btn');
+    if (!statusEl) return;
+    if (_ytStatus && _ytStatus.connected) {
+      statusEl.textContent = '✓ Connected';
+      statusEl.style.color = '#4ade80';
+      if (channelEl && _ytStatus.channel_title) {
+        channelEl.style.display = '';
+        channelEl.innerHTML = `Channel: <b style="color:#fff">${_esc(_ytStatus.channel_title)}</b>${_ytStatus.channel_id ? ' (' + _esc(_ytStatus.channel_id) + ')' : ''}`;
+      }
+      if (connectBtn) connectBtn.style.display = 'none';
+      if (disconnectBtn) disconnectBtn.style.display = '';
+    } else {
+      statusEl.textContent = 'Not connected';
+      statusEl.style.color = '#666';
+      if (channelEl) channelEl.style.display = 'none';
+      if (connectBtn) connectBtn.style.display = '';
+      if (disconnectBtn) disconnectBtn.style.display = 'none';
+    }
+  } catch(e) { console.error('YT status check failed', e); }
+}
+
+function connectYoutube() {
+  window.open('/youtube/connect', '_blank');
+  toast('Abriendo autorización de YouTube…', 'info');
+  setTimeout(checkYoutubeStatus, 8000);
+}
+
+async function disconnectYoutube() {
+  if (!confirm('Disconnect YouTube? Pending uploads will be paused.')) return;
+  try {
+    await api('/youtube/disconnect', {method:'POST'});
+    _ytStatus = null;
+    toast('YouTube disconnected', 'success');
+    checkYoutubeStatus();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── YouTube Upload in pub modal ───────────────────────────────────────────────
+
+let _ytUploadSessionId = null;
+let _ytPollInterval = null;
+
+async function loadYtUploadSection(pub) {
+  const section = document.getElementById('pem-yt-section');
+  if (!section) return;
+  if (pub.platform !== 'youtube_shorts') { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  const evalWarn   = document.getElementById('pem-yt-eval-warning');
+  const connWarn   = document.getElementById('pem-yt-noconn-warning');
+  const uploadBtn  = document.getElementById('pem-yt-upload-btn');
+  const form       = document.getElementById('pem-yt-form');
+  const statusDiv  = document.getElementById('pem-yt-status');
+
+  // Check for existing session
+  try {
+    const existing = await api('/publications/' + pub.id + '/yt-upload');
+    if (existing && existing.status) {
+      _ytUploadSessionId = existing.id;
+      renderYtStatus(existing);
+      return;
+    }
+  } catch(e) { _ytUploadSessionId = null; }
+
+  form.style.display = '';
+  statusDiv.style.display = 'none';
+  _ytUploadSessionId = null;
+
+  // Check eval
+  let evalOk = false;
+  try {
+    const ev = await api('/clips/' + pub.clip_id + '/evaluation');
+    evalOk = ev && ev.decision === 'publish_as_is';
+  } catch(e) {}
+
+  // Refresh YT connection status
+  await checkYoutubeStatus();
+  const connected = !!(_ytStatus && _ytStatus.connected);
+
+  if (evalWarn)  evalWarn.style.display  = evalOk    ? 'none' : '';
+  if (connWarn)  connWarn.style.display  = connected ? 'none' : '';
+  if (uploadBtn) uploadBtn.disabled      = !(evalOk && connected);
+
+  // Duration compat hint
+  const compatEl = document.getElementById('pem-yt-compat');
+  if (compatEl) {
+    const dur = pub.duration_s;
+    if (dur) {
+      compatEl.textContent = dur > 60
+        ? `⚠ Duration ${dur.toFixed(0)}s > 60s — may not qualify as Short`
+        : `✓ Duration ${dur.toFixed(0)}s — Short-compatible`;
+      compatEl.style.color = dur > 60 ? '#fbbf24' : '#4ade80';
+    } else {
+      compatEl.textContent = '';
+    }
+  }
+}
+
+function renderYtStatus(session) {
+  const form       = document.getElementById('pem-yt-form');
+  const statusDiv  = document.getElementById('pem-yt-status');
+  const statusText = document.getElementById('pem-yt-status-text');
+  const progress   = document.getElementById('pem-yt-progress');
+  const link       = document.getElementById('pem-yt-link');
+  const cancelBtn  = document.getElementById('pem-yt-cancel-btn');
+  if (!statusDiv) return;
+  if (form) form.style.display = 'none';
+  statusDiv.style.display = '';
+
+  const labels = {
+    pending:     'Queued for upload…',
+    uploading:   'Uploading…',
+    processing:  'Uploaded — YouTube is processing…',
+    private:     'Available on YouTube (Private)',
+    error:       'Upload failed',
+    needs_check: 'Status uncertain — check YouTube Studio',
+    cancelled:   'Cancelled',
+  };
+  if (statusText) {
+    statusText.textContent = labels[session.status] || session.status;
+    if (session.error_message) statusText.textContent += ': ' + session.error_message;
+  }
+
+  const pct = (session.file_size > 0)
+    ? Math.round((session.bytes_sent / session.file_size) * 100) : 0;
+  if (progress) {
+    progress.style.width = (session.status === 'private' ? 100 : pct) + '%';
+    progress.style.background = session.status === 'error' ? '#ef4444' : '#4ade80';
+  }
+
+  if (link && session.remote_video_id) {
+    link.href = 'https://studio.youtube.com/video/' + session.remote_video_id + '/edit';
+    link.style.display = '';
+  }
+  if (cancelBtn) cancelBtn.style.display = session.status === 'pending' ? '' : 'none';
+
+  if (['pending','uploading','processing'].includes(session.status)) {
+    if (_ytPollInterval) clearInterval(_ytPollInterval);
+    _ytPollInterval = setInterval(async () => {
+      try {
+        const s = await api('/yt-uploads/' + session.id);
+        renderYtStatus(s);
+        if (!['pending','uploading','processing'].includes(s.status)) {
+          clearInterval(_ytPollInterval); _ytPollInterval = null;
+        }
+      } catch(e) { clearInterval(_ytPollInterval); _ytPollInterval = null; }
+    }, 8000);
+  }
+}
+
+async function startYtUpload() {
+  if (!_pubCurrentPub) return;
+  const isForKids = document.querySelector('input[name="yt-for-kids"]:checked')?.value === 'true';
+  const title       = (document.getElementById('pem-title')?.value || '').trim() || 'Short';
+  const description = (document.getElementById('pem-caption')?.value || '').trim();
+  const rawTags     = document.getElementById('pem-hashtags')?.value || '';
+  const tags = rawTags.split(/[\s,\n]+/).filter(Boolean).map(t => t.startsWith('#') ? t.slice(1) : t);
+
+  const channel = (_ytStatus && _ytStatus.channel_title) || 'Connected channel';
+  if (!confirm(
+    `Upload this clip to YouTube as PRIVATE?\n\n` +
+    `Channel: ${channel}\n` +
+    `Visibility: Private\n` +
+    `Audience: ${isForKids ? 'Made for kids' : 'Not made for kids'}\n\n` +
+    `This will send the file to YouTube. Proceed?`
+  )) return;
+
+  try {
+    const r = await api('/publications/' + _pubCurrentPub.id + '/youtube-upload', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({title, description, tags, is_for_kids: isForKids}),
+    });
+    _ytUploadSessionId = r.session_id;
+    toast('Upload queued!', 'success');
+    renderYtStatus({id: r.session_id, status: 'pending', bytes_sent: 0, file_size: 0});
+  } catch(e) { toast('Upload failed: ' + e.message, 'error'); }
+}
+
+async function cancelYtUpload() {
+  if (!_ytUploadSessionId) return;
+  try {
+    await api('/yt-uploads/' + _ytUploadSessionId + '/cancel', {method:'POST'});
+    toast('Upload cancelled', 'success');
+    if (_ytPollInterval) { clearInterval(_ytPollInterval); _ytPollInterval = null; }
+    renderYtStatus({id: _ytUploadSessionId, status: 'cancelled', bytes_sent: 0, file_size: 0});
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 // ── Prepare clip for publishing (from clip modal) ────────────────────────────

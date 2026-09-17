@@ -4,7 +4,13 @@ Optimizations:
 - WhisperModel is kept as a module-level singleton (avoids reloading between jobs).
 - Word-level data is cached in videos.words_json (survives server restarts).
 - Audio is extracted once to 16kHz mono WAV and reused for all downstream steps.
+
+Backend priority:
+1. HuggingFace WhisperForConditionalGeneration (torch-based, no av/tiktoken DLLs)
+2. faster-whisper (ctranslate2-based, faster but needs av/ctranslate2)
+3. openai-whisper (legacy fallback, needs tiktoken)
 """
+import re
 import subprocess
 import os
 from pathlib import Path
@@ -12,8 +18,18 @@ from pathlib import Path
 from engine.config import CONFIG
 from engine import database as db
 
-# ── Model singleton ───────────────────────────────────────────────────────────
-_WHISPER_MODEL = None
+# ── Singletons ────────────────────────────────────────────────────────────────
+_WHISPER_MODEL = None   # faster-whisper
+_HF_PROCESSOR = None    # transformers WhisperProcessor
+_HF_MODEL = None        # transformers WhisperForConditionalGeneration
+
+_HF_MODEL_MAP = {
+    "tiny":   "openai/whisper-tiny",
+    "base":   "openai/whisper-base",
+    "small":  "openai/whisper-small",
+    "medium": "openai/whisper-medium",
+    "large":  "openai/whisper-large-v3",
+}
 
 
 def _get_model():
@@ -22,6 +38,20 @@ def _get_model():
         from faster_whisper import WhisperModel
         _WHISPER_MODEL = WhisperModel(CONFIG.whisper_model, device="cpu", compute_type="int8")
     return _WHISPER_MODEL
+
+
+def _get_hf_model():
+    global _HF_PROCESSOR, _HF_MODEL
+    if _HF_MODEL is None:
+        from transformers import WhisperProcessor, WhisperForConditionalGeneration
+        import torch
+        model_name = _HF_MODEL_MAP.get(CONFIG.whisper_model, "openai/whisper-small")
+        _HF_PROCESSOR = WhisperProcessor.from_pretrained(model_name)
+        _HF_MODEL = WhisperForConditionalGeneration.from_pretrained(
+            model_name, torch_dtype=torch.float32
+        )
+        _HF_MODEL.eval()
+    return _HF_PROCESSOR, _HF_MODEL
 
 
 def _has_audio_stream(video_path: str) -> bool:
@@ -82,7 +112,6 @@ def _extract_audio(video_path: str, video_id: str = None) -> str:
     stem = Path(video_path).stem
     audio_path = str(out_dir / f"{stem}_audio.wav")
 
-    # Skip re-extraction if file already exists (e.g. pipeline retry)
     if Path(audio_path).exists():
         return audio_path
 
@@ -103,15 +132,123 @@ def _extract_audio(video_path: str, video_id: str = None) -> str:
 
 def _run_whisper(audio_path: str) -> list[dict]:
     try:
-        return _run_faster_whisper(audio_path)
+        return _run_hf_whisper(audio_path)
     except Exception:
-        return _run_openai_whisper(audio_path)
+        try:
+            return _run_faster_whisper(audio_path)
+        except Exception:
+            return _run_openai_whisper(audio_path)
+
+
+def _run_hf_whisper(audio_path: str) -> list[dict]:
+    """HuggingFace Whisper — uses torch only, no av/tiktoken DLLs required."""
+    import soundfile as sf
+    import torch
+    import numpy as np
+
+    processor, model = _get_hf_model()
+
+    audio, sr = sf.read(audio_path, dtype="float32")
+    if audio.ndim > 1:
+        audio = audio.mean(axis=1)
+
+    # Resample to 16 kHz if needed
+    if sr != 16000:
+        import librosa
+        audio = librosa.resample(audio, orig_sr=sr, target_sr=16000)
+        sr = 16000
+
+    TARGET_SR = 16000
+    CHUNK_S = 30
+    chunk_samples = CHUNK_S * TARGET_SR
+
+    all_segments: list[dict] = []
+    offset = 0
+
+    while offset < len(audio):
+        chunk_end = min(offset + chunk_samples, len(audio))
+        chunk = audio[offset:chunk_end].copy()
+        time_offset = offset / TARGET_SR
+
+        # Pad short final chunk to 30 s so the model always gets a full context window
+        if len(chunk) < chunk_samples:
+            chunk = np.pad(chunk, (0, chunk_samples - len(chunk)))
+
+        inputs = processor(chunk, sampling_rate=TARGET_SR, return_tensors="pt")
+
+        with torch.no_grad():
+            generated = model.generate(
+                **inputs,
+                return_timestamps=True,
+                task="transcribe",
+            )
+
+        decoded = processor.batch_decode(generated, skip_special_tokens=False)
+        raw_text = decoded[0] if decoded else ""
+
+        segs = _parse_whisper_timestamp_tokens(raw_text, time_offset)
+        all_segments.extend(segs)
+
+        offset = chunk_end
+
+    return all_segments
+
+
+def _parse_whisper_timestamp_tokens(raw: str, time_offset: float) -> list[dict]:
+    """
+    Parse Whisper timestamp tokens of the form <|0.00|>text<|1.20|>.
+    Returns a list of segment dicts with interpolated word timestamps.
+    """
+    # Match timestamp token value
+    ts_pattern = re.compile(r"<\|([\d.]+)\|>")
+    parts = ts_pattern.split(raw)
+
+    # parts alternates: [pre-text, ts1, text1, ts2, text2, ts3, ...]
+    segments = []
+    i = 0
+    while i < len(parts) - 2:
+        try:
+            t_start = float(parts[i]) + time_offset
+            text = parts[i + 1].strip()
+            t_end = float(parts[i + 2]) + time_offset
+        except (ValueError, IndexError):
+            i += 1
+            continue
+
+        # Skip empty or pure-noise segments
+        if not text or t_end <= t_start:
+            i += 2
+            continue
+
+        words_raw = [w for w in text.split() if w]
+        if not words_raw:
+            i += 2
+            continue
+
+        n = len(words_raw)
+        word_dur = (t_end - t_start) / n
+        seg_words = [
+            {
+                "word": words_raw[j],
+                "start": round(t_start + j * word_dur, 3),
+                "end": round(t_start + (j + 1) * word_dur, 3),
+                "probability": 1.0,
+            }
+            for j in range(n)
+        ]
+        segments.append({
+            "text": text,
+            "start": t_start,
+            "end": t_end,
+            "words": seg_words,
+        })
+        i += 2
+
+    return segments
 
 
 def _run_faster_whisper(audio_path: str) -> list[dict]:
     model = _get_model()
-    # VAD filter removes silence segments, reducing hallucinations.
-    # Falls back gracefully on older faster-whisper versions that lack the parameter.
     try:
         segments_gen, _ = model.transcribe(
             audio_path,

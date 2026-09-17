@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-12 (Clipping Engine V2)
+Last updated: 2026-09-15 (Full-app audit: security, UX, code cleanup)
 
 ## Readiness classification: INTERNAL ALPHA READY
 
@@ -32,7 +32,7 @@ See `docs/PRODUCTION_READINESS.md` for full assessment.
 | Library (job list) | ✓ Working | Grouped by creator/video, persists across restarts |
 | Clip modal + video player | ✓ Working | Inline playback via `/clips/{id}/preview` |
 | Caption editor | ✓ Working | 3 tabs: Style / Words / Position; canvas real-time preview |
-| Caption presets | ✓ Working | Impact, Aura, Glowing Bold |
+| Caption presets | ✓ Working | Impact, Aura, Glowing Bold, Minimal |
 | Re-render captions | ✓ Working | POST `/clips/{id}/re-render` |
 | Download single clip | ✓ Working | Prefers captioned_path, falls back to output_path |
 | Download all (ZIP) | ✓ Working | GET `/jobs/{id}/download-all` |
@@ -48,6 +48,7 @@ See `docs/PRODUCTION_READINESS.md` for full assessment.
 | Date filter: 90d + custom range | ✓ Working | Filter chip panel now includes Last 90 Days and Custom Range (from/to date pickers) |
 | Performance metrics entry | ✓ Working | POST /publications/{id}/metrics — manual views/likes/comments/shares entry from Mark Published modal and edit modal |
 | Performance timing | ✓ Working | `GET /jobs/{id}/timing`, `GET /performance/summary` — per-stage wall-clock data persisted in `pipeline_timings` |
+| Quality evaluation | ✓ Working | Eval tab in clip modal: 3-state decision, 8 reason toggles, correction notes, start/pause timer, save. Missed moments sub-section. Export JSON/CSV. `eval_mode` bypass for re-experiments. |
 
 ## Performance (2026-09-10 optimization)
 

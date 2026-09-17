@@ -3,7 +3,7 @@ import uuid, shutil, asyncio, datetime, json, zipfile, tempfile, subprocess
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException, UploadFile, File, Form, Query, Body
+from fastapi import FastAPI, BackgroundTasks, HTTPException, UploadFile, File, Form, Query, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -27,6 +27,35 @@ _jobs: dict = {}
 
 # Worker pool — injected by server.py at startup
 pool = None
+
+
+def _get_pipeline_snapshot() -> dict:
+    """Capture current processing config for evaluation linkage."""
+    git_hash = "unknown"
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+            cwd=str(Path(__file__).parent.parent),
+        )
+        if r.returncode == 0:
+            git_hash = r.stdout.strip()
+    except Exception:
+        pass
+    import os as _os
+    return {
+        "git_hash": git_hash,
+        "whisper_model": CONFIG.whisper_model,
+        "min_candidate_composite": CONFIG.min_candidate_composite,
+        "min_clip_duration": CONFIG.min_clip_duration,
+        "max_clip_duration": CONFIG.max_clip_duration,
+        "target_clips": CONFIG.target_clips,
+        "intro_skip_ratio": CONFIG.intro_skip_ratio,
+        "outro_skip_ratio": CONFIG.outro_skip_ratio,
+        "caption_min_word_confidence": CONFIG.caption_min_word_confidence,
+        "llm_enabled": bool(_os.environ.get("ANTHROPIC_API_KEY", "").strip()),
+        "captured_at": datetime.datetime.utcnow().isoformat(),
+    }
 
 
 # ── LIFECYCLE ───────────────────────────────────────────────────────────────
@@ -184,11 +213,13 @@ async def create_job(
     else:
         raise HTTPException(503, "Worker pool not available")
 
-    # Persist creator_id on job record immediately
-    if resolved_creator_id:
-        conn = dbmod.get_db()
-        conn.execute("UPDATE jobs SET creator_id=? WHERE id=?", [resolved_creator_id, job_id])
-        conn.commit(); conn.close()
+    snap = _get_pipeline_snapshot()
+    snap_str = json.dumps(snap)
+    with dbmod.db() as conn:
+        conn.execute("UPDATE jobs SET pipeline_snapshot=? WHERE id=?", [snap_str, job_id])
+        if resolved_creator_id:
+            conn.execute("UPDATE jobs SET creator_id=? WHERE id=?",
+                         [resolved_creator_id, job_id])
 
     return {"job_id": job_id, "status": "queued"}
 
@@ -327,6 +358,7 @@ async def create_job_from_url(
     video_name: str = Body(""),
     content_type: str = Body("auto"),
     language: str = Body("auto"),
+    eval_mode: bool = Body(False),
 ):
     """Submit a job by providing a video URL (YouTube, TikTok, Instagram, etc.)."""
     if not is_url(url):
@@ -336,17 +368,18 @@ async def create_job_from_url(
     except ValueError as exc:
         raise HTTPException(400, f"URL not allowed: {exc}")
 
-    # Idempotency: if a running or completed job already exists for this URL, return it
-    with dbmod.db() as conn:
-        existing = conn.execute("""
-            SELECT j.id, j.status FROM jobs j
-            LEFT JOIN videos v ON v.job_id = j.id
-            WHERE (v.source_url = ? OR j.source_path = ?)
-              AND LOWER(j.status) NOT IN ('failed')
-            ORDER BY j.created_at DESC LIMIT 1
-        """, (url, url)).fetchone()
-    if existing:
-        return {"job_id": existing["id"], "status": existing["status"].lower(), "duplicate": True}
+    # Idempotency: skip when eval_mode=True (intentional re-evaluation experiment)
+    if not eval_mode:
+        with dbmod.db() as conn:
+            existing = conn.execute("""
+                SELECT j.id, j.status FROM jobs j
+                LEFT JOIN videos v ON v.job_id = j.id
+                WHERE (v.source_url = ? OR j.source_path = ?)
+                  AND LOWER(j.status) NOT IN ('failed')
+                ORDER BY j.created_at DESC LIMIT 1
+            """, (url, url)).fetchone()
+        if existing:
+            return {"job_id": existing["id"], "status": existing["status"].lower(), "duplicate": True}
 
     job_id = str(uuid.uuid4())
     resolved_creator = creator or "unknown"
@@ -381,18 +414,19 @@ async def create_job_from_url(
     else:
         raise HTTPException(503, "Worker pool not available")
 
-    # Persist creator_id and video_name on DB job record
-    if resolved_creator_id or video_name:
-        with dbmod.db() as conn:
-            if resolved_creator_id:
-                conn.execute("UPDATE jobs SET creator_id=? WHERE id=?",
-                             [resolved_creator_id, job_id])
-            # video_name stored as source_title placeholder until pipeline sets it
-            if video_name:
-                conn.execute(
-                    "UPDATE videos SET source_title=? WHERE job_id=?",
-                    [video_name, job_id],
-                )
+    # Persist creator_id, video_name, and pipeline snapshot on DB job record
+    snap = _get_pipeline_snapshot()
+    snap_str = json.dumps(snap)
+    with dbmod.db() as conn:
+        conn.execute("UPDATE jobs SET pipeline_snapshot=? WHERE id=?", [snap_str, job_id])
+        if resolved_creator_id:
+            conn.execute("UPDATE jobs SET creator_id=? WHERE id=?",
+                         [resolved_creator_id, job_id])
+        if video_name:
+            conn.execute(
+                "UPDATE videos SET source_title=? WHERE job_id=?",
+                [video_name, job_id],
+            )
 
     return {"job_id": job_id, "status": "queued"}
 
@@ -888,7 +922,10 @@ async def oauth_start(platform: str):
 
 
 @app.get("/oauth/{platform}/callback")
-async def oauth_callback(platform: str, code: str, state: str):
+async def oauth_callback(platform: str, request: Request, code: str = None, state: str = None, error: str = None):
+    if platform == "youtube":
+        # Delegate to the proper YouTube PKCE handler
+        return await youtube_oauth_callback(code=code, state=state, error=error)
     from publishers import get_publisher
     publisher = get_publisher(platform)
     tokens = publisher.exchange_code(code, f"http://localhost:8000/oauth/{platform}/callback")
@@ -897,6 +934,245 @@ async def oauth_callback(platform: str, code: str, state: str):
         "tokens": tokens,
         "instructions": "Copy these tokens to your .env file and restart the server.",
     }
+
+
+# ── YOUTUBE OAUTH ────────────────────────────────────────────────────────────
+
+@app.get("/youtube/status")
+async def youtube_status():
+    """Connection status and channel info. Never exposes tokens."""
+    from publishers import yt_auth
+    try:
+        connected = yt_auth.is_connected()
+        if not connected:
+            return {"connected": False}
+        token = yt_auth.get_valid_token()
+        if not token:
+            return {"connected": False}
+        try:
+            info = yt_auth.fetch_channel_info(token)
+            return {
+                "connected": True,
+                "channel_id": info["channel_id"],
+                "channel_title": info["title"],
+                "thumbnail_url": info.get("thumbnail_url", ""),
+            }
+        except Exception:
+            return {"connected": True, "channel_id": None, "channel_title": None}
+    except RuntimeError as e:
+        # Client ID / Secret not configured
+        return {"connected": False, "error": str(e)}
+
+
+@app.get("/youtube/connect")
+async def youtube_connect():
+    """Start YouTube OAuth flow — redirects browser directly to Google."""
+    import secrets as _secrets
+    from publishers import yt_auth
+    from fastapi import HTTPException
+    from fastapi.responses import RedirectResponse
+    try:
+        state = _secrets.token_urlsafe(24)
+        verifier, _ = yt_auth.generate_pkce()
+        dbmod.save_yt_oauth_state(state, verifier)
+        auth_url = yt_auth.get_auth_url(state, verifier)
+        return RedirectResponse(url=auth_url)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/oauth/youtube/callback")
+async def youtube_oauth_callback(
+    code: str = None,
+    state: str = None,
+    error: str = None,
+):
+    """OAuth callback. Validates state (one-time), exchanges code, stores tokens."""
+    from fastapi.responses import HTMLResponse as _HTML
+    from publishers import yt_auth
+
+    if error:
+        return _HTML(f"<h2>Authorization denied</h2><p>{error}</p>", status_code=400)
+
+    if not code or not state:
+        return _HTML("<h2>Missing parameters</h2>", status_code=400)
+
+    code_verifier = dbmod.consume_yt_oauth_state(state)
+    if not code_verifier:
+        return _HTML("<h2>Invalid or expired state parameter</h2>", status_code=400)
+
+    try:
+        token_data = yt_auth.exchange_code(code, code_verifier)
+        access_token = token_data.get("access_token")
+        channel = yt_auth.fetch_channel_info(access_token)
+        return _HTML(
+            f"""
+            <html><body style="font-family:sans-serif;background:#111;color:#eee;padding:40px">
+            <h2 style="color:#4ade80">YouTube Connected</h2>
+            <p>Channel: <b>{channel['title']}</b></p>
+            <p>You can close this tab and return to the dashboard.</p>
+            </body></html>
+            """
+        )
+    except Exception as exc:
+        return _HTML(f"<h2>Authorization failed</h2><p>{exc}</p>", status_code=500)
+
+
+@app.post("/youtube/disconnect")
+async def youtube_disconnect():
+    """Revoke YouTube tokens and clear connection."""
+    from publishers import yt_auth
+    yt_auth.revoke_tokens()
+    return {"disconnected": True}
+
+
+# ── YOUTUBE UPLOADS ───────────────────────────────────────────────────────────
+
+@app.post("/publications/{pub_id}/youtube-upload")
+async def start_youtube_upload(pub_id: str, body: dict = Body({})):
+    """
+    Validate and enqueue a YouTube upload for a publication.
+
+    Security rules enforced here:
+    - Publication platform must be youtube_shorts
+    - Clip evaluation decision must be 'publish_as_is'
+    - Clip file must exist on disk
+    - YouTube account must be connected
+    - is_for_kids must be provided as boolean (required by YouTube ToS)
+    - privacyStatus is ALWAYS forced to 'private' server-side
+    - Eval 'publish_as_is' is a quality signal — upload still requires explicit user action
+    """
+    from publishers import yt_auth
+    from publishers.yt_upload import compute_file_hash
+
+    if "is_for_kids" not in body:
+        raise HTTPException(400, "is_for_kids (boolean) is required by YouTube Terms of Service")
+    is_for_kids = bool(body["is_for_kids"])
+
+    conn = dbmod.get_db()
+    pub = conn.execute("SELECT * FROM publications WHERE id=?", [pub_id]).fetchone()
+    conn.close()
+    if not pub:
+        raise HTTPException(404, "Publication not found")
+    pub = dict(pub)
+
+    if pub["platform"] != "youtube_shorts":
+        raise HTTPException(400, "This publication is not for youtube_shorts")
+
+    # Check for existing session
+    existing = dbmod.get_yt_upload_session_by_pub(pub_id)
+    if existing:
+        return {"session_id": existing["id"], "status": existing["status"], "existing": True}
+
+    # Validate clip
+    conn = dbmod.get_db()
+    clip = conn.execute("""
+            SELECT cl.*, ca.id as candidate_id
+            FROM clips cl
+            JOIN candidates ca ON cl.candidate_id = ca.id
+            WHERE cl.id=?
+        """, [pub["clip_id"]]).fetchone()
+    conn.close()
+
+    if not clip:
+        raise HTTPException(404, "Clip not found")
+    clip = dict(clip)
+
+    # Check clip evaluation — accept clip_evaluations.decision='publish_as_is'
+    # OR legacy clips.prepublish_decision='PUBLISH' for older processed clips
+    eval_row = dbmod.get_evaluation(pub["clip_id"])
+    eval_ok = (eval_row and eval_row.get("decision") == "publish_as_is") or \
+              (clip.get("prepublish_decision") == "PUBLISH")
+    if not eval_ok:
+        raise HTTPException(400, "Clip must be evaluated as 'publish_as_is' before uploading")
+
+    # Verify file
+    file_path = clip.get("captioned_path") or clip.get("output_path")
+    if not file_path or not Path(file_path).exists():
+        raise HTTPException(400, "Clip file not found on disk")
+
+    # Verify YouTube connected
+    if not yt_auth.is_connected():
+        raise HTTPException(400, "YouTube account not connected — use /youtube/connect first")
+
+    token = yt_auth.get_valid_token()
+    if not token:
+        raise HTTPException(400, "YouTube token invalid — re-authenticate via /youtube/connect")
+
+    channel_info = yt_auth.fetch_channel_info(token)
+    channel_id = channel_info["channel_id"]
+
+    file_size = Path(file_path).stat().st_size
+    file_hash = compute_file_hash(file_path)
+
+    title = (body.get("title") or pub.get("title") or "Short")[:100]
+    description = (body.get("description") or pub.get("caption") or "")[:5000]
+    tags_raw = body.get("tags")
+    if tags_raw is None:
+        raw_hashtags = pub.get("hashtags") or "[]"
+        try:
+            hashtags = json.loads(raw_hashtags) if isinstance(raw_hashtags, str) else raw_hashtags
+        except Exception:
+            hashtags = []
+        tags = [t.lstrip("#") for t in hashtags if t]
+    else:
+        tags = [str(t) for t in tags_raw]
+
+    session_id = dbmod.create_yt_upload_session(
+        pub_id=pub_id,
+        clip_id=pub["clip_id"],
+        channel_id=channel_id,
+        title=title,
+        description=description,
+        tags=tags,
+        is_for_kids=is_for_kids,
+        file_path=str(file_path),
+        file_hash=file_hash,
+        file_size=file_size,
+    )
+
+    return {"session_id": session_id, "status": "pending", "existing": False}
+
+
+def _safe_yt_session(row: dict) -> dict:
+    """Strip session_url before returning to clients."""
+    r = dict(row)
+    r.pop("session_url", None)
+    return r
+
+
+@app.get("/yt-uploads/{session_id}")
+async def get_yt_upload_status(session_id: str):
+    """Poll upload status. Does NOT expose session_url."""
+    row = dbmod.get_yt_upload_session(session_id)
+    if not row:
+        raise HTTPException(404, "Upload session not found")
+    return _safe_yt_session(row)
+
+
+@app.post("/yt-uploads/{session_id}/cancel")
+async def cancel_yt_upload(session_id: str):
+    """Cancel an upload session if it is still pending."""
+    row = dbmod.get_yt_upload_session(session_id)
+    if not row:
+        raise HTTPException(404, "Upload session not found")
+    if row["status"] != "pending":
+        raise HTTPException(400, f"Cannot cancel session in status '{row['status']}' — only 'pending' can be cancelled")
+    dbmod.update_yt_upload_session(
+        session_id,
+        status="cancelled",
+        updated_at=datetime.utcnow().isoformat(),
+    )
+    return {"cancelled": True}
+
+
+@app.get("/publications/{pub_id}/yt-upload")
+async def get_pub_yt_upload(pub_id: str):
+    """Get the YouTube upload session for a publication, if one exists."""
+    row = dbmod.get_yt_upload_session_by_pub(pub_id)
+    if not row:
+        raise HTTPException(404, "No upload session for this publication")
+    return row
 
 
 # ── ANALYTICS ────────────────────────────────────────────────────────────────
@@ -1999,6 +2275,159 @@ async def admin_orphan_check():
     }
 
 
+# ── QUALITY EVALUATIONS ──────────────────────────────────────────────────────
+
+_VALID_DECISIONS = {"publish_as_is", "publish_after_edit", "rejected", ""}
+_DECISION_TO_PREPUB = {
+    "publish_as_is": "PUBLISH",
+    "publish_after_edit": "REVIEW",
+    "rejected": "REJECT",
+}
+_VALID_REJECTION_REASONS = {
+    "seleccion_floja", "falta_contexto", "corte_incompleto", "duplicado",
+    "transcripcion", "captions", "encuadre", "otros",
+}
+
+
+@app.post("/clips/{clip_id}/evaluate")
+async def upsert_clip_evaluation(clip_id: str, body: dict = Body(...)):
+    """Create or update the human quality evaluation for a clip."""
+    with dbmod.db() as conn:
+        row = conn.execute(
+            "SELECT id, job_id FROM clips WHERE id=?", [clip_id]
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "Clip not found")
+
+    decision = str(body.get("decision", ""))
+    if decision not in _VALID_DECISIONS:
+        raise HTTPException(400, f"Invalid decision '{decision}'. "
+                            f"Must be one of: {sorted(_VALID_DECISIONS - {''})}")
+
+    rejection_reasons = [str(r) for r in (body.get("rejection_reasons") or [])]
+    bad = [r for r in rejection_reasons if r not in _VALID_REJECTION_REASONS]
+    if bad:
+        raise HTTPException(400, f"Unknown rejection reason(s): {bad}")
+
+    correction_notes = str(body.get("correction_notes", ""))[:2000]
+    edit_time_seconds = max(0, int(body.get("edit_time_seconds", 0)))
+
+    # Keep prepublish_decision in sync with the structured evaluation
+    if decision in _DECISION_TO_PREPUB:
+        dbmod.update_clip(clip_id, prepublish_decision=_DECISION_TO_PREPUB[decision])
+
+    snap = _get_pipeline_snapshot()
+    eval_id = dbmod.upsert_evaluation(
+        clip_id,
+        job_id=row["job_id"] or "",
+        decision=decision,
+        rejection_reasons=rejection_reasons,
+        correction_notes=correction_notes,
+        edit_time_seconds=edit_time_seconds,
+        pipeline_version=snap.get("git_hash", ""),
+        config_snapshot=snap,
+    )
+    return {"eval_id": eval_id, "clip_id": clip_id, "decision": decision}
+
+
+@app.get("/clips/{clip_id}/evaluation")
+async def get_clip_evaluation(clip_id: str):
+    """Return the evaluation record for a clip (404 if not yet evaluated)."""
+    ev = dbmod.get_evaluation(clip_id)
+    if not ev:
+        raise HTTPException(404, "No evaluation found for this clip")
+    return ev
+
+
+@app.get("/evaluations")
+async def list_evaluations(
+    job_id: str = Query(None),
+    decision: str = Query(None),
+    from_date: str = Query(None),
+    to_date: str = Query(None),
+    limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+):
+    """List all evaluations with optional filters."""
+    return dbmod.list_evaluations(
+        job_id=job_id, decision=decision,
+        from_date=from_date, to_date=to_date,
+        limit=limit, offset=offset,
+    )
+
+
+@app.get("/evaluations/export")
+async def export_evaluations(
+    fmt: str = Query("json", alias="format"),
+    job_id: str = Query(None),
+    from_date: str = Query(None),
+    to_date: str = Query(None),
+):
+    """Export evaluations as JSON or CSV."""
+    rows = dbmod.list_evaluations(
+        job_id=job_id, from_date=from_date, to_date=to_date, limit=10000
+    )
+    if fmt == "csv":
+        import io, csv as _csv
+        buf = io.StringIO()
+        fields = [
+            "id", "clip_id", "job_id", "decision", "rejection_reasons",
+            "correction_notes", "edit_time_seconds", "pipeline_version",
+            "source_title", "creator_slug", "duration_s", "virality_score",
+            "hook_score", "job_created_at", "created_at",
+        ]
+        writer = _csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
+        writer.writeheader()
+        for r in rows:
+            r["rejection_reasons"] = ";".join(r.get("rejection_reasons") or [])
+            writer.writerow(r)
+        return StreamingResponse(
+            iter([buf.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=evaluations.csv"},
+        )
+    return rows
+
+
+# ── MISSED MOMENTS ────────────────────────────────────────────────────────────
+
+@app.post("/jobs/{job_id}/missed-moments")
+async def add_missed_moment(job_id: str, body: dict = Body(...)):
+    """Record a good moment the pipeline missed. start_s and end_s are in seconds."""
+    start_s = float(body.get("start_s", 0))
+    end_s = float(body.get("end_s", 0))
+    notes = str(body.get("notes", ""))[:500]
+
+    if end_s <= start_s:
+        raise HTTPException(400, "end_s must be greater than start_s")
+    if end_s - start_s < 3:
+        raise HTTPException(400, "Minimum moment duration is 3 seconds")
+
+    with dbmod.db() as conn:
+        job_row = conn.execute("SELECT id FROM jobs WHERE id=?", [job_id]).fetchone()
+        video_row = conn.execute(
+            "SELECT id FROM videos WHERE job_id=? LIMIT 1", [job_id]
+        ).fetchone()
+    if not job_row:
+        raise HTTPException(404, "Job not found")
+
+    video_id = video_row["id"] if video_row else ""
+    moment_id = dbmod.add_missed_moment(job_id, video_id, start_s, end_s, notes)
+    return {"id": moment_id, "job_id": job_id, "start_s": start_s, "end_s": end_s, "notes": notes}
+
+
+@app.get("/jobs/{job_id}/missed-moments")
+async def get_missed_moments(job_id: str):
+    """List all missed moments recorded for a job."""
+    return dbmod.list_missed_moments(job_id)
+
+
+@app.delete("/missed-moments/{moment_id}")
+async def delete_missed_moment(moment_id: str):
+    dbmod.delete_missed_moment(moment_id)
+    return {"deleted": True}
+
+
 # ── DASHBOARD ────────────────────────────────────────────────────────────────
 
 _dashboard_path = Path(__file__).parent.parent / "dashboard"
@@ -2015,4 +2444,4 @@ async def dashboard():
 if __name__ == "__main__":
     import uvicorn
     dbmod.init_db()
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
