@@ -56,6 +56,9 @@ def compute_file_hash(path: str) -> str:
 
 # ── Resumable session creation ────────────────────────────────────────────────
 
+_VALID_PRIVACY = {"private", "unlisted", "public"}
+
+
 def create_resumable_session(
     access_token: str,
     title: str,
@@ -63,12 +66,21 @@ def create_resumable_session(
     tags: list[str],
     file_size: int,
     is_for_kids: bool,
+    privacy_status: str = "private",
 ) -> str:
     """
     Create a YouTube resumable upload session.
     Returns the upload session URL (keep private — never expose to clients).
-    privacyStatus is FORCED to 'private' regardless of any caller value.
+
+    NOTE: YouTube API projects created after 2020-07-28 that have not passed
+    the API Services Compliance Audit are restricted to privacyStatus='private'
+    regardless of what is sent here. The API accepts the request without error
+    but returns the video as private. The caller must compare the approved
+    privacy_status with remote_privacy_status after processing completes and
+    set status='needs_check' if they differ.
     """
+    if privacy_status not in _VALID_PRIVACY:
+        raise ValueError(f"Invalid privacy_status '{privacy_status}'. Must be one of {_VALID_PRIVACY}")
     title = (title or "Short")[:100]
     description = (description or "")[:5000]
     safe_tags = [str(t)[:500] for t in (tags or [])]
@@ -81,7 +93,7 @@ def create_resumable_session(
             "categoryId": "22",
         },
         "status": {
-            "privacyStatus": "private",  # FORCED — do not change
+            "privacyStatus": privacy_status,
             "selfDeclaredMadeForKids": bool(is_for_kids),
         },
     }).encode()

@@ -141,6 +141,7 @@ class YTUploadWorker(threading.Thread):
                     tags = json.loads(session.get("tags") or "[]")
                 except Exception:
                     pass
+                approved_privacy = session.get("privacy_status") or "private"
                 session_url = uploader.create_resumable_session(
                     access_token=access_token,
                     title=session.get("title") or "Short",
@@ -148,6 +149,7 @@ class YTUploadWorker(threading.Thread):
                     tags=tags,
                     file_size=file_size,
                     is_for_kids=bool(session.get("is_for_kids")),
+                    privacy_status=approved_privacy,
                 )
                 db.update_yt_upload_session(
                     sid,
@@ -214,7 +216,13 @@ class YTUploadWorker(threading.Thread):
                     )
 
                     if process_status in ("processed", "succeeded"):
-                        final_status = "private"
+                        # Map remote privacy to final status
+                        if privacy_status == "public":
+                            final_status = "public"
+                        elif privacy_status == "unlisted":
+                            final_status = "unlisted"
+                        else:
+                            final_status = "private"
                         break
                     if process_status == "failed":
                         final_status = "error"
@@ -229,7 +237,31 @@ class YTUploadWorker(threading.Thread):
                 # Polling exhausted — mark needs_check
                 final_status = "needs_check"
 
-            # 6. Finalize
+            # 6. Check for visibility mismatch (YouTube API project restriction)
+            approved_privacy = session.get("privacy_status") or "private"
+            final_remote_privacy = db.get_yt_upload_session(sid)
+            actual_privacy = (final_remote_privacy or {}).get("remote_privacy_status", "unknown")
+
+            if final_status not in ("error", "needs_check") and approved_privacy != "private":
+                if actual_privacy not in ("unknown", approved_privacy):
+                    # YouTube returned different visibility than requested
+                    final_status = "needs_check"
+                    db.update_yt_upload_session(
+                        sid,
+                        error_code="VISIBILITY_MISMATCH",
+                        error_message=(
+                            f"YouTube devolvió visibilidad '{actual_privacy}' pero se solicitó "
+                            f"'{approved_privacy}'. Posible restricción de proyecto API sin auditar "
+                            f"(proyectos creados después del 28/07/2020 quedan restringidos a privado)."
+                        ),
+                        updated_at=_now(),
+                    )
+                    logger.warning(
+                        "[YTUploadWorker] visibility mismatch for %s: approved=%s remote=%s",
+                        video_id, approved_privacy, actual_privacy,
+                    )
+
+            # 7. Finalize
             db.update_yt_upload_session(
                 sid,
                 status=final_status,
@@ -238,7 +270,8 @@ class YTUploadWorker(threading.Thread):
                 updated_at=_now(),
             )
             external_url = f"https://studio.youtube.com/video/{video_id}/edit"
-            _update_pub_status(pub_id, "published",
+            pub_status = "published" if final_status in ("public", "unlisted", "private") else final_status
+            _update_pub_status(pub_id, pub_status,
                                external_post_id=video_id,
                                external_url=external_url)
             logger.info("[YTUploadWorker] session %s done: video_id=%s status=%s",

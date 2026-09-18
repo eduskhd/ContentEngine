@@ -1049,6 +1049,11 @@ async def start_youtube_upload(pub_id: str, body: dict = Body({})):
         raise HTTPException(400, "is_for_kids (boolean) is required by YouTube Terms of Service")
     is_for_kids = bool(body["is_for_kids"])
 
+    _valid_privacy = {"private", "unlisted", "public"}
+    privacy_status = body.get("privacy_status", "private")
+    if privacy_status not in _valid_privacy:
+        raise HTTPException(422, f"privacy_status must be one of {sorted(_valid_privacy)}")
+
     conn = dbmod.get_db()
     pub = conn.execute("SELECT * FROM publications WHERE id=?", [pub_id]).fetchone()
     conn.close()
@@ -1129,6 +1134,7 @@ async def start_youtube_upload(pub_id: str, body: dict = Body({})):
         file_path=str(file_path),
         file_hash=file_hash,
         file_size=file_size,
+        privacy_status=privacy_status,
     )
 
     return {"session_id": session_id, "status": "pending", "existing": False}
@@ -2471,6 +2477,11 @@ async def create_upload_batch(body: dict = Body(...)):
     if existing_batch:
         return {"batch_id": existing_batch["id"], "duplicate": True, "queued": 0, "skipped": []}
 
+    _valid_privacy = {"private", "unlisted", "public"}
+    privacy_status = (body.get("privacy_status") or "private").strip()
+    if privacy_status not in _valid_privacy:
+        raise HTTPException(422, f"privacy_status must be one of {sorted(_valid_privacy)}")
+
     pub_ids = body.get("pub_ids") or []
     if not pub_ids:
         raise HTTPException(400, "pub_ids required")
@@ -2543,6 +2554,7 @@ async def create_upload_batch(body: dict = Body(...)):
             file_path=file_path,
             file_hash=file_hash,
             file_size=file_size,
+            privacy_status=privacy_status,
         )
         queued_pairs.append((pub_id, session_id))
 
@@ -2550,7 +2562,8 @@ async def create_upload_batch(body: dict = Body(...)):
         return {"batch_id": None, "queued": 0, "skipped": skipped,
                 "error": "No valid YouTube Shorts publications to upload"}
 
-    batch_id = dbmod.create_upload_batch(name, channel_id, idempotency_key, queued_pairs)
+    batch_id = dbmod.create_upload_batch(name, channel_id, idempotency_key, queued_pairs,
+                                         approved_privacy=privacy_status)
     return {"batch_id": batch_id, "duplicate": False, "queued": len(queued_pairs), "skipped": skipped}
 
 

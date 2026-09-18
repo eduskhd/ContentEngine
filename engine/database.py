@@ -470,6 +470,10 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_yt_sessions_pub_id ON yt_upload_sessions(pub_id);
         """)
         _add_column_if_missing(conn, "social_accounts", "channel_name", "TEXT")
+        # Visibility / privacy columns (2026-09-18)
+        _add_column_if_missing(conn, "yt_upload_sessions", "privacy_status", "TEXT DEFAULT 'private'")
+        _add_column_if_missing(conn, "upload_batch_items", "privacy_status", "TEXT DEFAULT 'private'")
+        _add_column_if_missing(conn, "upload_batches", "approved_privacy", "TEXT DEFAULT 'private'")
         # Packages & batch upload tables (2026-09-18)
         conn.executescript("""
         CREATE TABLE IF NOT EXISTS clip_packages (
@@ -1767,6 +1771,7 @@ def create_yt_upload_session(
     pub_id: str, clip_id: str, channel_id: str, title: str,
     description: str, tags: list, is_for_kids: bool,
     file_path: str, file_hash: str, file_size: int,
+    privacy_status: str = "private",
 ) -> str:
     sid = new_id()
     ts = now()
@@ -1775,12 +1780,12 @@ def create_yt_upload_session(
             INSERT INTO yt_upload_sessions
             (id, pub_id, clip_id, channel_id, title, description, tags, is_for_kids,
              file_path, file_hash, file_size, status, bytes_sent, attempts,
-             created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,'pending',0,0,?,?)
+             privacy_status, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,'pending',0,0,?,?,?)
         """, (
             sid, pub_id, clip_id, channel_id, title or "", description or "",
             json.dumps(tags or []), 1 if is_for_kids else 0,
-            file_path, file_hash, file_size, ts, ts,
+            file_path, file_hash, file_size, privacy_status, ts, ts,
         ))
     return sid
 
@@ -1968,22 +1973,23 @@ def remove_package_items(package_id: str, pub_ids: list) -> int:
 # ── Upload batch helpers ──────────────────────────────────────────────────────
 
 def create_upload_batch(name: str, channel_id: str, idempotency_key: str,
-                        pub_session_pairs: list) -> str:
+                        pub_session_pairs: list,
+                        approved_privacy: str = "private") -> str:
     bid = new_id()
     ts = now()
     with db() as conn:
         conn.execute("""
             INSERT INTO upload_batches (id, name, channel_id, idempotency_key, paused,
-                total_items, created_at, updated_at)
-            VALUES (?,?,?,?,0,?,?,?)
+                total_items, approved_privacy, created_at, updated_at)
+            VALUES (?,?,?,?,0,?,?,?,?)
         """, (bid, name or "", channel_id or "", idempotency_key,
-              len(pub_session_pairs), ts, ts))
+              len(pub_session_pairs), approved_privacy, ts, ts))
         for pub_id, session_id in pub_session_pairs:
             conn.execute("""
                 INSERT OR IGNORE INTO upload_batch_items
-                    (id, batch_id, pub_id, session_id, added_at)
-                VALUES (?,?,?,?,?)
-            """, (new_id(), bid, pub_id, session_id, ts))
+                    (id, batch_id, pub_id, session_id, added_at, privacy_status)
+                VALUES (?,?,?,?,?,?)
+            """, (new_id(), bid, pub_id, session_id, ts, approved_privacy))
     return bid
 
 

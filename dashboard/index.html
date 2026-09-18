@@ -1134,11 +1134,28 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         <div id="pem-yt-noconn-warning" style="font-size:11px;color:#fbbf24;margin-bottom:8px;display:none">
           &#9888; YouTube not connected. Go to OAuth tab to connect.
         </div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Visibilidad</div>
+          <div style="display:flex;gap:14px;font-size:12px;color:#ccc">
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+              <input type="radio" name="pem-privacy" value="public" checked onchange="updatePemUploadBtn()"> Público
+            </label>
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+              <input type="radio" name="pem-privacy" value="unlisted" onchange="updatePemUploadBtn()"> No listado
+            </label>
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+              <input type="radio" name="pem-privacy" value="private" onchange="updatePemUploadBtn()"> Privado
+            </label>
+          </div>
+          <div id="pem-privacy-warning" style="font-size:10px;color:#fbbf24;margin-top:4px">
+            ⚠ Proyectos sin auditoría de API pueden quedar restringidos a Privado aunque se solicite Público.
+          </div>
+        </div>
         <button class="btn btn-success" id="pem-yt-upload-btn" onclick="startYtUpload()" disabled>
-          Aprobar y subir en privado
+          Publicar en público
         </button>
         <div style="font-size:10px;color:#555;margin-top:5px">
-          Uploads as Private. Requires evaluation decision "Publish as-is".
+          Requires evaluation decision "Publish as-is".
         </div>
       </div>
       <div id="pem-yt-status" style="display:none">
@@ -1195,15 +1212,32 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <div class="pub-modal-overlay" id="batch-upload-modal" onclick="if(event.target===this)closeBatchUploadModal()">
   <div class="pub-modal" style="max-width:560px">
     <button class="pub-modal-close" onclick="closeBatchUploadModal()">✕</button>
-    <h3 style="font-size:14px;font-weight:600;color:#fff;margin-bottom:4px">Aprobar y subir en privado</h3>
-    <p style="font-size:12px;color:#666;margin-bottom:12px">Sube los clips seleccionados a YouTube como privados. Se enviarán uno a uno en segundo plano.</p>
+    <h3 style="font-size:14px;font-weight:600;color:#fff;margin-bottom:4px">Revisar y subir a YouTube</h3>
+    <p style="font-size:12px;color:#666;margin-bottom:12px">Los clips se subirán uno a uno en segundo plano. Esta acción no se puede deshacer para los ya enviados.</p>
     <div id="bum-channel-info" style="background:#111;border-radius:6px;padding:8px 12px;font-size:12px;color:#aaa;margin-bottom:12px"></div>
-    <div id="bum-item-list" style="max-height:240px;overflow-y:auto;margin-bottom:12px"></div>
+    <div id="bum-item-list" style="max-height:200px;overflow-y:auto;margin-bottom:12px"></div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Visibilidad</div>
+      <div style="display:flex;gap:18px;font-size:13px;color:#ccc">
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="radio" name="bum-privacy" value="public" checked onchange="updateBumButton()"> Público
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="radio" name="bum-privacy" value="unlisted" onchange="updateBumButton()"> No listado
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="radio" name="bum-privacy" value="private" onchange="updateBumButton()"> Privado
+        </label>
+      </div>
+      <div id="bum-privacy-warning" style="font-size:11px;color:#fbbf24;margin-top:6px">
+        ⚠ Proyectos de API sin auditoría de contenido pueden quedar restringidos a Privado aunque se solicite Público. Se indicará la visibilidad real que devuelva YouTube.
+      </div>
+    </div>
     <div id="bum-skip-info" style="font-size:11px;color:#666;margin-bottom:12px;display:none"></div>
     <div id="bum-error" style="display:none;background:#1a0a0a;border:1px solid #7f1d1d;border-radius:6px;padding:8px 12px;font-size:12px;color:#fca5a5;margin-bottom:12px"></div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-outline btn-sm" onclick="closeBatchUploadModal()">Cancelar</button>
-      <button class="btn btn-success" id="bum-confirm-btn" onclick="confirmBatchUpload()">Aprobar y subir <span id="bum-count">0</span> clip(s) en privado</button>
+      <button class="btn btn-success" id="bum-confirm-btn" onclick="confirmBatchUpload()">Publicar <span id="bum-count">0</span> clips en público</button>
     </div>
   </div>
 </div>
@@ -4628,6 +4662,7 @@ async function loadYtUploadSection(pub) {
   if (evalWarn)  evalWarn.style.display  = evalOk    ? 'none' : '';
   if (connWarn)  connWarn.style.display  = connected ? 'none' : '';
   if (uploadBtn) uploadBtn.disabled      = !(evalOk && connected);
+  if (evalOk && connected) updatePemUploadBtn();
 
   // Duration compat hint
   const compatEl = document.getElementById('pem-yt-compat');
@@ -4656,24 +4691,33 @@ function renderYtStatus(session) {
   statusDiv.style.display = '';
 
   const labels = {
-    pending:     'Queued for upload…',
-    uploading:   'Uploading…',
-    processing:  'Uploaded — YouTube is processing…',
-    private:     'Available on YouTube (Private)',
-    error:       'Upload failed',
-    needs_check: 'Status uncertain — check YouTube Studio',
-    cancelled:   'Cancelled',
+    pending:     'En cola para subir…',
+    uploading:   'Subiendo…',
+    processing:  'Subido — YouTube está procesando…',
+    public:      'Disponible en YouTube (Público)',
+    unlisted:    'Disponible en YouTube (No listado)',
+    private:     'Disponible en YouTube (Privado)',
+    error:       'Error al subir',
+    needs_check: 'Subido — visibilidad no confirmada. Verifica en YouTube Studio.',
+    cancelled:   'Cancelado',
   };
   if (statusText) {
     statusText.textContent = labels[session.status] || session.status;
-    if (session.error_message) statusText.textContent += ': ' + session.error_message;
+    if (session.error_code === 'VISIBILITY_MISMATCH') {
+      statusText.textContent = '⚠ Visibilidad no coincide — YouTube puede haber ignorado la visibilidad solicitada por restricción del proyecto API. Comprueba en YouTube Studio.';
+      statusText.style.color = '#fbbf24';
+    } else if (session.error_message && session.status === 'error') {
+      statusText.textContent += ': ' + session.error_message;
+    }
   }
 
-  const pct = (session.file_size > 0)
+  const done = ['public','unlisted','private','needs_check'].includes(session.status);
+  const pct = done ? 100 : (session.file_size > 0)
     ? Math.round((session.bytes_sent / session.file_size) * 100) : 0;
   if (progress) {
-    progress.style.width = (session.status === 'private' ? 100 : pct) + '%';
-    progress.style.background = session.status === 'error' ? '#ef4444' : '#4ade80';
+    progress.style.width = pct + '%';
+    progress.style.background = session.status === 'error' ? '#ef4444'
+      : session.status === 'needs_check' ? '#fbbf24' : '#4ade80';
   }
 
   if (link && session.remote_video_id) {
@@ -4696,28 +4740,41 @@ function renderYtStatus(session) {
   }
 }
 
+function updatePemUploadBtn() {
+  const v = document.querySelector('input[name="pem-privacy"]:checked')?.value || 'public';
+  const warn = document.getElementById('pem-privacy-warning');
+  if (warn) warn.style.display = (v === 'public' || v === 'unlisted') ? '' : 'none';
+  const btn = document.getElementById('pem-yt-upload-btn');
+  if (btn && !btn.disabled) {
+    const labels = {public: 'Publicar en público', unlisted: 'Subir como No listado', private: 'Subir en privado'};
+    btn.textContent = labels[v] || 'Subir';
+  }
+}
+
 async function startYtUpload() {
   if (!_pubCurrentPub) return;
   const isForKids = document.querySelector('input[name="yt-for-kids"]:checked')?.value === 'true';
+  const privacy_status = document.querySelector('input[name="pem-privacy"]:checked')?.value || 'public';
   const title       = (document.getElementById('pem-title')?.value || '').trim() || 'Short';
   const description = (document.getElementById('pem-caption')?.value || '').trim();
   const rawTags     = document.getElementById('pem-hashtags')?.value || '';
   const tags = rawTags.split(/[\s,\n]+/).filter(Boolean).map(t => t.startsWith('#') ? t.slice(1) : t);
 
   const channel = (_ytStatus && _ytStatus.channel_title) || 'Connected channel';
+  const visLabel = {public: 'Público', unlisted: 'No listado', private: 'Privado'}[privacy_status] || privacy_status;
   if (!confirm(
-    `Upload this clip to YouTube as PRIVATE?\n\n` +
-    `Channel: ${channel}\n` +
-    `Visibility: Private\n` +
-    `Audience: ${isForKids ? 'Made for kids' : 'Not made for kids'}\n\n` +
-    `This will send the file to YouTube. Proceed?`
+    `Subir este clip a YouTube como ${visLabel.toUpperCase()}?\n\n` +
+    `Canal: ${channel}\n` +
+    `Visibilidad: ${visLabel}\n` +
+    `Audiencia: ${isForKids ? 'Para niños' : 'No para niños'}\n\n` +
+    `Esta acción enviará el archivo a YouTube. ¿Continuar?`
   )) return;
 
   try {
     const r = await api('/publications/' + _pubCurrentPub.id + '/youtube-upload', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({title, description, tags, is_for_kids: isForKids}),
+      body: JSON.stringify({title, description, tags, is_for_kids: isForKids, privacy_status}),
     });
     _ytUploadSessionId = r.session_id;
     toast('Upload queued!', 'success');
@@ -4760,16 +4817,30 @@ async function prepareClipForPublishing(clipId) {
 let _batchPubIds = [];
 let _batchPollInterval = null;
 
+function updateBumButton() {
+  const v = document.querySelector('input[name="bum-privacy"]:checked')?.value || 'public';
+  const warn = document.getElementById('bum-privacy-warning');
+  if (warn) warn.style.display = (v === 'public' || v === 'unlisted') ? '' : 'none';
+  const n = document.getElementById('bum-count')?.textContent || '0';
+  const btn = document.getElementById('bum-confirm-btn');
+  if (!btn) return;
+  const labels = {public: `Publicar ${n} clip(s) en público`, unlisted: `Subir ${n} clip(s) como No listados`, private: `Subir ${n} clip(s) en privado`};
+  btn.textContent = labels[v] || `Subir ${n} clip(s)`;
+}
+
 function openBatchUploadModal() {
   _batchPubIds = [..._pubSelected];
   if (!_batchPubIds.length) return;
+  // Reset radio to public
+  const pubRadio = document.querySelector('input[name="bum-privacy"][value="public"]');
+  if (pubRadio) pubRadio.checked = true;
   document.getElementById('bum-count').textContent = _batchPubIds.length;
   document.getElementById('bum-error').style.display = 'none';
   const skipEl = document.getElementById('bum-skip-info');
   skipEl.style.display = 'none';
   const channelEl = document.getElementById('bum-channel-info');
   if (_ytStatus && _ytStatus.connected) {
-    channelEl.textContent = `Canal: ${_ytStatus.channel_title || _ytStatus.channel_id || 'YouTube'} · Visibilidad: Privado`;
+    channelEl.textContent = `Canal: ${_ytStatus.channel_title || _ytStatus.channel_id || 'YouTube'}`;
   } else {
     channelEl.textContent = 'YouTube no conectado — conecta tu cuenta en la pestaña OAuth';
   }
@@ -4779,6 +4850,7 @@ function openBatchUploadModal() {
     const title = card?.querySelector('.pub-card-title')?.textContent?.trim() || id;
     return `<div style="padding:6px 0;border-bottom:1px solid #1a1a1a;font-size:12px;color:#ccc">${_esc(title)}</div>`;
   }).join('');
+  updateBumButton();
   document.getElementById('batch-upload-modal').classList.add('open');
 }
 
@@ -4788,6 +4860,7 @@ function closeBatchUploadModal() {
 
 async function confirmBatchUpload() {
   const btn = document.getElementById('bum-confirm-btn');
+  const privacy_status = document.querySelector('input[name="bum-privacy"]:checked')?.value || 'public';
   btn.disabled = true;
   btn.textContent = 'Enviando…';
   const errEl = document.getElementById('bum-error');
@@ -4800,6 +4873,7 @@ async function confirmBatchUpload() {
       body: JSON.stringify({
         pub_ids: _batchPubIds,
         idempotency_key,
+        privacy_status,
         name: `Batch ${new Date().toLocaleDateString('es-ES')} (${_batchPubIds.length} clips)`,
       }),
     });
@@ -4807,7 +4881,7 @@ async function confirmBatchUpload() {
       errEl.textContent = r.error;
       errEl.style.display = '';
       btn.disabled = false;
-      btn.textContent = `Aprobar y subir ${_batchPubIds.length} clip(s) en privado`;
+      updateBumButton();
       return;
     }
     const skipped = r.skipped || [];
@@ -4826,7 +4900,7 @@ async function confirmBatchUpload() {
     errEl.textContent = e.message;
     errEl.style.display = '';
     btn.disabled = false;
-    btn.textContent = `Aprobar y subir ${_batchPubIds.length} clip(s) en privado`;
+    updateBumButton();
   }
 }
 
@@ -4916,13 +4990,16 @@ async function viewBatchDetail(batchId) {
     const b = await api('/upload-batches/' + batchId);
     const items = (b.items || []).map(i => {
       const pct = i.file_size > 0 ? Math.round((i.bytes_sent/i.file_size)*100) : 0;
-      const statusCols = {pending:'#666',uploading:'#3b82f6',processing:'#f59e0b',private:'#4ade80',error:'#ef4444',paused:'#f59e0b',cancelled:'#555',needs_check:'#fbbf24'};
+      const statusCols = {pending:'#666',uploading:'#3b82f6',processing:'#f59e0b',public:'#4ade80',unlisted:'#34d399',private:'#4ade80',error:'#ef4444',paused:'#f59e0b',cancelled:'#555',needs_check:'#fbbf24'};
       const col = statusCols[i.status] || '#666';
+      const statusLabel = {public:'Público',unlisted:'No listado',private:'Privado',needs_check:'Visibilidad no confirmada',error:'Error',uploading:'Subiendo',processing:'Procesando',pending:'En cola',paused:'Pausado',cancelled:'Cancelado'}[i.status] || i.status;
+      const mismatch = i.error_code === 'VISIBILITY_MISMATCH';
       return `<div style="padding:5px 0;border-bottom:1px solid #1a1a1a;font-size:12px">
         <span style="color:#ccc">${_esc(i.title||i.pub_id)}</span>
-        <span style="color:${col};margin-left:8px">${i.status||'?'}</span>
+        <span style="color:${col};margin-left:8px">${statusLabel}</span>
         ${i.status==='uploading'?` <span style="color:#555">${pct}%</span>`:''}
-        ${i.error_message?` <span style="color:#ef4444">${_esc(i.error_message)}</span>`:''}
+        ${mismatch?` <span style="color:#fbbf24">⚠ Visibilidad no coincide — verifica en YouTube Studio</span>`:''}
+        ${(!mismatch&&i.error_message&&i.status==='error')?` <span style="color:#ef4444">${_esc(i.error_message)}</span>`:''}
       </div>`;
     }).join('');
     toast(`Lote: ${b.name||b.id} · ${b.derived_status}`, 'info');
