@@ -5100,10 +5100,22 @@ async function loadStorageSummary() {
       ['Proxies', (s.dirs?.proxies?.size_mb||0) + ' MB', s.dirs?.proxies?.files + ' archivos'],
       ['Clips', (s.dirs?.clips?.size_mb||0) + ' MB', s.dirs?.clips?.files + ' archivos'],
       ['Thumbnails', (s.dirs?.thumbnails?.size_mb||0) + ' MB', s.dirs?.thumbnails?.files + ' archivos'],
-      ['Otros', (s.other_dirs_mb||0) + ' MB', ''],
     ];
+    // Add per-creator render dirs if present
+    const creatorDirs = s.creator_dirs || {};
+    const creatorEntries = Object.entries(creatorDirs).sort((a,b) => b[1].size_mb - a[1].size_mb);
+    if (creatorEntries.length) {
+      rows.push(['Renders por creador', (s.other_dirs_mb||0).toFixed(1) + ' MB', creatorEntries.length + ' carpeta(s)']);
+    }
     const diskPct = s.disk?.used_pct || 0;
     const diskCol = diskPct > 85 ? '#ef4444' : diskPct > 70 ? '#f59e0b' : '#4ade80';
+    const creatorDetail = creatorEntries.length ? `
+      <details style="margin-top:4px">
+        <summary style="font-size:10px;color:#555;cursor:pointer">Ver carpetas de creadores</summary>
+        <div style="padding:4px 0 0 8px;font-size:10px;color:#444">
+          ${creatorEntries.map(([n,v])=>`<div>${_esc(n)}: ${v.size_mb.toFixed(1)} MB</div>`).join('')}
+        </div>
+      </details>` : '';
     el.innerHTML = `
       <div style="font-size:12px;color:#aaa;margin-bottom:8px">
         <b style="color:#fff">Total output:</b> ${s.total_output_mb} MB
@@ -5119,10 +5131,12 @@ async function loadStorageSummary() {
           <td style="padding:3px 0;color:#555">${r[2]}</td>
         </tr>`).join('')}
       </table>
+      ${creatorDetail}
       ${s.missing_clips>0||s.missing_videos>0 ? `
       <div style="margin-top:8px;background:#1a0a0a;border:1px solid #7f1d1d;border-radius:6px;padding:8px 12px;font-size:11px;color:#fca5a5">
         ⚠ Archivos faltantes: ${s.missing_clips} clip(s), ${s.missing_videos} video(s)
         ${s.missing_details?.videos?.length ? '<br>' + s.missing_details.videos.map(v=>'• '+v.path).join('<br>') : ''}
+        <br><span style="color:#666;font-size:10px">El vídeo original fue borrado o movido. Los clips derivados pueden estar intactos.</span>
       </div>` : `<div style="font-size:11px;color:#4ade80;margin-top:6px">✓ Todos los archivos presentes</div>`}
       <div style="font-size:10px;color:#333;margin-top:6px">Actualizado: ${s.scanned_at?.slice(0,16)||''}</div>`;
   } catch(e) {

@@ -2635,11 +2635,16 @@ async def storage_summary():
             count = 0
         dirs[sub] = {"size_mb": size, "files": count}
 
+    # Creator-named render directories (e.g. mrbeast/, kai_cenat_live/)
+    creator_dirs = {}
     other_mb = 0.0
     try:
         for entry in _os.scandir(out):
             if entry.is_dir() and entry.name not in subdirs:
-                other_mb += _dir_size_mb(entry.path)
+                size = _dir_size_mb(entry.path)
+                if size > 0:
+                    creator_dirs[entry.name] = {"size_mb": size}
+                other_mb += size
     except Exception:
         pass
 
@@ -2683,6 +2688,7 @@ async def storage_summary():
         "db_size_mb": db_mb,
         "total_output_mb": total_mb,
         "other_dirs_mb": round(other_mb, 1),
+        "creator_dirs": creator_dirs,
         "dirs": dirs,
         "disk": disk,
         "missing_clips": len(missing_clips),
