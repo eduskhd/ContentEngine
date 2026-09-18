@@ -982,6 +982,16 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     </div>
   </div>
   <div id="oauth-result" style="margin-top:14px;font-size:12px;color:#888;white-space:pre-wrap;font-family:monospace;max-width:560px"></div>
+
+  <!-- Storage summary -->
+  <div class="sec-hdr" style="margin-top:28px">Almacenamiento</div>
+  <div id="storage-summary" style="max-width:560px;margin-top:12px">
+    <div style="font-size:12px;color:#555">Cargando…</div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:10px">
+    <button class="btn btn-outline btn-sm" onclick="loadStorageSummary()">Actualizar</button>
+    <button class="btn btn-outline btn-sm" onclick="runStorageScan()">Escanear archivos</button>
+  </div>
 </section>
 
 <!-- ══════════════════════ PUBLISHING CENTER ══════════════════════ -->
@@ -1011,6 +1021,14 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     <div class="pub-sidebar-title" style="margin-top:10px">Views</div>
     <div class="pub-nav-item" id="pn-queue" onclick="pubNav('queue')">
       Recommended
+    </div>
+    <div class="pub-sidebar-title" style="margin-top:10px">Subida</div>
+    <div class="pub-nav-item" id="pn-batches" onclick="pubNav('batches')">
+      Lotes <span class="pub-nav-badge" id="pnb-batches"></span>
+    </div>
+    <div class="pub-sidebar-title" style="margin-top:10px">Paquetes</div>
+    <div class="pub-nav-item" id="pn-packages" onclick="pubNav('packages')">
+      Paquetes <span class="pub-nav-badge" id="pnb-packages"></span>
     </div>
   </div>
 
@@ -1044,6 +1062,8 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
       <button class="btn btn-outline btn-sm" onclick="bulkPubAction('mark_ready')">Mark Ready</button>
       <button class="btn btn-success btn-sm" onclick="bulkPubAction('mark_published')">Mark Published</button>
       <button class="btn btn-outline btn-sm" onclick="bulkPubDownload()">Download ZIP</button>
+      <button class="btn btn-primary btn-sm" onclick="openBatchUploadModal()">Upload Selected</button>
+      <button class="btn btn-outline btn-sm" onclick="openSavePackageModal()">Save as Package</button>
       <button class="btn btn-danger btn-sm" onclick="bulkPubAction('delete')">Delete</button>
       <button class="btn btn-outline btn-sm" onclick="clearPubSelection()">Cancel</button>
     </div>
@@ -1171,6 +1191,43 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
   </div>
 </div>
 
+<!-- ═════════════ BATCH UPLOAD MODAL ═════════════ -->
+<div class="pub-modal-overlay" id="batch-upload-modal" onclick="if(event.target===this)closeBatchUploadModal()">
+  <div class="pub-modal" style="max-width:560px">
+    <button class="pub-modal-close" onclick="closeBatchUploadModal()">✕</button>
+    <h3 style="font-size:14px;font-weight:600;color:#fff;margin-bottom:4px">Aprobar y subir en privado</h3>
+    <p style="font-size:12px;color:#666;margin-bottom:12px">Sube los clips seleccionados a YouTube como privados. Se enviarán uno a uno en segundo plano.</p>
+    <div id="bum-channel-info" style="background:#111;border-radius:6px;padding:8px 12px;font-size:12px;color:#aaa;margin-bottom:12px"></div>
+    <div id="bum-item-list" style="max-height:240px;overflow-y:auto;margin-bottom:12px"></div>
+    <div id="bum-skip-info" style="font-size:11px;color:#666;margin-bottom:12px;display:none"></div>
+    <div id="bum-error" style="display:none;background:#1a0a0a;border:1px solid #7f1d1d;border-radius:6px;padding:8px 12px;font-size:12px;color:#fca5a5;margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-outline btn-sm" onclick="closeBatchUploadModal()">Cancelar</button>
+      <button class="btn btn-success" id="bum-confirm-btn" onclick="confirmBatchUpload()">Aprobar y subir <span id="bum-count">0</span> clip(s) en privado</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════════ SAVE PACKAGE MODAL ═════════════ -->
+<div class="pub-modal-overlay" id="save-package-modal" onclick="if(event.target===this)closeSavePackageModal()">
+  <div class="pub-modal" style="max-width:420px">
+    <button class="pub-modal-close" onclick="closeSavePackageModal()">✕</button>
+    <h3 style="font-size:14px;font-weight:600;color:#fff;margin-bottom:12px">Guardar como paquete</h3>
+    <div class="pub-field">
+      <label>Nombre del paquete</label>
+      <input id="spm-name" placeholder="Nombre…" oninput="document.getElementById('spm-save-btn').disabled=!this.value.trim()">
+    </div>
+    <div class="pub-field">
+      <label>Descripción (opcional)</label>
+      <input id="spm-desc" placeholder="Descripción…">
+    </div>
+    <div style="font-size:12px;color:#555;margin-bottom:12px"><span id="spm-count">0</span> clips seleccionados</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-outline btn-sm" onclick="closeSavePackageModal()">Cancelar</button>
+      <button class="btn btn-primary" id="spm-save-btn" disabled onclick="confirmSavePackage()">Guardar paquete</button>
+    </div>
+  </div>
+</div>
 </main>
 <div id="toast"></div>
 
@@ -1442,7 +1499,7 @@ function loadTab(t) {
   ({overview:loadOverview, library:loadLibrary, review:loadReview,
     jobs:loadJobs, analytics:loadAnalytics, publishing:loadPublishing})[t]?.();
   if (t === 'analysis') populateAnalysisJobSelect();
-  if (t === 'oauth') checkYoutubeStatus();
+  if (t === 'oauth') { checkYoutubeStatus(); loadStorageSummary(); }
 }
 
 // ── Video player + Caption editor ─────────────────────────────────────────────
@@ -4103,6 +4160,9 @@ function pubNav(view) {
 }
 
 async function reloadPub() {
+  if (_pubView === 'batches') { await loadBatchList(); return; }
+  if (_pubView === 'packages') { await loadPackageList(); return; }
+
   const status = (_pubView === 'all' || _pubView === 'queue') ? null : _pubView;
   const creator_id = document.getElementById('pub-f-creator')?.value || '';
   const platform   = document.getElementById('pub-f-platform')?.value || '';
@@ -4693,6 +4753,312 @@ async function prepareClipForPublishing(clipId) {
     const sk = (r.skipped||[]).length;
     toast(`${n} publication${n!==1?'s':''} created${sk?' ('+sk+' already existed)':''}`, 'success');
   } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── Batch Upload Modal ───────────────────────────────────────────────────────
+
+let _batchPubIds = [];
+let _batchPollInterval = null;
+
+function openBatchUploadModal() {
+  _batchPubIds = [..._pubSelected];
+  if (!_batchPubIds.length) return;
+  document.getElementById('bum-count').textContent = _batchPubIds.length;
+  document.getElementById('bum-error').style.display = 'none';
+  const skipEl = document.getElementById('bum-skip-info');
+  skipEl.style.display = 'none';
+  const channelEl = document.getElementById('bum-channel-info');
+  if (_ytStatus && _ytStatus.connected) {
+    channelEl.textContent = `Canal: ${_ytStatus.channel_title || _ytStatus.channel_id || 'YouTube'} · Visibilidad: Privado`;
+  } else {
+    channelEl.textContent = 'YouTube no conectado — conecta tu cuenta en la pestaña OAuth';
+  }
+  const listEl = document.getElementById('bum-item-list');
+  listEl.innerHTML = _batchPubIds.map(id => {
+    const card = document.getElementById('pubcard-' + id);
+    const title = card?.querySelector('.pub-card-title')?.textContent?.trim() || id;
+    return `<div style="padding:6px 0;border-bottom:1px solid #1a1a1a;font-size:12px;color:#ccc">${_esc(title)}</div>`;
+  }).join('');
+  document.getElementById('batch-upload-modal').classList.add('open');
+}
+
+function closeBatchUploadModal() {
+  document.getElementById('batch-upload-modal').classList.remove('open');
+}
+
+async function confirmBatchUpload() {
+  const btn = document.getElementById('bum-confirm-btn');
+  btn.disabled = true;
+  btn.textContent = 'Enviando…';
+  const errEl = document.getElementById('bum-error');
+  errEl.style.display = 'none';
+  try {
+    const idempotency_key = Date.now() + '-' + Math.random().toString(36).slice(2);
+    const r = await api('/upload-batches', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        pub_ids: _batchPubIds,
+        idempotency_key,
+        name: `Batch ${new Date().toLocaleDateString('es-ES')} (${_batchPubIds.length} clips)`,
+      }),
+    });
+    if (r.error && !r.batch_id) {
+      errEl.textContent = r.error;
+      errEl.style.display = '';
+      btn.disabled = false;
+      btn.textContent = `Aprobar y subir ${_batchPubIds.length} clip(s) en privado`;
+      return;
+    }
+    const skipped = r.skipped || [];
+    if (skipped.length) {
+      const skipEl = document.getElementById('bum-skip-info');
+      skipEl.textContent = `Omitidos: ${skipped.length} (${skipped.map(s => s.reason).join(', ')})`;
+      skipEl.style.display = '';
+    }
+    toast(`${r.queued} clip(s) en cola para subir a YouTube`, 'success');
+    closeBatchUploadModal();
+    clearPubSelection();
+    if (r.batch_id) {
+      pubNav('batches');
+    }
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.style.display = '';
+    btn.disabled = false;
+    btn.textContent = `Aprobar y subir ${_batchPubIds.length} clip(s) en privado`;
+  }
+}
+
+// ── Save Package Modal ───────────────────────────────────────────────────────
+
+function openSavePackageModal() {
+  if (!_pubSelected.size) return;
+  document.getElementById('spm-name').value = '';
+  document.getElementById('spm-desc').value = '';
+  document.getElementById('spm-count').textContent = _pubSelected.size;
+  document.getElementById('spm-save-btn').disabled = true;
+  document.getElementById('save-package-modal').classList.add('open');
+}
+
+function closeSavePackageModal() {
+  document.getElementById('save-package-modal').classList.remove('open');
+}
+
+async function confirmSavePackage() {
+  const name = document.getElementById('spm-name').value.trim();
+  const description = document.getElementById('spm-desc').value.trim();
+  if (!name) return;
+  try {
+    await api('/packages', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name, description, pub_ids: [..._pubSelected]}),
+    });
+    toast(`Paquete "${name}" guardado`, 'success');
+    closeSavePackageModal();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── Batch list (Lotes view) ──────────────────────────────────────────────────
+
+async function loadBatchList() {
+  const el = document.getElementById('pub-content');
+  const titleEl = document.getElementById('pub-view-title');
+  if (titleEl) titleEl.textContent = 'Lotes de Subida';
+  el.innerHTML = '<div class="pub-empty"><p>Cargando…</p></div>';
+  try {
+    const batches = await api('/upload-batches?limit=50');
+    if (!batches.length) {
+      el.innerHTML = `<div class="pub-empty"><p>No hay lotes todavía.</p>
+        <p style="font-size:12px;color:#555">Selecciona clips en "All" y haz clic en <b>"Upload Selected"</b>.</p></div>`;
+      return;
+    }
+    el.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;padding:4px 0">
+      ${batches.map(renderBatchRow).join('')}
+    </div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="pub-empty"><p>Error: ${_esc(e.message)}</p></div>`;
+  }
+}
+
+function renderBatchRow(b) {
+  const statusColors = {active:'#3b82f6',done:'#4ade80',error:'#ef4444',paused:'#f59e0b'};
+  const col = statusColors[b.derived_status] || '#666';
+  const done = b.done_items || 0;
+  const total = b.total_items || b.item_count || 0;
+  const err = b.error_items || 0;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const isPaused = b.derived_status === 'paused';
+  const isActive = b.derived_status === 'active';
+  const hasErr = b.derived_status === 'error' || err > 0;
+  return `
+  <div class="card" style="padding:12px 16px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <div style="flex:1;font-size:13px;font-weight:600;color:#fff">${_esc(b.name||'Lote sin nombre')}</div>
+      <span style="font-size:11px;color:${col};font-weight:600">${b.derived_status||'?'}</span>
+    </div>
+    <div style="font-size:11px;color:#555;margin-bottom:6px">${b.created_at ? b.created_at.slice(0,16).replace('T',' ') : ''} · ${done}/${total} subidos${err?' · '+err+' error(s)':''}</div>
+    <div style="background:#1a1a1a;border-radius:3px;height:4px;margin-bottom:8px">
+      <div style="background:${col};width:${pct}%;height:4px;border-radius:3px;transition:width .3s"></div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn btn-outline btn-sm" onclick="viewBatchDetail('${b.id}')">Ver detalle</button>
+      ${isActive ? `<button class="btn btn-outline btn-sm" onclick="pauseBatch('${b.id}')">Pausar</button>` : ''}
+      ${isPaused ? `<button class="btn btn-primary btn-sm" onclick="resumeBatch('${b.id}')">Reanudar</button>` : ''}
+      ${hasErr ? `<button class="btn btn-outline btn-sm" onclick="retryBatchErrors('${b.id}')">Reintentar errores</button>` : ''}
+    </div>
+  </div>`;
+}
+
+async function viewBatchDetail(batchId) {
+  try {
+    const b = await api('/upload-batches/' + batchId);
+    const items = (b.items || []).map(i => {
+      const pct = i.file_size > 0 ? Math.round((i.bytes_sent/i.file_size)*100) : 0;
+      const statusCols = {pending:'#666',uploading:'#3b82f6',processing:'#f59e0b',private:'#4ade80',error:'#ef4444',paused:'#f59e0b',cancelled:'#555',needs_check:'#fbbf24'};
+      const col = statusCols[i.status] || '#666';
+      return `<div style="padding:5px 0;border-bottom:1px solid #1a1a1a;font-size:12px">
+        <span style="color:#ccc">${_esc(i.title||i.pub_id)}</span>
+        <span style="color:${col};margin-left:8px">${i.status||'?'}</span>
+        ${i.status==='uploading'?` <span style="color:#555">${pct}%</span>`:''}
+        ${i.error_message?` <span style="color:#ef4444">${_esc(i.error_message)}</span>`:''}
+      </div>`;
+    }).join('');
+    toast(`Lote: ${b.name||b.id} · ${b.derived_status}`, 'info');
+    const el = document.getElementById('pub-content');
+    el.innerHTML = `<div style="padding:8px 0">
+      <button class="btn btn-outline btn-sm" style="margin-bottom:12px" onclick="loadBatchList()">← Volver a lotes</button>
+      <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:8px">${_esc(b.name||'Lote')}</div>
+      <div>${items}</div>
+    </div>`;
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function pauseBatch(id) {
+  try { await api('/upload-batches/'+id+'/pause',{method:'POST'}); toast('Lote pausado','success'); loadBatchList(); }
+  catch(e) { toast(e.message,'error'); }
+}
+async function resumeBatch(id) {
+  try { await api('/upload-batches/'+id+'/resume',{method:'POST'}); toast('Lote reanudado','success'); loadBatchList(); }
+  catch(e) { toast(e.message,'error'); }
+}
+async function retryBatchErrors(id) {
+  try { await api('/upload-batches/'+id+'/retry-errors',{method:'POST'}); toast('Reintentando errores','success'); loadBatchList(); }
+  catch(e) { toast(e.message,'error'); }
+}
+
+// ── Package list (Paquetes view) ─────────────────────────────────────────────
+
+async function loadPackageList() {
+  const el = document.getElementById('pub-content');
+  const titleEl = document.getElementById('pub-view-title');
+  if (titleEl) titleEl.textContent = 'Paquetes';
+  el.innerHTML = '<div class="pub-empty"><p>Cargando…</p></div>';
+  try {
+    const pkgs = await api('/packages');
+    const badge = document.getElementById('pnb-packages');
+    if (badge) badge.textContent = pkgs.length || '';
+    if (!pkgs.length) {
+      el.innerHTML = `<div class="pub-empty"><p>No hay paquetes todavía.</p>
+        <p style="font-size:12px;color:#555">Selecciona clips y haz clic en <b>"Save as Package"</b>.</p></div>`;
+      return;
+    }
+    el.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;padding:4px 0">
+      ${pkgs.map(renderPackageRow).join('')}
+    </div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="pub-empty"><p>Error: ${_esc(e.message)}</p></div>`;
+  }
+}
+
+function renderPackageRow(p) {
+  return `
+  <div class="card" style="padding:12px 16px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      <div style="flex:1;font-size:13px;font-weight:600;color:#fff">${_esc(p.name)}</div>
+      <span style="font-size:11px;color:#555">${p.item_count||0} clips</span>
+    </div>
+    ${p.description ? `<div style="font-size:12px;color:#555;margin-bottom:6px">${_esc(p.description)}</div>` : ''}
+    <div style="font-size:11px;color:#444;margin-bottom:8px">${p.created_at ? p.created_at.slice(0,10) : ''}</div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-primary btn-sm" onclick="uploadPackage('${p.id}')">Upload Package</button>
+      <button class="btn btn-danger btn-sm" onclick="deletePackage('${p.id}', ${JSON.stringify(_esc(p.name))})">Eliminar</button>
+    </div>
+  </div>`;
+}
+
+async function deletePackage(id, name) {
+  if (!confirm(`Eliminar paquete "${name}"? Los clips no se borrarán.`)) return;
+  try {
+    await api('/packages/'+id, {method:'DELETE'});
+    toast('Paquete eliminado','success');
+    loadPackageList();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function uploadPackage(packageId) {
+  try {
+    const pkg = await api('/packages/' + packageId);
+    const pubIds = (pkg.items||[]).map(i => i.pub_id);
+    if (!pubIds.length) { toast('El paquete está vacío','error'); return; }
+    _pubSelected = new Set(pubIds);
+    openBatchUploadModal();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── Storage Summary ──────────────────────────────────────────────────────────
+
+async function loadStorageSummary() {
+  const el = document.getElementById('storage-summary');
+  if (!el) return;
+  el.innerHTML = '<div style="font-size:12px;color:#555">Cargando…</div>';
+  try {
+    const s = await api('/storage/summary');
+    const rows = [
+      ['Base de datos', s.db_size_mb + ' MB', s.db_path],
+      ['Downloads', (s.dirs?.downloads?.size_mb||0) + ' MB', s.dirs?.downloads?.files + ' archivos'],
+      ['Uploads', (s.dirs?.uploads?.size_mb||0) + ' MB', s.dirs?.uploads?.files + ' archivos'],
+      ['Audio', (s.dirs?.audio?.size_mb||0) + ' MB', s.dirs?.audio?.files + ' archivos'],
+      ['Proxies', (s.dirs?.proxies?.size_mb||0) + ' MB', s.dirs?.proxies?.files + ' archivos'],
+      ['Clips', (s.dirs?.clips?.size_mb||0) + ' MB', s.dirs?.clips?.files + ' archivos'],
+      ['Thumbnails', (s.dirs?.thumbnails?.size_mb||0) + ' MB', s.dirs?.thumbnails?.files + ' archivos'],
+      ['Otros', (s.other_dirs_mb||0) + ' MB', ''],
+    ];
+    const diskPct = s.disk?.used_pct || 0;
+    const diskCol = diskPct > 85 ? '#ef4444' : diskPct > 70 ? '#f59e0b' : '#4ade80';
+    el.innerHTML = `
+      <div style="font-size:12px;color:#aaa;margin-bottom:8px">
+        <b style="color:#fff">Total output:</b> ${s.total_output_mb} MB
+        <span style="margin-left:12px"><b style="color:#fff">Disco libre:</b>
+          <span style="color:${diskCol}">${s.disk?.free_gb||'?'} GB</span>
+          (${diskPct}% usado)
+        </span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;color:#888">
+        ${rows.map(r=>`<tr>
+          <td style="padding:3px 8px 3px 0;color:#aaa">${r[0]}</td>
+          <td style="padding:3px 8px;color:#fff;text-align:right">${r[1]}</td>
+          <td style="padding:3px 0;color:#555">${r[2]}</td>
+        </tr>`).join('')}
+      </table>
+      ${s.missing_clips>0||s.missing_videos>0 ? `
+      <div style="margin-top:8px;background:#1a0a0a;border:1px solid #7f1d1d;border-radius:6px;padding:8px 12px;font-size:11px;color:#fca5a5">
+        ⚠ Archivos faltantes: ${s.missing_clips} clip(s), ${s.missing_videos} video(s)
+        ${s.missing_details?.videos?.length ? '<br>' + s.missing_details.videos.map(v=>'• '+v.path).join('<br>') : ''}
+      </div>` : `<div style="font-size:11px;color:#4ade80;margin-top:6px">✓ Todos los archivos presentes</div>`}
+      <div style="font-size:10px;color:#333;margin-top:6px">Actualizado: ${s.scanned_at?.slice(0,16)||''}</div>`;
+  } catch(e) {
+    el.innerHTML = `<div style="font-size:12px;color:#ef4444">Error: ${_esc(e.message)}</div>`;
+  }
+}
+
+async function runStorageScan() {
+  try {
+    const r = await api('/storage/scan', {method:'POST'});
+    toast(`Escaneo completado: ${r.missing_clips} clips faltantes, ${r.missing_videos} videos faltantes`, 'info');
+    loadStorageSummary();
+  } catch(e) { toast(e.message,'error'); }
 }
 </script>
 </body>

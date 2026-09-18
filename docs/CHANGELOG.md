@@ -1,5 +1,63 @@
 # Changelog
 
+## 2026-09-18 — Multi-Clip Batch Upload, Packages & Storage Audit
+
+### New features
+
+**Clip Packages** — named collections of publication references (not file copies).
+- Create packages from bulk selection ("Save as Package" button in bulk bar).
+- Manage packages in Publishing Center sidebar → Paquetes.
+- Each package can be uploaded as a batch at any time.
+
+**Batch Upload** — select multiple YouTube Shorts publications and upload them all at once.
+- "Upload Selected" button in bulk bar opens approval modal.
+- `POST /upload-batches` validates all selected pubs atomically:
+  - Clips must be approved (`publish_as_is` or `PUBLISH`)
+  - Files must exist on disk
+  - No active upload already in progress for that pub
+  - YouTube must be connected
+- Creates one `yt_upload_session` per pub; existing worker handles upload.
+- Idempotency key prevents double-submit.
+- Pause / Resume / Retry errors per batch.
+- "Lotes" sidebar section shows all batches with progress bars.
+
+**Storage Audit** — `GET /storage/summary` + `POST /storage/scan`.
+- Disk usage breakdown by subdirectory.
+- Missing file detection for clips and videos.
+- Exposed in Settings (OAuth tab) → Almacenamiento section.
+- Persistent doc: `docs/ALMACENAMIENTO_ACTUAL.md`.
+
+**New files:**
+- `tests/test_packages_batches.py` — 11 tests (packages CRUD, batch idempotency, pause/resume, retry, derived status).
+- `docs/ALMACENAMIENTO_ACTUAL.md` — storage audit with real measured paths, sizes, and backup plan.
+
+**Database (`engine/database.py`):**
+- New tables: `clip_packages`, `clip_package_items`, `upload_batches`, `upload_batch_items`.
+- New CRUD: `create_package`, `list_packages`, `get_package`, `update_package`, `delete_package`, `add_package_items`, `remove_package_items`, `get_clip`, `create_upload_batch`, `get_batch_by_idempotency`, `get_upload_batch`, `list_upload_batches`, `pause_upload_batch`, `resume_upload_batch`, `retry_batch_errors`.
+- Fixed: `idx_videos_creator_id` index moved after `_add_column_if_missing` for `videos.creator_id` — prevented fresh DB creation in tests.
+
+**API (`api/main.py`):**
+- `GET/POST /packages` — list/create packages.
+- `GET/PUT/DELETE /packages/{id}` — get/update/delete package.
+- `POST/DELETE /packages/{id}/items` — add/remove publications from package.
+- `POST /upload-batches` — create batch with validation (idempotency, file hash, eval check).
+- `GET /upload-batches` — list all batches.
+- `GET /upload-batches/{id}` — get batch with item statuses.
+- `POST /upload-batches/{id}/pause|resume|retry-errors` — batch lifecycle.
+- `GET /storage/summary` — full storage breakdown with missing file detection.
+- `POST /storage/scan` — quick re-scan of file presence.
+
+**Dashboard (`dashboard/index.html`):**
+- Bulk bar: added "Upload Selected" and "Save as Package" buttons.
+- Sidebar: added "Lotes" and "Paquetes" sections.
+- Batch upload modal: "Aprobar y subir N clips en privado" with per-item validation.
+- Save package modal: name + description input.
+- Batch list view with progress bars, pause/resume/retry controls.
+- Package list view with "Upload Package" shortcut.
+- Settings (OAuth tab): storage summary card with subdirectory breakdown, missing file warning, and scan button.
+
+---
+
 ## 2026-09-17 — Publishing Center + YouTube Integration
 
 ### New feature: YouTube upload to private with OAuth + resumable upload

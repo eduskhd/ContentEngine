@@ -188,17 +188,16 @@ class TestAPIEndpoints(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(r.status_code, 200)
         self.assertFalse(r.json()["connected"])
 
-    async def test_youtube_connect_returns_auth_url(self):
-        """Connect endpoint returns auth_url (with client ID configured)."""
+    async def test_youtube_connect_returns_redirect(self):
+        """Connect endpoint redirects to Google OAuth (307) with client ID configured."""
         with patch.dict(os.environ, {
             "YOUTUBE_CLIENT_ID": "mock-client-id",
             "YOUTUBE_CLIENT_SECRET": "mock-client-secret",
         }):
-            r = await self.client.get("/youtube/connect")
-        self.assertEqual(r.status_code, 200)
-        data = r.json()
-        self.assertIn("auth_url", data)
-        self.assertIn("accounts.google.com", data["auth_url"])
+            r = await self.client.get("/youtube/connect", follow_redirects=False)
+        self.assertEqual(r.status_code, 307)
+        location = r.headers.get("location", "")
+        self.assertIn("accounts.google.com", location)
 
     async def test_start_upload_rejects_non_youtube_platform(self):
         """Upload endpoint must reject publications that are not youtube_shorts."""

@@ -140,3 +140,20 @@ Fixed in `engine/database.py:_delete_video_cascade` — now checks `COUNT(*)` of
 - `PERMANENT`: invalid format, unsupported codec, video too short
 
 Permanent errors should not be retried.
+
+---
+
+## KI-013 — Missing video file `drafteados_ms8nxjbhfki.mp4`
+
+**Status:** Known, non-critical.
+**Symptom:** `GET /storage/summary` reports 1 missing video. DB has a record for `output/downloads/drafteados_ms8nxjbhfki.mp4` but the file was deleted manually.
+**Impact:** The corresponding job cannot be re-processed. Its clips (if any) are unaffected. The entry appears in `/admin/orphans`.
+**Fix path:** Either delete the orphaned `videos` record manually via `DELETE FROM videos WHERE path LIKE '%drafteados%'`, or restore the file from backup.
+
+---
+
+## KI-014 — No file backup mechanism
+
+**Status:** Accepted risk for solo local tool.
+**Symptom:** No automated backup of downloaded videos or rendered clips. Loss of disk = loss of all original footage.
+**Fix path:** See `docs/ALMACENAMIENTO_ACTUAL.md` for a robocopy or R2/B2 cloud storage plan.

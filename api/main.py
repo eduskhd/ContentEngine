@@ -2389,6 +2389,320 @@ async def export_evaluations(
     return rows
 
 
+# ── CLIP PACKAGES ─────────────────────────────────────────────────────────────
+
+@app.get("/packages")
+async def list_packages():
+    return dbmod.list_packages()
+
+
+@app.post("/packages")
+async def create_package(body: dict = Body(...)):
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "name is required")
+    description = (body.get("description") or "").strip()
+    pub_ids = body.get("pub_ids") or []
+    pid = dbmod.create_package(name, description)
+    if pub_ids:
+        dbmod.add_package_items(pid, pub_ids)
+    return {"id": pid, "name": name}
+
+
+@app.get("/packages/{package_id}")
+async def get_package(package_id: str):
+    pkg = dbmod.get_package(package_id)
+    if not pkg:
+        raise HTTPException(404, "Package not found")
+    return pkg
+
+
+@app.put("/packages/{package_id}")
+async def update_package(package_id: str, body: dict = Body(...)):
+    if not dbmod.get_package(package_id):
+        raise HTTPException(404, "Package not found")
+    dbmod.update_package(package_id, **{k: v for k, v in body.items() if k in ("name", "description")})
+    return {"status": "updated"}
+
+
+@app.delete("/packages/{package_id}")
+async def delete_package(package_id: str):
+    if not dbmod.get_package(package_id):
+        raise HTTPException(404, "Package not found")
+    dbmod.delete_package(package_id)
+    return {"deleted": True}
+
+
+@app.post("/packages/{package_id}/items")
+async def add_package_items(package_id: str, body: dict = Body(...)):
+    if not dbmod.get_package(package_id):
+        raise HTTPException(404, "Package not found")
+    pub_ids = body.get("pub_ids") or []
+    if not pub_ids:
+        raise HTTPException(400, "pub_ids required")
+    return {"added": dbmod.add_package_items(package_id, pub_ids)}
+
+
+@app.delete("/packages/{package_id}/items")
+async def remove_package_items(package_id: str, body: dict = Body(...)):
+    if not dbmod.get_package(package_id):
+        raise HTTPException(404, "Package not found")
+    pub_ids = body.get("pub_ids") or []
+    return {"removed": dbmod.remove_package_items(package_id, pub_ids)}
+
+
+# ── UPLOAD BATCHES ────────────────────────────────────────────────────────────
+
+import os as _os
+
+@app.post("/upload-batches")
+async def create_upload_batch(body: dict = Body(...)):
+    """
+    Validate selected publications, create yt_upload_sessions, and group them as a batch.
+    idempotency_key prevents double-submit. privacyStatus is always private (server-enforced).
+    """
+    from publishers import yt_auth, yt_upload as _uploader
+
+    idempotency_key = (body.get("idempotency_key") or "").strip()
+    if not idempotency_key:
+        raise HTTPException(400, "idempotency_key required")
+
+    existing_batch = dbmod.get_batch_by_idempotency(idempotency_key)
+    if existing_batch:
+        return {"batch_id": existing_batch["id"], "duplicate": True, "queued": 0, "skipped": []}
+
+    pub_ids = body.get("pub_ids") or []
+    if not pub_ids:
+        raise HTTPException(400, "pub_ids required")
+
+    if not yt_auth.is_connected():
+        raise HTTPException(400, "YouTube not connected")
+
+    tokens = yt_auth.load_tokens()
+    channel_id = (tokens or {}).get("channel_id", "")
+    name = (body.get("name") or f"Batch {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M')}").strip()
+
+    queued_pairs = []
+    skipped = []
+
+    for pub_id in pub_ids:
+        pub = dbmod.get_publication(pub_id)
+        if not pub:
+            skipped.append({"pub_id": pub_id, "reason": "Publication not found"})
+            continue
+        if pub.get("platform") != "youtube_shorts":
+            skipped.append({"pub_id": pub_id, "reason": "Not a YouTube Shorts publication"})
+            continue
+
+        clip = dbmod.get_clip(pub["clip_id"])
+        eval_row = dbmod.get_evaluation(pub["clip_id"])
+        eval_ok = (eval_row and eval_row.get("decision") == "publish_as_is") or \
+                  (clip and clip.get("prepublish_decision") == "PUBLISH")
+        if not eval_ok:
+            skipped.append({"pub_id": pub_id, "reason": "Not approved (publish_as_is required)"})
+            continue
+
+        file_path = None
+        if clip:
+            for attr in ("captioned_path", "output_path"):
+                p = clip.get(attr)
+                if p and Path(p).exists():
+                    file_path = p
+                    break
+        if not file_path:
+            skipped.append({"pub_id": pub_id, "reason": "Clip file not found on disk"})
+            continue
+
+        existing_session = dbmod.get_yt_upload_session_by_pub(pub_id)
+        if existing_session and existing_session.get("status") in ("pending", "uploading", "processing", "private"):
+            skipped.append({"pub_id": pub_id, "reason": "Already in an active upload session"})
+            continue
+
+        try:
+            file_hash = _uploader.compute_file_hash(file_path)
+        except Exception:
+            skipped.append({"pub_id": pub_id, "reason": "Could not hash file"})
+            continue
+
+        file_size = _os.path.getsize(file_path)
+        tags = []
+        try:
+            raw = pub.get("hashtags") or "[]"
+            tags = json.loads(raw) if raw.startswith("[") else [t.lstrip("#") for t in raw.split() if t]
+        except Exception:
+            pass
+
+        session_id = dbmod.create_yt_upload_session(
+            pub_id=pub_id,
+            clip_id=pub["clip_id"],
+            channel_id=channel_id,
+            title=pub.get("title") or "Short",
+            description=pub.get("caption") or "",
+            tags=tags,
+            is_for_kids=False,
+            file_path=file_path,
+            file_hash=file_hash,
+            file_size=file_size,
+        )
+        queued_pairs.append((pub_id, session_id))
+
+    if not queued_pairs:
+        return {"batch_id": None, "queued": 0, "skipped": skipped,
+                "error": "No valid YouTube Shorts publications to upload"}
+
+    batch_id = dbmod.create_upload_batch(name, channel_id, idempotency_key, queued_pairs)
+    return {"batch_id": batch_id, "duplicate": False, "queued": len(queued_pairs), "skipped": skipped}
+
+
+@app.get("/upload-batches")
+async def list_upload_batches(limit: int = Query(50, le=200)):
+    return dbmod.list_upload_batches(limit)
+
+
+@app.get("/upload-batches/{batch_id}")
+async def get_upload_batch(batch_id: str):
+    batch = dbmod.get_upload_batch(batch_id)
+    if not batch:
+        raise HTTPException(404, "Batch not found")
+    return batch
+
+
+@app.post("/upload-batches/{batch_id}/pause")
+async def pause_upload_batch(batch_id: str):
+    if not dbmod.get_upload_batch(batch_id):
+        raise HTTPException(404, "Batch not found")
+    dbmod.pause_upload_batch(batch_id)
+    return {"status": "paused"}
+
+
+@app.post("/upload-batches/{batch_id}/resume")
+async def resume_upload_batch(batch_id: str):
+    if not dbmod.get_upload_batch(batch_id):
+        raise HTTPException(404, "Batch not found")
+    dbmod.resume_upload_batch(batch_id)
+    return {"status": "resumed"}
+
+
+@app.post("/upload-batches/{batch_id}/retry-errors")
+async def retry_batch_errors(batch_id: str):
+    if not dbmod.get_upload_batch(batch_id):
+        raise HTTPException(404, "Batch not found")
+    dbmod.retry_batch_errors(batch_id)
+    return {"status": "retrying"}
+
+
+# ── STORAGE SUMMARY ───────────────────────────────────────────────────────────
+
+@app.get("/storage/summary")
+async def storage_summary():
+    """Detailed storage breakdown with file-presence check."""
+    import shutil as _shutil
+
+    def _dir_size_mb(path: str) -> float:
+        total = 0
+        try:
+            for entry in _os.scandir(path):
+                if entry.is_file(follow_symlinks=False):
+                    total += entry.stat().st_size
+                elif entry.is_dir(follow_symlinks=False):
+                    total += int(_dir_size_mb(entry.path) * 1024 * 1024)
+        except Exception:
+            pass
+        return round(total / (1024 * 1024), 1)
+
+    out = CONFIG.output_dir
+    subdirs = ["downloads", "uploads", "audio", "proxies", "clips", "thumbnails"]
+    dirs = {}
+    for sub in subdirs:
+        p = _os.path.join(out, sub)
+        size = _dir_size_mb(p)
+        try:
+            count = len([f for f in _os.scandir(p) if f.is_file()])
+        except Exception:
+            count = 0
+        dirs[sub] = {"size_mb": size, "files": count}
+
+    other_mb = 0.0
+    try:
+        for entry in _os.scandir(out):
+            if entry.is_dir() and entry.name not in subdirs:
+                other_mb += _dir_size_mb(entry.path)
+    except Exception:
+        pass
+
+    total_mb = _dir_size_mb(out)
+    db_mb = 0.0
+    try:
+        db_mb = round(_os.path.getsize(CONFIG.db_path) / (1024 * 1024), 1)
+    except Exception:
+        pass
+
+    disk = {}
+    try:
+        u = _shutil.disk_usage(out)
+        disk = {
+            "free_gb": round(u.free / (1024 ** 3), 1),
+            "total_gb": round(u.total / (1024 ** 3), 1),
+            "used_pct": round((u.used / u.total) * 100, 1),
+        }
+    except Exception:
+        pass
+
+    with dbmod.db() as conn:
+        clip_rows = conn.execute("SELECT id, captioned_path, output_path FROM clips").fetchall()
+        video_rows = conn.execute("SELECT id, path FROM videos").fetchall()
+
+    missing_clips = [
+        {"id": r["id"][:8], "path": r["captioned_path"] or r["output_path"]}
+        for r in clip_rows
+        if (r["captioned_path"] or r["output_path"]) and
+           not Path(r["captioned_path"] or r["output_path"]).exists()
+    ]
+    missing_videos = [
+        {"id": r["id"][:8], "path": r["path"]}
+        for r in video_rows
+        if r["path"] and not Path(r["path"]).exists()
+    ]
+
+    return {
+        "output_dir": out,
+        "db_path": CONFIG.db_path,
+        "db_size_mb": db_mb,
+        "total_output_mb": total_mb,
+        "other_dirs_mb": round(other_mb, 1),
+        "dirs": dirs,
+        "disk": disk,
+        "missing_clips": len(missing_clips),
+        "missing_videos": len(missing_videos),
+        "missing_details": {
+            "clips": missing_clips[:10],
+            "videos": missing_videos[:10],
+        },
+        "scanned_at": datetime.datetime.utcnow().isoformat(),
+    }
+
+
+@app.post("/storage/scan")
+async def storage_scan():
+    """Rescan file presence and return updated counts."""
+    with dbmod.db() as conn:
+        clip_rows = conn.execute("SELECT id, captioned_path, output_path FROM clips").fetchall()
+        video_rows = conn.execute("SELECT id, path FROM videos").fetchall()
+    missing_clips = sum(
+        1 for r in clip_rows
+        if (r["captioned_path"] or r["output_path"]) and
+           not Path(r["captioned_path"] or r["output_path"]).exists()
+    )
+    missing_videos = sum(
+        1 for r in video_rows if r["path"] and not Path(r["path"]).exists()
+    )
+    return {
+        "missing_clips": missing_clips,
+        "missing_videos": missing_videos,
+        "scanned_at": datetime.datetime.utcnow().isoformat(),
+    }
+
+
 # ── MISSED MOMENTS ────────────────────────────────────────────────────────────
 
 @app.post("/jobs/{job_id}/missed-moments")

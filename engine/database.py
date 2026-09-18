@@ -381,7 +381,6 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_pubs_clip_id         ON publications(clip_id);
             CREATE INDEX IF NOT EXISTS idx_pubs_status          ON publications(status);
             CREATE INDEX IF NOT EXISTS idx_pubs_creator_id      ON publications(creator_id);
-            CREATE INDEX IF NOT EXISTS idx_videos_creator_id    ON videos(creator_id);
             CREATE INDEX IF NOT EXISTS idx_prepub_clip_id       ON prepublish_decisions(clip_id);
             CREATE INDEX IF NOT EXISTS idx_coll_items_coll     ON collection_items(collection_id);
             CREATE INDEX IF NOT EXISTS idx_coll_items_item     ON collection_items(item_id);
@@ -417,6 +416,10 @@ def init_db():
         # Creator system (2026-09-09)
         _add_column_if_missing(conn, "jobs", "creator_id", "TEXT")
         _add_column_if_missing(conn, "videos", "creator_id", "TEXT")
+        try:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_videos_creator_id ON videos(creator_id)")
+        except Exception:
+            pass
         _add_column_if_missing(conn, "videos", "thumbnail_path", "TEXT")
         # Performance optimization (2026-09-10)
         _add_column_if_missing(conn, "videos", "words_json", "TEXT")
@@ -467,6 +470,43 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_yt_sessions_pub_id ON yt_upload_sessions(pub_id);
         """)
         _add_column_if_missing(conn, "social_accounts", "channel_name", "TEXT")
+        # Packages & batch upload tables (2026-09-18)
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS clip_packages (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS clip_package_items (
+            id TEXT PRIMARY KEY,
+            package_id TEXT NOT NULL REFERENCES clip_packages(id) ON DELETE CASCADE,
+            pub_id TEXT NOT NULL,
+            added_at TEXT NOT NULL,
+            UNIQUE(package_id, pub_id)
+        );
+        CREATE TABLE IF NOT EXISTS upload_batches (
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            channel_id TEXT,
+            idempotency_key TEXT UNIQUE,
+            paused INTEGER DEFAULT 0,
+            total_items INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS upload_batch_items (
+            id TEXT PRIMARY KEY,
+            batch_id TEXT NOT NULL REFERENCES upload_batches(id) ON DELETE CASCADE,
+            pub_id TEXT NOT NULL,
+            session_id TEXT,
+            added_at TEXT NOT NULL,
+            UNIQUE(batch_id, pub_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_pkg_items_pkg ON clip_package_items(package_id);
+        CREATE INDEX IF NOT EXISTS idx_batch_items_batch ON upload_batch_items(batch_id);
+        """)
         # Run migration: link existing videos to creator records
         _migrate_creators(conn)
 
@@ -1830,3 +1870,228 @@ def consume_yt_oauth_state(state: str) -> str | None:
             conn.execute("DELETE FROM yt_oauth_state WHERE state=?", (state,))
             return row["code_verifier"]
     return None
+
+
+# ── Clip row helper ───────────────────────────────────────────────────────────
+
+def get_clip(clip_id: str) -> dict | None:
+    with db() as conn:
+        row = conn.execute(
+            "SELECT * FROM clips WHERE id=?", (clip_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+# ── Clip package helpers ──────────────────────────────────────────────────────
+
+def create_package(name: str, description: str = "") -> str:
+    pid = new_id()
+    ts = now()
+    with db() as conn:
+        conn.execute(
+            "INSERT INTO clip_packages (id, name, description, created_at, updated_at) VALUES (?,?,?,?,?)",
+            (pid, name, description or "", ts, ts),
+        )
+    return pid
+
+
+def list_packages() -> list[dict]:
+    with db() as conn:
+        rows = conn.execute("""
+            SELECT p.*, COUNT(i.id) as item_count
+            FROM clip_packages p
+            LEFT JOIN clip_package_items i ON i.package_id = p.id
+            GROUP BY p.id
+            ORDER BY p.created_at DESC
+        """).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_package(package_id: str) -> dict | None:
+    with db() as conn:
+        row = conn.execute("SELECT * FROM clip_packages WHERE id=?", (package_id,)).fetchone()
+        if not row:
+            return None
+        items = conn.execute("""
+            SELECT i.pub_id, i.added_at, p.title, p.platform, p.status
+            FROM clip_package_items i
+            LEFT JOIN publications p ON p.id = i.pub_id
+            WHERE i.package_id=?
+            ORDER BY i.added_at ASC
+        """, (package_id,)).fetchall()
+    r = dict(row)
+    r["items"] = [dict(i) for i in items]
+    return r
+
+
+def update_package(package_id: str, **kwargs):
+    allowed = {k: v for k, v in kwargs.items() if k in ("name", "description")}
+    if not allowed:
+        return
+    allowed["updated_at"] = now()
+    sets = ", ".join(f"{k}=?" for k in allowed)
+    vals = list(allowed.values()) + [package_id]
+    with db() as conn:
+        conn.execute(f"UPDATE clip_packages SET {sets} WHERE id=?", vals)
+
+
+def delete_package(package_id: str):
+    with db() as conn:
+        conn.execute("DELETE FROM clip_packages WHERE id=?", (package_id,))
+
+
+def add_package_items(package_id: str, pub_ids: list) -> int:
+    ts = now()
+    added = 0
+    with db() as conn:
+        for pub_id in pub_ids:
+            conn.execute(
+                "INSERT OR IGNORE INTO clip_package_items (id, package_id, pub_id, added_at) VALUES (?,?,?,?)",
+                (new_id(), package_id, pub_id, ts),
+            )
+            added += conn.execute("SELECT changes()").fetchone()[0]
+    return added
+
+
+def remove_package_items(package_id: str, pub_ids: list) -> int:
+    removed = 0
+    with db() as conn:
+        for pub_id in pub_ids:
+            conn.execute(
+                "DELETE FROM clip_package_items WHERE package_id=? AND pub_id=?",
+                (package_id, pub_id),
+            )
+            removed += conn.execute("SELECT changes()").fetchone()[0]
+    return removed
+
+
+# ── Upload batch helpers ──────────────────────────────────────────────────────
+
+def create_upload_batch(name: str, channel_id: str, idempotency_key: str,
+                        pub_session_pairs: list) -> str:
+    bid = new_id()
+    ts = now()
+    with db() as conn:
+        conn.execute("""
+            INSERT INTO upload_batches (id, name, channel_id, idempotency_key, paused,
+                total_items, created_at, updated_at)
+            VALUES (?,?,?,?,0,?,?,?)
+        """, (bid, name or "", channel_id or "", idempotency_key,
+              len(pub_session_pairs), ts, ts))
+        for pub_id, session_id in pub_session_pairs:
+            conn.execute("""
+                INSERT OR IGNORE INTO upload_batch_items
+                    (id, batch_id, pub_id, session_id, added_at)
+                VALUES (?,?,?,?,?)
+            """, (new_id(), bid, pub_id, session_id, ts))
+    return bid
+
+
+def get_batch_by_idempotency(key: str) -> dict | None:
+    with db() as conn:
+        row = conn.execute(
+            "SELECT * FROM upload_batches WHERE idempotency_key=?", (key,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_upload_batch(batch_id: str) -> dict | None:
+    with db() as conn:
+        row = conn.execute("SELECT * FROM upload_batches WHERE id=?", (batch_id,)).fetchone()
+        if not row:
+            return None
+        items = conn.execute("""
+            SELECT i.pub_id, i.session_id, i.added_at,
+                   s.status, s.bytes_sent, s.file_size, s.error_message,
+                   s.remote_video_id, p.title, p.platform
+            FROM upload_batch_items i
+            LEFT JOIN yt_upload_sessions s ON s.id = i.session_id
+            LEFT JOIN publications p ON p.id = i.pub_id
+            WHERE i.batch_id=?
+            ORDER BY i.added_at ASC
+        """, (batch_id,)).fetchall()
+    r = dict(row)
+    r["items"] = [dict(i) for i in items]
+    statuses = {i["status"] for i in r["items"] if i["status"]}
+    if r.get("paused"):
+        r["derived_status"] = "paused"
+    elif not statuses:
+        r["derived_status"] = "pending"
+    elif statuses <= {"private", "needs_check", "cancelled"}:
+        r["derived_status"] = "done"
+    elif statuses & {"pending", "uploading", "processing", "paused"}:
+        r["derived_status"] = "active"
+    elif "error" in statuses:
+        r["derived_status"] = "error"
+    else:
+        r["derived_status"] = "done"
+    return r
+
+
+def list_upload_batches(limit: int = 50) -> list[dict]:
+    with db() as conn:
+        rows = conn.execute("""
+            SELECT b.*,
+                   COUNT(i.id) as item_count,
+                   SUM(CASE WHEN s.status IN ('private','needs_check') THEN 1 ELSE 0 END) as done_items,
+                   SUM(CASE WHEN s.status = 'error' THEN 1 ELSE 0 END) as error_items,
+                   SUM(CASE WHEN s.status IN ('pending','uploading','processing') THEN 1 ELSE 0 END) as active_items
+            FROM upload_batches b
+            LEFT JOIN upload_batch_items i ON i.batch_id = b.id
+            LEFT JOIN yt_upload_sessions s ON s.id = i.session_id
+            GROUP BY b.id
+            ORDER BY b.created_at DESC
+            LIMIT ?
+        """, (limit,)).fetchall()
+    result = []
+    for row in rows:
+        r = dict(row)
+        if r.get("paused"):
+            r["derived_status"] = "paused"
+        elif r.get("active_items", 0) > 0:
+            r["derived_status"] = "active"
+        elif r.get("error_items", 0) > 0:
+            r["derived_status"] = "error"
+        else:
+            r["derived_status"] = "done"
+        result.append(r)
+    return result
+
+
+def pause_upload_batch(batch_id: str):
+    ts = now()
+    with db() as conn:
+        conn.execute(
+            "UPDATE upload_batches SET paused=1, updated_at=? WHERE id=?", (ts, batch_id)
+        )
+        conn.execute("""
+            UPDATE yt_upload_sessions SET status='paused', updated_at=?
+            WHERE id IN (SELECT session_id FROM upload_batch_items WHERE batch_id=?)
+              AND status='pending'
+        """, (ts, batch_id))
+
+
+def resume_upload_batch(batch_id: str):
+    ts = now()
+    with db() as conn:
+        conn.execute(
+            "UPDATE upload_batches SET paused=0, updated_at=? WHERE id=?", (ts, batch_id)
+        )
+        conn.execute("""
+            UPDATE yt_upload_sessions SET status='pending', updated_at=?
+            WHERE id IN (SELECT session_id FROM upload_batch_items WHERE batch_id=?)
+              AND status='paused'
+        """, (ts, batch_id))
+
+
+def retry_batch_errors(batch_id: str):
+    ts = now()
+    with db() as conn:
+        conn.execute("""
+            UPDATE yt_upload_sessions
+            SET status='pending', attempts=0, error_message=NULL, error_code=NULL,
+                locked_at=NULL, locked_by=NULL, updated_at=?
+            WHERE id IN (SELECT session_id FROM upload_batch_items WHERE batch_id=?)
+              AND status='error'
+        """, (ts, batch_id))
+        conn.execute("UPDATE upload_batches SET updated_at=? WHERE id=?", (ts, batch_id))
