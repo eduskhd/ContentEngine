@@ -497,6 +497,7 @@ def init_db():
             idempotency_key TEXT UNIQUE,
             paused INTEGER DEFAULT 0,
             total_items INTEGER DEFAULT 0,
+            approved_privacy TEXT DEFAULT 'private',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
@@ -505,6 +506,7 @@ def init_db():
             batch_id TEXT NOT NULL REFERENCES upload_batches(id) ON DELETE CASCADE,
             pub_id TEXT NOT NULL,
             session_id TEXT,
+            privacy_status TEXT DEFAULT 'private',
             added_at TEXT NOT NULL,
             UNIQUE(batch_id, pub_id)
         );
