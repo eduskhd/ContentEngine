@@ -455,6 +455,9 @@ def init_db():
             error_code TEXT,
             locked_at TEXT,
             locked_by TEXT,
+            privacy_status TEXT DEFAULT 'private',
+            series_id TEXT,
+            series_part INTEGER DEFAULT 0,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             FOREIGN KEY (pub_id) REFERENCES publications(id),
@@ -474,6 +477,9 @@ def init_db():
         _add_column_if_missing(conn, "yt_upload_sessions", "privacy_status", "TEXT DEFAULT 'private'")
         _add_column_if_missing(conn, "upload_batch_items", "privacy_status", "TEXT DEFAULT 'private'")
         _add_column_if_missing(conn, "upload_batches", "approved_privacy", "TEXT DEFAULT 'private'")
+        # Series sequential upload (2026-09-19)
+        _add_column_if_missing(conn, "yt_upload_sessions", "series_id", "TEXT")
+        _add_column_if_missing(conn, "yt_upload_sessions", "series_part", "INTEGER DEFAULT 0")
         # Packages & batch upload tables (2026-09-18)
         conn.executescript("""
         CREATE TABLE IF NOT EXISTS clip_packages (
@@ -1765,7 +1771,7 @@ _YT_SESSION_ALLOWED_COLS = {
     "status", "session_url", "remote_video_id", "remote_process_status",
     "remote_privacy_status", "bytes_sent", "file_size", "file_path", "file_hash",
     "attempts", "last_attempt_at", "error_message", "error_code",
-    "locked_at", "locked_by", "updated_at",
+    "locked_at", "locked_by", "updated_at", "series_id", "series_part",
 }
 
 
@@ -1774,6 +1780,7 @@ def create_yt_upload_session(
     description: str, tags: list, is_for_kids: bool,
     file_path: str, file_hash: str, file_size: int,
     privacy_status: str = "private",
+    series_id: str = None, series_part: int = 0,
 ) -> str:
     sid = new_id()
     ts = now()
@@ -1782,12 +1789,13 @@ def create_yt_upload_session(
             INSERT INTO yt_upload_sessions
             (id, pub_id, clip_id, channel_id, title, description, tags, is_for_kids,
              file_path, file_hash, file_size, status, bytes_sent, attempts,
-             privacy_status, created_at, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,'pending',0,0,?,?,?)
+             privacy_status, series_id, series_part, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,'pending',0,0,?,?,?,?,?)
         """, (
             sid, pub_id, clip_id, channel_id, title or "", description or "",
             json.dumps(tags or []), 1 if is_for_kids else 0,
-            file_path, file_hash, file_size, privacy_status, ts, ts,
+            file_path, file_hash, file_size, privacy_status,
+            series_id or None, series_part or 0, ts, ts,
         ))
     return sid
 
@@ -1823,26 +1831,67 @@ def update_yt_upload_session(session_id: str, **kwargs):
 
 
 def claim_yt_upload_session(worker_id: str) -> dict | None:
-    """Atomically claim the next pending session. Returns full row (with session_url)."""
+    """Atomically claim the next pending session.
+
+    Series ordering: skips part N if any earlier part of the same series is
+    not yet in a terminal state (private/public/unlisted/needs_check/error/cancelled).
+    """
+    _TERMINAL = {"private", "public", "unlisted", "needs_check", "error", "cancelled"}
     threshold = datetime.utcnow() - timedelta(minutes=5)
     threshold_iso = threshold.isoformat()
     with db() as conn:
-        row = conn.execute("""
+        candidates = conn.execute("""
             SELECT * FROM yt_upload_sessions
             WHERE status='pending'
               AND (locked_at IS NULL OR locked_at < ?)
               AND attempts < 3
-            ORDER BY created_at ASC
-            LIMIT 1
-        """, (threshold_iso,)).fetchone()
-        if not row:
+            ORDER BY series_id NULLS LAST, series_part ASC, created_at ASC
+            LIMIT 20
+        """, (threshold_iso,)).fetchall()
+        if not candidates:
             return None
+
+        chosen = None
+        for row in candidates:
+            row = dict(row)
+            sid_val = row.get("series_id")
+            spart = row.get("series_part") or 0
+            if sid_val and spart > 0:
+                # Check if a previous part is still in-progress
+                blocking = conn.execute("""
+                    SELECT 1 FROM yt_upload_sessions
+                    WHERE series_id=? AND series_part < ? AND status NOT IN
+                          ('private','public','unlisted','needs_check','error','cancelled')
+                    LIMIT 1
+                """, (sid_val, spart)).fetchone()
+                if blocking:
+                    continue
+            chosen = row
+            break
+
+        if not chosen:
+            return None
+
         ts = now()
         conn.execute(
             "UPDATE yt_upload_sessions SET locked_at=?, locked_by=?, updated_at=? WHERE id=?",
-            (ts, worker_id, ts, row["id"]),
+            (ts, worker_id, ts, chosen["id"]),
         )
-    return dict(row)
+    return chosen
+
+
+def pause_series_subsequent(series_id: str, failed_part: int) -> int:
+    """After a permanent failure on part N, pause all later parts of the same series."""
+    if not series_id:
+        return 0
+    ts = now()
+    with db() as conn:
+        result = conn.execute("""
+            UPDATE yt_upload_sessions
+            SET status='paused', error_message='Paused: previous part failed', updated_at=?
+            WHERE series_id=? AND series_part > ? AND status IN ('pending','paused')
+        """, (ts, series_id, failed_part))
+        return result.rowcount
 
 
 def list_stale_yt_sessions() -> list[dict]:

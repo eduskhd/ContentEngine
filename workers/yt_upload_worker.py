@@ -306,6 +306,16 @@ class YTUploadWorker(threading.Thread):
         )
         if status == "error":
             _update_pub_status(pub_id, "failed")
+            # Cascade-pause later parts of the same series
+            series_id = (session or {}).get("series_id")
+            series_part = (session or {}).get("series_part") or 0
+            if series_id and series_part > 0:
+                paused = db.pause_series_subsequent(series_id, series_part)
+                if paused:
+                    logger.warning(
+                        "[YTUploadWorker] paused %d subsequent series parts for series=%s after part %d failed",
+                        paused, series_id, series_part,
+                    )
 
 
 def _now() -> str:

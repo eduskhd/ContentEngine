@@ -172,6 +172,8 @@ class TestAPIEndpoints(unittest.IsolatedAsyncioTestCase):
         try:
             from httpx import AsyncClient, ASGITransport
             from api.main import app
+            from engine import database as _db
+            _db.init_db()  # ensure schema migrations are applied before direct DB calls
             self.transport = ASGITransport(app=app)
             self.app = app
             self.client = AsyncClient(transport=self.transport, base_url="http://test")

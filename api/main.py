@@ -1169,6 +1169,8 @@ async def start_youtube_upload(pub_id: str, body: dict = Body({})):
         file_hash=file_hash,
         file_size=file_size,
         privacy_status=privacy_status,
+        series_id=pub.get("series_id") or None,
+        series_part=pub.get("series_part") or 0,
     )
 
     return {"session_id": session_id, "status": "pending", "existing": False}
@@ -2589,6 +2591,8 @@ async def create_upload_batch(body: dict = Body(...)):
             file_hash=file_hash,
             file_size=file_size,
             privacy_status=privacy_status,
+            series_id=pub.get("series_id") or None,
+            series_part=pub.get("series_part") or 0,
         )
         queued_pairs.append((pub_id, session_id))
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-09-19 — Comprehensive QA Repair: Review, Jobs, Library & Publishing
+## 2026-09-19 — QA Repair + Series Sequential Upload
 
 ### Bug fixes & UX improvements
 
@@ -33,6 +33,17 @@
 - `GET /clips` — added `video_id` query param filter.
 - `POST /clips/{id}/return-to-review` — new endpoint.
 - `GET /review/pending` — `?status=` param with default REVIEW.
+
+**Series sequential upload (`engine/database.py`, `workers/yt_upload_worker.py`):**
+- `yt_upload_sessions` gains `series_id TEXT` and `series_part INTEGER DEFAULT 0` columns.
+- `create_yt_upload_session()` copies series metadata from publication.
+- `claim_yt_upload_session()` now skips part N if any earlier part of the same series is not yet terminal — ensures part 2 never starts before part 1 finishes.
+- `pause_series_subsequent()` helper: when part N permanently fails, parts N+1, N+2… are set to "paused" status.
+- `_fail()` in `YTUploadWorker` calls cascade-pause for series sessions on permanent error.
+- Resume batch or retry errors to unblock paused subsequent parts.
+
+**Tests:**
+- `tests/test_yt_publishing.py`: `TestAPIEndpoints.asyncSetUp` now calls `init_db()` to ensure schema migrations are applied before direct DB calls.
 
 ## 2026-09-18 — Multi-Clip Batch Upload, Packages & Storage Audit
 
