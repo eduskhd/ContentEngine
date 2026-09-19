@@ -2197,7 +2197,7 @@ function updateJobCard(el, data) {
 async function loadOverview() {
   try {
     const [health, clips, jobs, ws] = await Promise.all([
-      api('/health'), api('/clips?limit=9999'), api('/jobs'), api('/workers/stats')
+      api('/health'), api('/clips?limit=500'), api('/jobs'), api('/workers/stats')
     ]);
     document.getElementById('server-status').textContent = '● online';
     document.getElementById('server-status').style.color = '#4ade80';
