@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-18 (Batch upload, packages, storage audit)
+Last updated: 2026-09-19 (QA repair: Review queue, Jobs filters, Library actions, Publishing navigation)
 
 ## Readiness classification: INTERNAL ALPHA READY
 
@@ -41,7 +41,10 @@ See `docs/PRODUCTION_READINESS.md` for full assessment.
 | Generate top clips | ✓ Working | POST `/jobs/{id}/generate-top?n=N` — renders N highest-virality ungenerated candidates |
 | Generate series | ✓ Working | POST `/jobs/{id}/generate-series/{series_id}` — renders all parts of a narrative series |
 | Publishing Center | ✓ Working | Full manual publishing workflow: create publications, edit metadata, mark ready, mark published, record external URL, bulk actions, download ZIP, manual metrics entry, series order warning |
-| Add to Publishing (clip modal) | ✓ Working | Platform selector + "Add to Publishing Center" button in clip player; also "+ Publish" on each clip card in Library views |
+| Add to Publishing (clip modal) | ✓ Working | Platform selector + "Add to Publishing Center" button; navigates to Publishing tab after success |
+| Return to Review | ✓ Working | "↩ Pendiente" button on approved/rejected clips in Review tab and Library clip views; `POST /clips/{id}/return-to-review` |
+| Jobs filter tabs | ✓ Working | Todos / En curso / Completados / Fallidos; client-side; "Reintentar" action on failed jobs |
+| Library bulk Publicar | ✓ Working | Fetches approved clips for selected videos, prepares publications, navigates to Publishing tab |
 | Clip delete | ✓ Working | DELETE /clips/{id} — removes rendered files, captions, publication drafts; available per-clip in Library clip list views |
 | Bulk approve/reject clips | ✓ Working | Review tab Select mode — checkboxes + bulk bar; calls /review/{id}/approve|reject in parallel |
 | Date display on video cards | ✓ Working | created_at (YYYY-MM-DD) shown in Library video card metadata |

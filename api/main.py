@@ -487,6 +487,7 @@ async def list_clips(
     decision: str = Query(None),
     creator_id: str = Query(None),
     job_id: str = Query(None),
+    video_id: str = Query(None),
     limit: int = Query(50, le=500),
 ):
     conn = dbmod.get_db()
@@ -504,6 +505,9 @@ async def list_clips(
     if job_id:
         conditions.append("cl.job_id=?")
         params.append(job_id)
+    if video_id:
+        conditions.append("v.id=?")
+        params.append(video_id)
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     params.append(limit)
@@ -620,18 +624,33 @@ async def download_all_clips(job_id: str, background_tasks: BackgroundTasks):
 async def pending_review(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    status: str = Query(None),  # REVIEW|PUBLISH|REJECT|all — default: REVIEW (pending queue)
 ):
-    """Clips for manual review, paginated."""
+    """Clips for manual review, paginated.
+
+    status=REVIEW (default) → pending queue (needs human decision)
+    status=PUBLISH           → approved clips
+    status=REJECT            → rejected clips
+    status=all               → everything
+    """
     conn = dbmod.get_db()
-    rows = conn.execute("""
+    effective = (status or "REVIEW").upper()
+    if effective == "ALL":
+        where = ""
+        params: list = []
+    else:
+        where = "WHERE cl.prepublish_decision=?"
+        params = [effective]
+    rows = conn.execute(f"""
         SELECT cl.id, cl.captioned_path, cl.output_path, cl.prepublish_score,
                cl.prepublish_decision, cl.created_at, cl.job_id,
                ca.hook_score, ca.virality_score, ca.start_s, ca.end_s
         FROM clips cl
         JOIN candidates ca ON cl.candidate_id = ca.id
+        {where}
         ORDER BY cl.created_at DESC, ca.virality_score DESC
         LIMIT ? OFFSET ?
-    """, [limit, offset]).fetchall()
+    """, params + [limit, offset]).fetchall()
     conn.close()
     return [
         {
@@ -672,6 +691,21 @@ async def reject_clip(clip_id: str, reason: str = "manual_rejection"):
     conn.commit()
     conn.close()
     return {"status": "rejected", "clip_id": clip_id}
+
+
+@app.post("/clips/{clip_id}/return-to-review")
+async def return_clip_to_review(clip_id: str):
+    """Reset a clip's editorial decision to 'REVIEW' so it reappears in the pending queue.
+    The clip_evaluations history is preserved for audit purposes."""
+    with dbmod.db() as conn:
+        row = conn.execute("SELECT id FROM clips WHERE id=?", [clip_id]).fetchone()
+        if not row:
+            raise HTTPException(404, "Clip not found")
+        conn.execute(
+            "UPDATE clips SET prepublish_decision='REVIEW', review_notes='' WHERE id=?",
+            [clip_id],
+        )
+    return {"status": "returned_to_review", "clip_id": clip_id}
 
 
 @app.post("/videos/{video_id}/verify-rights")

@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-09-19 — Comprehensive QA Repair: Review, Jobs, Library & Publishing
+
+### Bug fixes & UX improvements
+
+**Review tab:**
+- `GET /review/pending` now accepts `?status=` param (REVIEW | PUBLISH | REJECT | all); default REVIEW.
+- Filter dropdown defaults to "Pendientes" (REVIEW) instead of "Todos".
+- Clips that are approved/rejected now disappear from the pending queue when filtered to REVIEW.
+- "Devolver a pendiente" button appears on approved/rejected clips in the Review tab.
+- New `POST /clips/{id}/return-to-review` endpoint resets `prepublish_decision` to REVIEW.
+
+**Jobs tab:**
+- Replaced flat table with filter tabs: Todos / En curso / Completados / Fallidos.
+- Client-side filtering groups all non-terminal statuses under "En curso".
+- Jobs count badge shows filtered vs. total.
+- "Reintentar" action button on failed jobs.
+- Job count uses `?limit=500` to show full result set.
+- Fixed empty-state template literal bug.
+
+**Library:**
+- "↩ Pendiente" button on approved/rejected clips in Creator and Video clip views.
+- Bulk bar now includes "Publicar" button — fetches approved clips for selected videos, calls `/clips/{id}/prepare`, navigates to Publishing tab.
+- `GET /clips` accepts new `?video_id=` filter param.
+
+**Publishing:**
+- `prepareClipForPublishing()` now navigates to Publishing tab after success.
+- Falls back to `youtube_shorts` when no platform checkboxes are selected (Library context).
+- New `prepareClipsForPublishing(clipIds[])` for bulk prepare flows.
+
+**API:**
+- `GET /clips` — added `video_id` query param filter.
+- `POST /clips/{id}/return-to-review` — new endpoint.
+- `GET /review/pending` — `?status=` param with default REVIEW.
+
 ## 2026-09-18 — Multi-Clip Batch Upload, Packages & Storage Audit
 
 ### New features

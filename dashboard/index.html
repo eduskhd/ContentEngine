@@ -620,6 +620,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           <span id="lib-sel-count">0 selected</span>
           <button class="btn btn-outline btn-sm" onclick="bulkAssignCreatorFlow()">Assign Creator</button>
           <button class="btn btn-outline btn-sm" onclick="bulkAddToCollectionFlow()">+ Collection</button>
+          <button class="btn btn-primary btn-sm" onclick="bulkPublishFlow()">Publicar</button>
           <button class="btn btn-danger btn-sm" onclick="bulkDeleteFlow()">Delete</button>
           <button class="btn btn-outline btn-sm" onclick="clearSelection()">Cancel</button>
         </div>
@@ -726,13 +727,13 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- REVIEW QUEUE -->
 <section id="tab-review" class="active">
   <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap">
-    <p style="color:#555;font-size:13px;margin:0">All generated clips — play, approve or reject, then download.</p>
+    <p style="color:#555;font-size:13px;margin:0">Clips pendientes de decisión editorial. Los aprobados y rechazados se conservan en Library.</p>
     <div style="display:flex;gap:8px;margin-left:auto;flex-wrap:wrap">
       <select id="review-filter" onchange="loadReview()" style="background:#111;border:1px solid #333;color:#aaa;padding:5px 10px;border-radius:6px;font-size:12px">
-        <option value="">All clips</option>
-        <option value="REVIEW">Pending review</option>
-        <option value="PUBLISH">Approved</option>
-        <option value="REJECT">Rejected</option>
+        <option value="">Todos</option>
+        <option value="REVIEW" selected>Pendientes</option>
+        <option value="PUBLISH">Aprobados</option>
+        <option value="REJECT">Rechazados</option>
       </select>
       <button class="btn btn-outline btn-sm" id="review-sel-btn" onclick="toggleReviewSelectMode()">Select</button>
     </div>
@@ -749,10 +750,21 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 
 <!-- JOBS -->
 <section id="tab-jobs">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <div style="display:flex;gap:4px;flex-wrap:wrap" id="jobs-filters">
+      <button class="btn btn-outline btn-sm active" id="jf-all" onclick="setJobsFilter('all',this)">Todos</button>
+      <button class="btn btn-outline btn-sm" id="jf-running" onclick="setJobsFilter('running',this)">En curso</button>
+      <button class="btn btn-outline btn-sm" id="jf-completed" onclick="setJobsFilter('completed',this)">Completados</button>
+      <button class="btn btn-outline btn-sm" id="jf-failed" onclick="setJobsFilter('failed',this)">Fallidos</button>
+    </div>
+    <span id="jobs-count" style="font-size:12px;color:#444;margin-left:4px"></span>
+    <span style="flex:1"></span>
+    <button class="btn btn-outline btn-sm" onclick="loadJobs()">↻ Actualizar</button>
+  </div>
   <div class="tbl-wrap">
     <table>
-      <thead><tr><th>Job ID</th><th>Source</th><th>Status</th><th>Clips</th><th>Created</th></tr></thead>
-      <tbody id="jobs-body"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+      <thead><tr><th>Job ID</th><th>Fuente</th><th>Estado</th><th>Clips</th><th>Creado</th><th>Acciones</th></tr></thead>
+      <tbody id="jobs-body"><tr><td colspan="6" class="empty">Cargando…</td></tr></tbody>
     </table>
   </div>
 </section>
@@ -2488,7 +2500,10 @@ async function showCreatorClips(creatorId) {
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-outline btn-sm" onclick="openPlayer('${c.id}',false)">▶ Play</button>
           <a href="${API}/clips/${c.id}/download" download><button class="btn btn-outline btn-sm">↓</button></a>
-          <button class="btn btn-outline btn-sm" onclick="prepareClipForPublishing('${c.id}')">+ Publish</button>
+          <button class="btn btn-outline btn-sm" onclick="prepareClipForPublishing('${c.id}')">+ Publicar</button>
+          ${(c.prepublish_decision==='PUBLISH'||c.prepublish_decision==='REJECT')
+            ? `<button class="btn btn-outline btn-sm" style="color:#fbbf24;border-color:#4a3800" onclick="resetClipReview('${c.id}',document.getElementById('clipcard-${c.id}'))">↩ Pendiente</button>`
+            : ''}
           <button class="btn btn-danger btn-sm" onclick="deleteClip('${c.id}')">Delete</button>
         </div>
       </div>
@@ -2676,7 +2691,10 @@ async function showVideoClips(jobId, videoTitle) {
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-outline btn-sm" onclick="openPlayer('${c.id}',true)">▶ Play</button>
           <a href="${API}/clips/${c.id}/download" download><button class="btn btn-outline btn-sm">↓ Download</button></a>
-          <button class="btn btn-outline btn-sm" onclick="prepareClipForPublishing('${c.id}')">+ Publish</button>
+          <button class="btn btn-outline btn-sm" onclick="prepareClipForPublishing('${c.id}')">+ Publicar</button>
+          ${(c.prepublish_decision==='PUBLISH'||c.prepublish_decision==='REJECT')
+            ? `<button class="btn btn-outline btn-sm" style="color:#fbbf24;border-color:#4a3800" onclick="resetClipReview('${c.id}',document.getElementById('clipcard-${c.id}'))">↩ Pendiente</button>`
+            : ''}
           <button class="btn btn-danger btn-sm" onclick="deleteClip('${c.id}')">Delete</button>
         </div>
       </div>
@@ -2755,6 +2773,25 @@ function bulkAssignCreatorFlow() {
 function bulkDeleteFlow() {
   if (!_libSelected.size) return;
   showDeleteConfirm([..._libSelected]);
+}
+
+async function bulkPublishFlow() {
+  if (!_libSelected.size) return;
+  const videoIds = [..._libSelected];
+  // Gather PUBLISH-approved clips for the selected videos
+  const allClips = [];
+  for (const vid of videoIds) {
+    try {
+      const clips = await api(`/clips?video_id=${encodeURIComponent(vid)}&limit=100`);
+      allClips.push(...(clips||[]).filter(c => c.prepublish_decision === 'PUBLISH' || c.prepublish_decision === 'REVIEW'));
+    } catch(_) {}
+  }
+  if (!allClips.length) {
+    toast('No hay clips aprobados en los vídeos seleccionados', 'error'); return;
+  }
+  if (!confirm(`Enviar ${allClips.length} clip(s) al Publishing Center?\n\nSe usará YouTube Shorts como plataforma.`)) return;
+  await prepareClipsForPublishing(allClips.map(c => c.id));
+  clearSelection();
 }
 
 // ── Delete flow ───────────────────────────────────────────────────────────────
@@ -3474,15 +3511,24 @@ function relTime(iso) {
 
 // ── Review queue ──────────────────────────────────────────────────────────────
 async function loadReview() {
-  const filter = document.getElementById('review-filter')?.value || '';
-  let clips = await api('/review/pending').catch(()=>[]);
-  if (filter) clips = clips.filter(c => c.decision === filter);
+  const filter = document.getElementById('review-filter')?.value || 'REVIEW';
+  // Map dropdown value to backend ?status= param (empty = all)
+  const statusParam = filter === '' ? 'all' : filter;
+  let clips = await api('/review/pending?status=' + encodeURIComponent(statusParam) + '&limit=200').catch(()=>[]);
 
-  const pending = clips.filter(c => c.decision === 'REVIEW').length;
+  // Badge: always show total REVIEW (pending) count
+  const pending = filter === 'REVIEW' ? clips.length
+    : (await api('/review/pending?status=REVIEW&limit=1000').catch(()=>[])).length;
   document.getElementById('review-count').textContent = pending || '';
 
+  const emptyMsgs = {
+    REVIEW: 'No hay clips pendientes de revisión. ¡Envía un vídeo para empezar!',
+    PUBLISH: 'No hay clips aprobados aún.',
+    REJECT: 'No hay clips rechazados.',
+    '': 'No hay clips aún.',
+  };
   if (!clips.length) {
-    document.getElementById('review-list').innerHTML = '<div class="empty">No clips yet — submit a video to get started</div>';
+    document.getElementById('review-list').innerHTML = `<div class="empty">${emptyMsgs[filter] || emptyMsgs['']}</div>`;
     return;
   }
 
@@ -3490,6 +3536,7 @@ async function loadReview() {
     const decChip = chip(c.decision || 'PENDING');
     const approved = c.decision === 'PUBLISH';
     const rejected = c.decision === 'REJECT';
+    const isPending = c.decision === 'REVIEW' || c.decision === 'PENDING';
     const isSelected = _reviewSelected.has(c.id);
     const selCb = _reviewSelectMode
       ? `<div class="vc-checkbox show ${isSelected?'checked':''}" onclick="toggleReviewSelect('${c.id}',this)" style="position:relative;flex-shrink:0;margin-right:4px">${isSelected?'✓':''}</div>`
@@ -3513,13 +3560,24 @@ async function loadReview() {
           </div>
           <div class="actions" style="flex-wrap:wrap;gap:6px">
             ${!_reviewSelectMode ? `<button class="btn btn-primary btn-sm" onclick="openPlayer('${c.id}',true)">▶ Play</button>` : ''}
-            ${!approved && !_reviewSelectMode ? `<button class="btn btn-success btn-sm" onclick="reviewAction('${c.id}','approve')">✓ Approve</button>` : ''}
-            ${!rejected && !_reviewSelectMode ? `<button class="btn btn-danger btn-sm" onclick="reviewAction('${c.id}','reject')">✕ Reject</button>` : ''}
-            ${!_reviewSelectMode ? `<a href="${API}/clips/${c.id}/download" download="clip_${i+1}.mp4"><button class="btn btn-outline btn-sm">↓ Download</button></a>` : ''}
+            ${!approved && !_reviewSelectMode ? `<button class="btn btn-success btn-sm" onclick="reviewAction('${c.id}','approve')">✓ Aprobar</button>` : ''}
+            ${!rejected && !_reviewSelectMode ? `<button class="btn btn-danger btn-sm" onclick="reviewAction('${c.id}','reject')">✕ Rechazar</button>` : ''}
+            ${!isPending && !_reviewSelectMode ? `<button class="btn btn-outline btn-sm" onclick="resetClipReview('${c.id}',document.getElementById('rcard-${c.id}'))">↩ Volver a pendiente</button>` : ''}
+            ${!_reviewSelectMode ? `<a href="${API}/clips/${c.id}/download" download="clip_${i+1}.mp4"><button class="btn btn-outline btn-sm">↓ Descargar</button></a>` : ''}
           </div>
         </div>
       </div>`;
   }).join('');
+}
+
+async function resetClipReview(clipId, cardEl) {
+  try {
+    await api(`/clips/${clipId}/return-to-review`, {method:'POST'});
+    toast('Clip devuelto a pendientes', 'success');
+    cardEl?.remove();
+    loadReview();
+    loadOverview();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
 async function reviewAction(id, action) {
@@ -3598,13 +3656,45 @@ async function bulkReviewAction(action) {
 }
 
 // ── Jobs ──────────────────────────────────────────────────────────────────────
+let _jobsFilter = 'all';
+const _JOBS_RUNNING_STATUSES = new Set(['queued','running','ingesting','transcribing','analyzing','rendering','processing']);
+
+function setJobsFilter(f, btn) {
+  _jobsFilter = f;
+  document.querySelectorAll('#jobs-filters .btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  loadJobs();
+}
+
 async function loadJobs() {
-  const jobs = await api('/jobs').catch(()=>[]);
+  const all = await api('/jobs?limit=500').catch(()=>[]);
+
+  let jobs = all;
+  if (_jobsFilter === 'running') {
+    jobs = all.filter(j => _JOBS_RUNNING_STATUSES.has((j.status||'').toLowerCase()));
+  } else if (_jobsFilter === 'completed') {
+    jobs = all.filter(j => (j.status||'').toLowerCase() === 'completed');
+  } else if (_jobsFilter === 'failed') {
+    jobs = all.filter(j => (j.status||'').toLowerCase() === 'failed');
+  }
+
+  const countEl = document.getElementById('jobs-count');
+  if (countEl) countEl.textContent = jobs.length !== all.length ? `${jobs.length} de ${all.length}` : `${all.length} trabajos`;
+
   document.getElementById('jobs-body').innerHTML = jobs.length
     ? jobs.map(j => {
-        const src = j.source_url || j.source || '';
-        const srcDisplay = src.length > 50 ? src.substring(0,50)+'…' : src;
+        const src = j.source_title || j.source_url || j.source || '';
+        const srcDisplay = src.length > 55 ? src.substring(0,55)+'…' : src;
         const clips = j.result?.stats?.clips_generated ?? j.clips_requested ?? '—';
+        const canRetry = (j.status||'').toLowerCase() === 'failed';
+        const isRunning = _JOBS_RUNNING_STATUSES.has((j.status||'').toLowerCase());
+        const actions = canRetry
+          ? `<button class="btn btn-outline btn-sm" onclick="retryJobFromTable('${j.id}',this)">↺ Reintentar</button>`
+          : isRunning
+          ? `<button class="btn btn-outline btn-sm" onclick="showTab('analysis',document.querySelectorAll('nav button')[4]);loadAnalysis('${j.id}')">Ver</button>`
+          : j.status?.toLowerCase() === 'completed'
+          ? `<button class="btn btn-outline btn-sm" onclick="showTab('analysis',document.querySelectorAll('nav button')[4]);loadAnalysis('${j.id}')">Análisis</button>`
+          : '—';
         return `<tr>
           <td>${monoId(j.id)}</td>
           <td style="font-size:12px;color:#555;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
@@ -3612,9 +3702,22 @@ async function loadJobs() {
           <td>${chip(j.status)}</td>
           <td>${clips}</td>
           <td style="color:#444;font-size:12px">${fmt(j.created_at)}</td>
+          <td>${actions}</td>
         </tr>`;
       }).join('')
-    : '<tr><td colspan="5" class="empty">No jobs yet</td></tr>';
+    : `<tr><td colspan="6" class="empty">${_jobsFilter==='failed'?'Sin trabajos fallidos':_jobsFilter==='running'?'Sin trabajos en curso':'No hay trabajos aún'}</td></tr>`;
+}
+
+async function retryJobFromTable(jobId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    await api(`/jobs/${jobId}/retry`, {method:'POST'});
+    toast('Trabajo reencolado', 'success');
+    loadJobs();
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '↺ Reintentar'; }
+  }
 }
 
 // ── New Job tab ────────────────────────────────────────────────────────────────
@@ -4794,22 +4897,47 @@ async function cancelYtUpload() {
 
 // ── Prepare clip for publishing (from clip modal) ────────────────────────────
 
-async function prepareClipForPublishing(clipId) {
+async function prepareClipForPublishing(clipId, opts={}) {
   if (!clipId) return;
+  // Collect platforms from checkboxes if available; fall back to youtube_shorts
   const platforms = [];
   if (document.getElementById('prep-tiktok')?.checked) platforms.push('tiktok');
   if (document.getElementById('prep-yt')?.checked)     platforms.push('youtube_shorts');
   if (document.getElementById('prep-ig')?.checked)     platforms.push('instagram_reels');
-  if (!platforms.length) { toast('Select at least one platform', 'error'); return; }
+  const finalPlatforms = platforms.length ? platforms : ['youtube_shorts'];
   try {
     const r = await api('/clips/' + clipId + '/prepare', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({platforms}),
+      body: JSON.stringify({platforms: finalPlatforms}),
     });
     const n = (r.created||[]).length;
     const sk = (r.skipped||[]).length;
-    toast(`${n} publication${n!==1?'s':''} created${sk?' ('+sk+' already existed)':''}`, 'success');
+    const msg = `${n} publicación${n!==1?'es':''} creada${n!==1?'s':''}${sk?' ('+sk+' ya existían)':''}`;
+    toast(msg, 'success');
+    // Navigate to Publishing tab unless explicitly suppressed
+    if (!opts.noNavigate) {
+      const pubBtn = document.querySelector('nav button[onclick*="publishing"]');
+      if (pubBtn) showTab('publishing', pubBtn);
+    }
   } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function prepareClipsForPublishing(clipIds) {
+  if (!clipIds || !clipIds.length) { toast('No clips seleccionados', 'error'); return; }
+  let created = 0, skipped = 0;
+  for (const cid of clipIds) {
+    try {
+      const r = await api('/clips/' + cid + '/prepare', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({platforms: ['youtube_shorts']}),
+      });
+      created += (r.created||[]).length;
+      skipped += (r.skipped||[]).length;
+    } catch(_) {}
+  }
+  toast(`${created} publicación${created!==1?'es':''} creada${created!==1?'s':''}${skipped?' ('+skipped+' ya existían)':''}`, 'success');
+  const pubBtn = document.querySelector('nav button[onclick*="publishing"]');
+  if (pubBtn) showTab('publishing', pubBtn);
 }
 
 // ── Batch Upload Modal ───────────────────────────────────────────────────────
