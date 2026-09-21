@@ -303,9 +303,18 @@ input[type=file]{font-size:13px;color:#888}
 .vc-meta{font-size:11px;color:#888;display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 .vc-actions{display:flex;gap:5px;align-items:center}
 .vc-score{font-size:11px;font-weight:700;border-radius:5px;padding:2px 6px;margin-left:auto}
-.vc-checkbox{position:absolute;top:8px;left:8px;width:18px;height:18px;border-radius:4px;border:2px solid #555;background:#111;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:2}
+.vc-checkbox{position:absolute;top:8px;left:8px;width:20px;height:20px;border-radius:4px;border:2px solid #555;background:rgba(17,17,17,.85);cursor:pointer;display:none;align-items:center;justify-content:center;z-index:3;font-size:12px;font-weight:700;transition:background .12s,border-color .12s}
 .vc-checkbox.show{display:flex}
 .vc-checkbox.checked{background:#f97316;border-color:#f97316;color:#fff}
+/* Select-mode: full-thumbnail overlay */
+.lib-select-mode .vc-checkbox{top:0;left:0;right:0;bottom:0;width:auto;height:auto;border-radius:0;background:rgba(0,0,0,.08);border:2px solid transparent;font-size:0}
+.lib-select-mode .vc-checkbox::after{content:'';position:absolute;top:8px;left:8px;width:26px;height:26px;border-radius:6px;border:2.5px solid rgba(255,255,255,.65);background:rgba(0,0,0,.45);box-sizing:border-box;transition:all .12s}
+.lib-select-mode .video-card:hover .vc-checkbox{background:rgba(249,115,22,.1)}
+.lib-select-mode .vc-checkbox.checked{background:rgba(249,115,22,.28);border-color:#f97316}
+.lib-select-mode .vc-checkbox.checked::after{content:'✓';background:#f97316;border-color:#f97316;color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.lib-select-mode .vc-thumb{cursor:pointer}
+/* List-view select mode: narrower overlay matches thumb width */
+.lib-select-mode .video-list .vc-checkbox{right:auto;bottom:auto;width:100px;height:70px;border-radius:0}
 /* List view */
 .video-list .video-card{display:flex;border-radius:8px;overflow:hidden}
 .video-list .vc-thumb{width:100px;height:70px;flex-shrink:0}
@@ -620,7 +629,8 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           <span id="lib-sel-count">0 selected</span>
           <button class="btn btn-outline btn-sm" onclick="bulkAssignCreatorFlow()">Assign Creator</button>
           <button class="btn btn-outline btn-sm" onclick="bulkAddToCollectionFlow()">+ Collection</button>
-          <button class="btn btn-primary btn-sm" onclick="bulkPublishFlow()">Publish</button>
+          <button class="btn btn-primary btn-sm" onclick="bulkPublishFlow()">Add to Publishing</button>
+          <button class="btn btn-success btn-sm" onclick="bulkUploadFromLibrary()">Upload to YouTube</button>
           <button class="btn btn-danger btn-sm" onclick="bulkDeleteFlow()">Delete</button>
           <button class="btn btn-outline btn-sm" onclick="clearSelection()">Cancel</button>
         </div>
@@ -1153,7 +1163,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
               <input type="radio" name="pem-privacy" value="public" checked onchange="updatePemUploadBtn()"> Public
             </label>
             <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
-              <input type="radio" name="pem-privacy" value="unlisted" onchange="updatePemUploadBtn()"> No listado
+              <input type="radio" name="pem-privacy" value="unlisted" onchange="updatePemUploadBtn()"> Unlisted
             </label>
             <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
               <input type="radio" name="pem-privacy" value="private" onchange="updatePemUploadBtn()"> Private
@@ -1235,7 +1245,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           <input type="radio" name="bum-privacy" value="public" checked onchange="updateBumButton()"> Public
         </label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
-          <input type="radio" name="bum-privacy" value="unlisted" onchange="updateBumButton()"> No listado
+          <input type="radio" name="bum-privacy" value="unlisted" onchange="updateBumButton()"> Unlisted
         </label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
           <input type="radio" name="bum-privacy" value="private" onchange="updateBumButton()"> Private
@@ -2720,6 +2730,7 @@ function toggleSelectMode() {
   const btn = document.getElementById('lib-sel-btn');
   btn.classList.toggle('active', _libSelectMode);
   btn.textContent = _libSelectMode ? 'Cancel' : 'Select';
+  document.getElementById('lib-content')?.classList.toggle('lib-select-mode', _libSelectMode);
   document.querySelectorAll('.vc-checkbox').forEach(el => {
     el.classList.toggle('show', _libSelectMode);
     el.classList.remove('checked');
@@ -2733,6 +2744,7 @@ function clearSelection() {
   _libSelected.clear();
   document.getElementById('lib-sel-btn').classList.remove('active');
   document.getElementById('lib-sel-btn').textContent = 'Select';
+  document.getElementById('lib-content')?.classList.remove('lib-select-mode');
   document.querySelectorAll('.vc-checkbox').forEach(el => {
     el.classList.remove('show','checked');
     el.textContent = '';
@@ -2792,6 +2804,61 @@ async function bulkPublishFlow() {
   if (!confirm(`Add ${allClips.length} clip(s) to Publishing Center?\n\nPlatform: YouTube Shorts.`)) return;
   await prepareClipsForPublishing(allClips.map(c => c.id));
   clearSelection();
+}
+
+async function bulkUploadFromLibrary() {
+  if (!_libSelected.size) return;
+  const videoIds = [..._libSelected];
+
+  // Gather approved/reviewed clips from selected videos
+  const allClips = [];
+  for (const vid of videoIds) {
+    try {
+      const clips = await api(`/clips?video_id=${encodeURIComponent(vid)}&limit=100`);
+      allClips.push(...(clips||[]).filter(c =>
+        c.prepublish_decision === 'PUBLISH' || c.prepublish_decision === 'REVIEW'
+      ));
+    } catch(_) {}
+  }
+  if (!allClips.length) {
+    toast('No approved clips in the selected videos', 'error'); return;
+  }
+
+  // Create/locate publications and collect their IDs + display titles
+  const pubIds = [], displayItems = [];
+  for (const clip of allClips) {
+    try {
+      const r = await api('/clips/' + clip.id + '/prepare', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({platforms: ['youtube_shorts']}),
+      });
+      const title = r.metadata?.title || clip.id;
+      for (const x of (r.created||[])) { pubIds.push(x.pub_id); displayItems.push(title); }
+      for (const x of (r.skipped||[])) { pubIds.push(x.pub_id); displayItems.push(title); }
+    } catch(_) {}
+  }
+  if (!pubIds.length) { toast('No publications to upload', 'error'); return; }
+
+  clearSelection();
+  _openBatchUploadDirect(pubIds, displayItems);
+}
+
+function _openBatchUploadDirect(pubIds, displayItems) {
+  _batchPubIds = pubIds;
+  const pubRadio = document.querySelector('input[name="bum-privacy"][value="public"]');
+  if (pubRadio) pubRadio.checked = true;
+  document.getElementById('bum-count').textContent = _batchPubIds.length;
+  document.getElementById('bum-error').style.display = 'none';
+  document.getElementById('bum-skip-info').style.display = 'none';
+  const channelEl = document.getElementById('bum-channel-info');
+  channelEl.textContent = (_ytStatus && _ytStatus.connected)
+    ? `Channel: ${_ytStatus.channel_title || _ytStatus.channel_id || 'YouTube'}`
+    : 'YouTube not connected — go to Settings to connect your account';
+  document.getElementById('bum-item-list').innerHTML = displayItems.map(t =>
+    `<div style="padding:6px 0;border-bottom:1px solid #1a1a1a;font-size:12px;color:#ccc">${_esc(t)}</div>`
+  ).join('');
+  updateBumButton();
+  document.getElementById('batch-upload-modal').classList.add('open');
 }
 
 // â”€â”€ Delete flow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -4867,8 +4934,8 @@ async function startYtUpload() {
   const visLabel = {public: 'Public', unlisted: 'Unlisted', private: 'Private'}[privacy_status] || privacy_status;
   if (!confirm(
     `Upload this clip to YouTube as ${visLabel.toUpperCase()}?\n\n` +
-    `Canal: ${channel}\n` +
-    `Visibilidad: ${visLabel}\n` +
+    `Channel: ${channel}\n` +
+    `Visibility: ${visLabel}\n` +
     `Audience: ${isForKids ? 'Made for kids' : 'Not for kids'}\n\n` +
     `This will upload the file to YouTube. Continue?`
   )) return;
@@ -4923,7 +4990,7 @@ async function prepareClipForPublishing(clipId, opts={}) {
 }
 
 async function prepareClipsForPublishing(clipIds) {
-  if (!clipIds || !clipIds.length) { toast('No clips seleccionados', 'error'); return; }
+  if (!clipIds || !clipIds.length) { toast('No clips selected', 'error'); return; }
   let created = 0, skipped = 0;
   for (const cid of clipIds) {
     try {
@@ -4968,7 +5035,7 @@ function openBatchUploadModal() {
   skipEl.style.display = 'none';
   const channelEl = document.getElementById('bum-channel-info');
   if (_ytStatus && _ytStatus.connected) {
-    channelEl.textContent = `Canal: ${_ytStatus.channel_title || _ytStatus.channel_id || 'YouTube'}`;
+    channelEl.textContent = `Channel: ${_ytStatus.channel_title || _ytStatus.channel_id || 'YouTube'}`;
   } else {
     channelEl.textContent = 'YouTube not connected — go to Settings to connect your account';
   }
