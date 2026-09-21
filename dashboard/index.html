@@ -1006,7 +1006,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
   </div>
 </section>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• PUBLISHING CENTER â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════════ PUBLISHING CENTER ══════════════════════ -->
 <section id="tab-publishing">
 <div class="pub-layout">
   <!-- Sidebar -->
@@ -1150,7 +1150,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Visibility</div>
           <div style="display:flex;gap:14px;font-size:12px;color:#ccc">
             <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
-              <input type="radio" name="pem-privacy" value="public" checked onchange="updatePemUploadBtn()"> Público
+              <input type="radio" name="pem-privacy" value="public" checked onchange="updatePemUploadBtn()"> Public
             </label>
             <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
               <input type="radio" name="pem-privacy" value="unlisted" onchange="updatePemUploadBtn()"> No listado
@@ -1220,7 +1220,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
   </div>
 </div>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â• BATCH UPLOAD MODAL â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ═════════════ BATCH UPLOAD MODAL ═════════════ -->
 <div class="pub-modal-overlay" id="batch-upload-modal" onclick="if(event.target===this)closeBatchUploadModal()">
   <div class="pub-modal" style="max-width:560px">
     <button class="pub-modal-close" onclick="closeBatchUploadModal()">✕</button>
@@ -1232,7 +1232,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
       <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Visibility</div>
       <div style="display:flex;gap:18px;font-size:13px;color:#ccc">
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
-          <input type="radio" name="bum-privacy" value="public" checked onchange="updateBumButton()"> Público
+          <input type="radio" name="bum-privacy" value="public" checked onchange="updateBumButton()"> Public
         </label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
           <input type="radio" name="bum-privacy" value="unlisted" onchange="updateBumButton()"> No listado
@@ -1254,7 +1254,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
   </div>
 </div>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â• SAVE PACKAGE MODAL â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ═════════════ SAVE PACKAGE MODAL ═════════════ -->
 <div class="pub-modal-overlay" id="save-package-modal" onclick="if(event.target===this)closeSavePackageModal()">
   <div class="pub-modal" style="max-width:420px">
     <button class="pub-modal-close" onclick="closeSavePackageModal()">✕</button>
@@ -1277,7 +1277,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 </main>
 <div id="toast"></div>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• DELETE CREATOR MODAL â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════ DELETE CREATOR MODAL ══════════════ -->
 <div class="lib-modal-overlay" id="dc-modal" onclick="if(event.target===this)closeDcModal()">
   <div class="lib-modal" style="max-width:480px">
     <button class="lib-modal-close" onclick="closeDcModal()">✕</button>
@@ -1375,7 +1375,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
             <div class="picon">🔥</div><div class="pname">Glowing</div>
           </button>
           <button class="preset-btn" data-preset="minimal" onclick="selectPreset('minimal',this)">
-            <div class="picon">â—»</div><div class="pname">Minimal</div>
+            <div class="picon">◻</div><div class="pname">Minimal</div>
           </button>
         </div>
 
@@ -1462,7 +1462,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           <div class="eval-decision-row">
             <button class="eval-dec-btn" id="eval-dec-publish" onclick="evalSetDecision('publish_as_is')">✓ Publish</button>
             <button class="eval-dec-btn" id="eval-dec-edit" onclick="evalSetDecision('publish_after_edit')">✏ Needs edit</button>
-            <button class="eval-dec-btn" id="eval-dec-reject" onclick="evalSetDecision('rejected')">âœ— Rechazar</button>
+            <button class="eval-dec-btn" id="eval-dec-reject" onclick="evalSetDecision('rejected')">✗ Rechazar</button>
           </div>
         </div>
 
@@ -1727,7 +1727,7 @@ function evalTimerStart() {
   _evalTimer.startedAt = Date.now();
   _evalTimer.interval = setInterval(evalTimerRender, 500);
   const btn = document.getElementById('eval-timer-toggle');
-  if (btn) btn.textContent = 'â¸ Pause';
+  if (btn) btn.textContent = 'Pause';
 }
 
 function evalTimerPause() {
@@ -1800,7 +1800,7 @@ function evalRenderMissedList(moments) {
     <div class="missed-item" data-id="${m.id}">
       <span class="mi-ts">${m.start_s.toFixed(1)}s → ${m.end_s.toFixed(1)}s</span>
       <span class="mi-notes">${_esc(m.notes || '')}</span>
-      <button class="mi-del" onclick="evalDeleteMoment('${m.id}',this.closest('.missed-item'))" title="Eliminar">Ã—</button>
+      <button class="mi-del" onclick="evalDeleteMoment('${m.id}',this.closest('.missed-item'))" title="Eliminar">×</button>
     </div>
   `).join('');
 }
@@ -2199,7 +2199,7 @@ async function loadOverview() {
     const [health, clips, jobs, ws] = await Promise.all([
       api('/health'), api('/clips?limit=500'), api('/jobs'), api('/workers/stats')
     ]);
-    document.getElementById('server-status').textContent = 'â— online';
+    document.getElementById('server-status').textContent = '● online';
     document.getElementById('server-status').style.color = '#4ade80';
     const badge = document.getElementById('mode-badge');
     badge.textContent = health.mode;
@@ -2238,7 +2238,7 @@ async function loadOverview() {
         </tr>`).join('')
       : '<tr><td colspan="7" class="empty">No clips yet</td></tr>';
   } catch(e) {
-    document.getElementById('server-status').textContent = 'â— offline';
+    document.getElementById('server-status').textContent = '● offline';
     document.getElementById('server-status').style.color = '#f87171';
   }
 }
@@ -2493,7 +2493,7 @@ async function showCreatorClips(creatorId) {
         <div style="display:flex;gap:8px;margin-bottom:4px;align-items:center;flex-wrap:wrap">
           <span class="mono">Clip ${String(i+1).padStart(2,'0')}</span>
           ${chip(c.prepublish_decision || 'PENDING')}
-          <span style="font-size:11px;font-weight:700;color:${vsColor}">â–² ${vs}</span>
+          <span style="font-size:11px;font-weight:700;color:${vsColor}">▲ ${vs}</span>
         </div>
         <div style="font-size:12px;color:#444;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(videoTitle)}">${_esc(videoTitle)}</div>
         <div style="font-size:12px;color:#888;margin-bottom:8px">${c.duration_s ? c.duration_s.toFixed(0) + 's' : '—'}</div>
@@ -2619,8 +2619,8 @@ function renderVideoCards(videos, container, creatorId) {
           ${clips ? `<button class="btn btn-outline btn-sm" onclick="showVideoClips('${v.job_id||v.id}','${_esc(title)}')">Clips (${clips})</button>` : ''}
           ${status==='COMPLETED' && !clips ? `<button class="btn btn-primary btn-sm" onclick="openVideoJobs('${v.job_id||v.id}')">Generate</button>` : ''}
           ${status!=='COMPLETED' ? `<button class="btn btn-outline btn-sm" onclick="openVideoJobs('${v.job_id||v.id}')">Open</button>` : ''}
-          ${vs ? `<span class="vc-score" style="color:${vsColor};background:#1a1a1a">â–²${vs}</span>` : ''}
-          Delete<DeletebDeleteuDeletetDeletetDeleteoDeletenDelete DeletecDeletelDeleteaDeletesDeletesDelete=Delete"DeletebDeletetDeletenDelete DeletebDeletetDeletenDelete-DeleteoDeleteuDeletetDeletelDeleteiDeletenDeleteeDelete DeletebDeletetDeletenDelete-DeletesDeletemDelete"Delete DeletesDeletetDeleteyDeletelDeleteeDelete=Delete"DeletemDeleteaDeleterDeletegDeleteiDeletenDelete-DeletelDeleteeDeletefDeletetDelete:DeleteaDeleteuDeletetDeleteoDelete;DeletecDeleteoDeletelDeleteoDeleterDelete:Delete#DeletefDelete8Delete7Delete1Delete7Delete1Delete;DeletebDeleteoDeleterDeletedDeleteeDeleterDelete-DeletecDeleteoDeletelDeleteoDeleterDelete:Delete#DeletefDelete8Delete7Delete1Delete7Delete1Delete;DeletepDeleteaDeletedDeletedDeleteiDeletenDeletegDelete:Delete4DeletepDeletexDelete Delete8DeletepDeletexDelete"Delete DeleteoDeletenDeletecDeletelDeleteiDeletecDeletekDelete=Delete"DeletesDeletehDeleteoDeletewDeleteDDeleteeDeletelDeleteeDeletetDeleteeDeleteCDeleteoDeletenDeletefDeleteiDeleterDeletemDelete(Delete[Delete'Delete$Delete{DeletevDelete.DeleteiDeletedDelete}Delete'Delete]Delete)Delete"Delete>DeleteðDeleteŸDelete—Delete‘Delete<Delete/DeletebDeleteuDeletetDeletetDeleteoDeletenDelete>Delete
+          ${vs ? `<span class="vc-score" style="color:${vsColor};background:#1a1a1a">▲${vs}</span>` : ''}
+          <button class="btn btn-outline btn-sm" style="margin-left:auto;color:#f87171;border-color:#f87171;padding:4px 8px" onclick="showDeleteConfirm([‘${v.id}’])">Delete</button>
         </div>
         ${creatorId ? `<div style="margin-top:6px">
           <button class="btn btn-outline btn-sm" style="font-size:10px;padding:3px 8px" onclick="showAssignModal(['${v.id}'])">Move Creator</button>
@@ -2662,7 +2662,7 @@ async function showVideoClips(jobId, videoTitle) {
   const backHtml = `<div style="margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <button class="btn btn-outline btn-sm" onclick="reloadCurrentView()">← Back</button>
     <span style="font-size:13px;color:#888">${_esc(videoTitle)}</span>
-    <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="openVideoJobs('${jobId}')">Analyze â†—</button>
+    <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="openVideoJobs('${jobId}')">Analyze</button>
   </div>`;
 
   if (!clips.length) {
@@ -2685,7 +2685,7 @@ async function showVideoClips(jobId, videoTitle) {
         <div style="display:flex;gap:8px;margin-bottom:4px;align-items:center;flex-wrap:wrap">
           <span class="mono">Clip ${String(i+1).padStart(2,'0')}</span>
           ${chip(c.prepublish_decision || 'PENDING')}
-          <span style="font-size:11px;font-weight:700;color:${vsColor}">â–² ${vs}</span>
+          <span style="font-size:11px;font-weight:700;color:${vsColor}">▲ ${vs}</span>
           ${c.duration_s ? `<span style="font-size:11px;color:#888">${c.duration_s.toFixed(0)}s</span>` : ''}
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -2964,23 +2964,23 @@ function renderFilterChips() {
   // Sort chip (always visible)
   html += `<span class="fc-chip fc-sort" title="Sort order">
     ↕ ${labelMap[f.sort]||f.sort}
-    <span class="fc-x" onclick="openFcPanel(event,'sort')">â–¾</span>
+    <span class="fc-x" onclick="openFcPanel(event,'sort')">▾</span>
   </span>`;
   if (f.status) html += `<span class="fc-chip">Status: ${labelMap[f.status]||f.status}
-    <span class="fc-x" onclick="clearFilter('status')">Ã—</span></span>`;
+    <span class="fc-x" onclick="clearFilter('status')">×</span></span>`;
   if (f.platform) html += `<span class="fc-chip">Source: ${labelMap[f.platform]||f.platform}
-    <span class="fc-x" onclick="clearFilter('platform')">Ã—</span></span>`;
+    <span class="fc-x" onclick="clearFilter('platform')">×</span></span>`;
   if (f.virality_min != null || f.virality_max != null) {
     const lo = f.virality_min ?? 0, hi = f.virality_max ?? 100;
-    html += `<span class="fc-chip">Score: ${lo}â€“${hi}
-      <span class="fc-x" onclick="clearFilter('virality')">Ã—</span></span>`;
+    html += `<span class="fc-chip">Score: ${lo}–${hi}
+      <span class="fc-x" onclick="clearFilter('virality')">×</span></span>`;
   }
   if (f.date_range) {
     const dateLabel = f.date_range === 'custom'
       ? `${f.date_from||'?'} → ${f.date_to||'?'}`
       : (labelMap[f.date_range]||f.date_range);
     html += `<span class="fc-chip">Date: ${dateLabel}
-      <span class="fc-x" onclick="clearFilter('date_range')">Ã—</span></span>`;
+      <span class="fc-x" onclick="clearFilter('date_range')">×</span></span>`;
   }
   // Clear all (if any non-sort filter active)
   const hasExtra = f.status || f.platform || f.virality_min != null || f.virality_max != null || f.date_range;
@@ -3021,7 +3021,7 @@ function openFcPanel(ev, mode) {
     <div class="fc-panel-row">
       <input type="number" min="0" max="100" placeholder="Min" value="${f.virality_min??''}"
         style="width:70px" onchange="setFilter('virality_min',this.value?parseFloat(this.value):null)">
-      <span style="color:#444;align-self:center">â€“</span>
+      <span style="color:#444;align-self:center">–</span>
       <input type="number" min="0" max="100" placeholder="Max" value="${f.virality_max??''}"
         style="width:70px" onchange="setFilter('virality_max',this.value?parseFloat(this.value):null)">
     </div>
@@ -3551,7 +3551,7 @@ async function loadReview() {
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
             <span class="mono">Clip ${String(i+1).padStart(2,'0')}</span>
             ${decChip}
-            <span style="color:#888;font-size:11px">${(c.start_s||0).toFixed(0)}s â€“ ${(c.end_s||0).toFixed(0)}s</span>
+            <span style="color:#888;font-size:11px">${(c.start_s||0).toFixed(0)}s – ${(c.end_s||0).toFixed(0)}s</span>
           </div>
           <div style="font-size:12px;color:#888;display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px">
             <span>Hook <strong style="color:#ccc">${Math.round(c.hook_score||0)}</strong></span>
@@ -3693,7 +3693,7 @@ async function loadJobs() {
           : isRunning
           ? `<button class="btn btn-outline btn-sm" onclick="showTab('analysis',document.querySelectorAll('nav button')[4]);loadAnalysis('${j.id}')">Ver</button>`
           : j.status?.toLowerCase() === 'completed'
-          ? `<button class="btn btn-outline btn-sm" onclick="showTab('analysis',document.querySelectorAll('nav button')[4]);loadAnalysis('${j.id}')">Análisis</button>`
+          ? `<button class="btn btn-outline btn-sm" onclick="showTab('analysis',document.querySelectorAll('nav button')[4]);loadAnalysis('${j.id}')">Analysis</button>`
           : '—';
         return `<tr>
           <td>${monoId(j.id)}</td>
@@ -4246,9 +4246,9 @@ populateAnalysisJobSelect();
 // Check YouTube connection status on load
 checkYoutubeStatus();
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════════════════════════════════
 // PUBLISHING CENTER
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════════════════════════════════
 
 let _pubView = 'all';
 let _pubSelectMode = false;
@@ -4371,7 +4371,7 @@ function renderPubCard(p) {
         <span class="pub-plat-pill ${p.platform}">${_statusDot(p.status)} ${_platLabel(p.platform)}</span>
         ${dur ? `<span style="font-size:10px;color:#888">${dur}</span>` : ''}
         ${p.status==='published'&&p.external_url
-          ? `<a href="${_esc(p.external_url)}" target="_blank" style="font-size:10px;color:#4ade80">Open â†—</a>` : ''}
+          ? `<a href="${_esc(p.external_url)}" target="_blank" style="font-size:10px;color:#4ade80">Open</a>` : ''}
       </div>
       <div class="pub-card-actions">
         <button class="btn btn-outline btn-sm" onclick="openPubEdit('${p.id}')">Edit</button>
@@ -4499,7 +4499,7 @@ async function openPubEdit(pubId) {
       const icons = {draft:'⬜',ready:'🔵',published:'✅',failed:'❌',scheduled:'🕐',cancelled:'⛔'};
       statusBar.innerHTML = `${icons[p.status]||''} Status: <b>${p.status}</b>
         ${p.published_at ? `· Published: ${p.published_at.slice(0,10)}` : ''}
-        ${p.external_url ? `· <a href="${_esc(p.external_url)}" target="_blank" style="color:#4ade80">Open Post â†—</a>` : ''}`;
+        ${p.external_url ? `· <a href="${_esc(p.external_url)}" target="_blank" style="color:#4ade80">Open Post</a>` : ''}`;
     }
     document.getElementById('pub-edit-modal').classList.add('open');
     loadYtUploadSection(p);
