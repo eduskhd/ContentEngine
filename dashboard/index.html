@@ -101,7 +101,7 @@ input[type=file]{font-size:13px;color:#888}
 /* Toast */
 #toast{position:fixed;bottom:20px;right:20px;background:#1c1c1c;border-radius:8px;padding:11px 18px;font-size:13px;z-index:200;display:none;box-shadow:0 4px 16px rgba(0,0,0,.7);max-width:320px}
 
-/* Video player modal â€” caption editor layout */
+/* Video player modal — caption editor layout */
 #video-modal{display:none;position:fixed;inset:0;z-index:500;background:#000c;align-items:center;justify-content:center;padding:12px}
 #video-modal.open{display:flex}
 #video-modal .modal-inner{background:#111;border:1px solid #222;border-radius:12px;width:100%;max-width:900px;max-height:96vh;overflow:hidden;display:flex;flex-direction:row;position:relative}
@@ -499,7 +499,7 @@ input[type=file]{font-size:13px;color:#888}
 .nj-advanced{border:1px solid #1e1e1e;border-radius:8px;margin-bottom:18px;overflow:hidden}
 .nj-adv-toggle{list-style:none;padding:10px 14px;cursor:pointer;font-size:12px;color:#888;user-select:none;display:flex;align-items:center;gap:6px}
 .nj-adv-toggle::-webkit-details-marker{display:none}
-.nj-adv-toggle::before{content:'â–¶';font-size:9px;transition:transform .15s;display:inline-block;margin-right:2px}
+.nj-adv-toggle::before{content:'▶';font-size:9px;transition:transform .15s;display:inline-block;margin-right:2px}
 details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 .nj-adv-toggle:hover{color:#888}
 .nj-adv-body{padding:12px 14px;border-top:1px solid #1e1e1e}
@@ -520,14 +520,14 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- Completion notification banner -->
 <div id="notif-banner">
   <span id="notif-text"></span>
-  <span class="close" onclick="dismissBanner()">âœ•</span>
+  <span class="close" onclick="dismissBanner()">✕</span>
 </div>
 
 <header>
-  <h1>AI Content Engine</h1>
+  <h1>Content Engine</h1>
   <span class="badge badge-review" id="mode-badge">REVIEW</span>
   <span id="llm-badge" style="font-size:11px;padding:2px 8px;border-radius:99px;font-weight:700;letter-spacing:.5px;background:#1a1a1a;color:#888;display:none">LLM</span>
-  <span style="margin-left:auto;font-size:12px;color:#888" id="server-status">connectingâ€¦</span>
+  <span style="margin-left:auto;font-size:12px;color:#888" id="server-status">connecting…</span>
 </header>
 
 <nav>
@@ -538,7 +538,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
   <button onclick="showTab('analysis',this)">Analysis</button>
   <button onclick="showTab('upload',this)">+ New Job</button>
   <button onclick="showTab('publishing',this)">Publishing</button>
-  <button onclick="showTab('analytics',this)">Analytics</button>
+  <button onclick="showTab('analytics',this)">Stats</button>
   <button onclick="showTab('oauth',this)">OAuth</button>
 </nav>
 
@@ -547,12 +547,12 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- OVERVIEW -->
 <section id="tab-overview">
   <div class="grid">
-    <div class="card"><div class="lbl">Total Clips</div><div class="val" id="s-total">â€”</div></div>
-    <div class="card"><div class="lbl">Approved</div><div class="val" id="s-publish" style="color:#4ade80">â€”</div></div>
-    <div class="card"><div class="lbl">Pending Review</div><div class="val" id="s-review" style="color:#fbbf24">â€”</div></div>
-    <div class="card"><div class="lbl">Rejected</div><div class="val" id="s-reject" style="color:#f87171">â€”</div></div>
-    <div class="card"><div class="lbl">Active Workers</div><div class="val" id="s-workers">â€”</div></div>
-    <div class="card"><div class="lbl">Jobs</div><div class="val" id="s-jobs">â€”</div></div>
+    <div class="card"><div class="lbl">Total Clips</div><div class="val" id="s-total">—</div></div>
+    <div class="card"><div class="lbl">Approved</div><div class="val" id="s-publish" style="color:#4ade80">—</div></div>
+    <div class="card"><div class="lbl">Pending Review</div><div class="val" id="s-review" style="color:#fbbf24">—</div></div>
+    <div class="card"><div class="lbl">Rejected</div><div class="val" id="s-reject" style="color:#f87171">—</div></div>
+    <div class="card"><div class="lbl">Active Workers</div><div class="val" id="s-workers">—</div></div>
+    <div class="card"><div class="lbl">Jobs</div><div class="val" id="s-jobs">—</div></div>
   </div>
   <div class="sec-hdr" style="display:flex;align-items:center;gap:12px">
     Recent Clips
@@ -563,41 +563,41 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
   <div class="tbl-wrap">
     <table>
       <thead><tr><th>Clip</th><th>Creator</th><th>Hook</th><th>Viral</th><th>Score</th><th>Decision</th><th>Created</th></tr></thead>
-      <tbody id="recent-clips-body"><tr><td colspan="7" class="empty">Loadingâ€¦</td></tr></tbody>
+      <tbody id="recent-clips-body"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
     </table>
   </div>
 </section>
 
-<!-- LIBRARY â€” creator-first redesign -->
+<!-- LIBRARY — creator-first redesign -->
 <section id="tab-library">
 <div class="lib-layout">
 
   <!-- Sidebar -->
   <aside class="lib-sidebar">
     <div class="lib-search-wrap">
-      <input class="lib-search" id="lib-search-input" placeholder="Search creators or videosâ€¦" oninput="libSearchChanged(this.value)">
+      <input class="lib-search" id="lib-search-input" placeholder="Search creators or videos…" oninput="libSearchChanged(this.value)">
     </div>
     <div class="lib-sidebar-inner">
       <div class="lib-nav-sep">Library</div>
       <div class="lib-nav-item active" id="lnav-creators" onclick="libNav('creators',this)">
-        <span class="lib-nav-label">ðŸ“š All Creators</span>
+        <span class=”lib-nav-label”>All Creators</span>
       </div>
-      <div class="lib-nav-item" id="lnav-all-videos" onclick="libNav('all-videos',this)">
-        <span class="lib-nav-label">ðŸŽ¬ All Videos</span>
+      <div class=”lib-nav-item” id=”lnav-all-videos” onclick=”libNav('all-videos',this)”>
+        <span class=”lib-nav-label”>All Videos</span>
         <span class="lib-nav-count" id="lnc-videos"></span>
       </div>
       <div class="lib-nav-item" id="lnav-processing" onclick="libNav('processing',this)">
-        <span class="lib-nav-label">â³ Processing</span>
+        <span class="lib-nav-label">⏳ Processing</span>
         <span class="lib-nav-count" id="lnc-processing"></span>
       </div>
       <div class="lib-nav-item" id="lnav-failed" onclick="libNav('failed',this)">
-        <span class="lib-nav-label">âŒ Failed</span>
+        <span class="lib-nav-label">Failed</span>
         <span class="lib-nav-count" id="lnc-failed"></span>
       </div>
       <div class="lib-nav-sep">Creators</div>
       <div id="lib-sidebar-creators"></div>
       <div class="lib-nav-item" id="lnav-unassigned" onclick="libNav('creator:__unassigned__',this)">
-        <span class="lib-nav-label">ðŸ“ Unassigned</span>
+        <span class="lib-nav-label">Unassigned</span>
         <span class="lib-nav-count" id="lnc-unassigned"></span>
       </div>
       <div class="lib-nav-sep-mini">Collections
@@ -620,13 +620,13 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           <span id="lib-sel-count">0 selected</span>
           <button class="btn btn-outline btn-sm" onclick="bulkAssignCreatorFlow()">Assign Creator</button>
           <button class="btn btn-outline btn-sm" onclick="bulkAddToCollectionFlow()">+ Collection</button>
-          <button class="btn btn-primary btn-sm" onclick="bulkPublishFlow()">Publicar</button>
+          <button class="btn btn-primary btn-sm" onclick="bulkPublishFlow()">Publish</button>
           <button class="btn btn-danger btn-sm" onclick="bulkDeleteFlow()">Delete</button>
           <button class="btn btn-outline btn-sm" onclick="clearSelection()">Cancel</button>
         </div>
         <button class="lib-select-btn" id="lib-sel-btn" onclick="toggleSelectMode()">Select</button>
-        <button class="lib-view-btn active" id="lib-vbtn-grid" onclick="setLibView('grid')" title="Grid">âŠž</button>
-        <button class="lib-view-btn" id="lib-vbtn-list" onclick="setLibView('list')" title="List">â‰¡</button>
+        <button class="lib-view-btn active" id="lib-vbtn-grid" onclick="setLibView('grid')" title="Grid">⊞</button>
+        <button class="lib-view-btn" id="lib-vbtn-list" onclick="setLibView('list')" title="List">≡</button>
       </div>
     </div>
     <!-- Filter chip bar (shown in video views) -->
@@ -637,7 +637,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     </div>
     <!-- Content -->
     <div class="lib-content" id="lib-content">
-      <div class="empty">Loadingâ€¦</div>
+      <div class="empty">Loading…</div>
     </div>
   </div>
 
@@ -647,7 +647,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- Creator modal -->
 <div class="lib-modal-overlay" id="creator-modal" onclick="if(event.target===this)closeCreatorModal()">
   <div class="lib-modal">
-    <button class="lib-modal-close" onclick="closeCreatorModal()">âœ•</button>
+    <button class="lib-modal-close" onclick="closeCreatorModal()">✕</button>
     <h2 id="cm-title">New Creator</h2>
     <input class="lib-modal-input" id="cm-name" placeholder="Creator name (e.g. MrBeast)" autofocus>
     <input class="lib-modal-input" id="cm-handle" placeholder="Handle / username (optional)">
@@ -662,11 +662,11 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- Delete confirm modal -->
 <div class="lib-modal-overlay" id="delete-modal" onclick="if(event.target===this)closeDeleteModal()">
   <div class="lib-modal">
-    <button class="lib-modal-close" onclick="closeDeleteModal()">âœ•</button>
+    <button class="lib-modal-close" onclick="closeDeleteModal()">✕</button>
     <h2 id="dm-title">Delete videos?</h2>
     <div id="dm-impact">
       <div class="dm-impact-grid" id="dm-impact-grid" style="display:none"></div>
-      <div id="dm-impact-loading" style="font-size:12px;color:#888;margin-bottom:12px">Calculating impactâ€¦</div>
+      <div id="dm-impact-loading" style="font-size:12px;color:#888;margin-bottom:12px">Calculating impact…</div>
     </div>
     <p style="font-size:12px;color:#888;margin-bottom:12px">Choose what to delete:</p>
     <div class="lib-modal-actions">
@@ -680,7 +680,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- Collection modal (create / edit) -->
 <div class="lib-modal-overlay" id="coll-modal" onclick="if(event.target===this)closeCollModal()">
   <div class="lib-modal">
-    <button class="lib-modal-close" onclick="closeCollModal()">âœ•</button>
+    <button class="lib-modal-close" onclick="closeCollModal()">✕</button>
     <h2 id="coll-modal-title">New Collection</h2>
     <input class="lib-modal-input" id="coll-modal-name" placeholder="Collection name" autofocus>
     <input class="lib-modal-input" id="coll-modal-desc" placeholder="Description (optional)">
@@ -698,7 +698,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- Add to Collection modal -->
 <div class="lib-modal-overlay" id="add-coll-modal" onclick="if(event.target===this)closeAddCollModal()">
   <div class="lib-modal">
-    <button class="lib-modal-close" onclick="closeAddCollModal()">âœ•</button>
+    <button class="lib-modal-close" onclick="closeAddCollModal()">✕</button>
     <h2>Add to Collection</h2>
     <p style="font-size:12px;color:#888;margin-bottom:12px" id="acm-subtitle"></p>
     <div id="acm-list" style="max-height:220px;overflow-y:auto;margin-bottom:12px"></div>
@@ -712,10 +712,10 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- Assign creator modal -->
 <div class="lib-modal-overlay" id="assign-modal" onclick="if(event.target===this)closeAssignModal()">
   <div class="lib-modal">
-    <button class="lib-modal-close" onclick="closeAssignModal()">âœ•</button>
+    <button class="lib-modal-close" onclick="closeAssignModal()">✕</button>
     <h2>Assign Creator</h2>
     <p style="font-size:12px;color:#888;margin-bottom:12px" id="am-subtitle"></p>
-    <input class="lib-modal-input" id="am-search" placeholder="Search creatorsâ€¦" oninput="filterAssignList(this.value)">
+    <input class="lib-modal-input" id="am-search" placeholder="Search creators…" oninput="filterAssignList(this.value)">
     <div id="am-list" style="max-height:200px;overflow-y:auto;margin-bottom:12px"></div>
     <div class="lib-modal-actions">
       <button class="btn btn-outline btn-sm" onclick="closeAssignModal()">Cancel</button>
@@ -727,13 +727,13 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- REVIEW QUEUE -->
 <section id="tab-review" class="active">
   <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap">
-    <p style="color:#888;font-size:13px;margin:0">Clips pendientes de decisiÃ³n editorial. Los aprobados y rechazados se conservan en Library.</p>
+    <p style="color:#888;font-size:13px;margin:0">Clips awaiting editorial decision. Approved and rejected clips remain in Library.</p>
     <div style="display:flex;gap:8px;margin-left:auto;flex-wrap:wrap">
       <select id="review-filter" onchange="loadReview()" style="background:#111;border:1px solid #333;color:#aaa;padding:5px 10px;border-radius:6px;font-size:12px">
-        <option value="">Todos</option>
-        <option value="REVIEW" selected>Pendientes</option>
-        <option value="PUBLISH">Aprobados</option>
-        <option value="REJECT">Rechazados</option>
+        <option value="">All</option>
+        <option value="REVIEW" selected>Pending</option>
+        <option value="PUBLISH">Approved</option>
+        <option value="REJECT">Rejected</option>
       </select>
       <button class="btn btn-outline btn-sm" id="review-sel-btn" onclick="toggleReviewSelectMode()">Select</button>
     </div>
@@ -741,30 +741,30 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
   <!-- Bulk bar -->
   <div id="review-bulk-bar" style="display:none;align-items:center;gap:8px;background:#0d1a0d;border:1px solid #16a34a;border-radius:8px;padding:8px 14px;margin-bottom:12px;flex-wrap:wrap">
     <span id="review-sel-count" style="font-size:12px;color:#4ade80">0 selected</span>
-    <button class="btn btn-success btn-sm" onclick="bulkReviewAction('approve')">âœ“ Approve Selected</button>
-    <button class="btn btn-danger btn-sm" onclick="bulkReviewAction('reject')">âœ• Reject Selected</button>
+    <button class="btn btn-success btn-sm" onclick="bulkReviewAction('approve')">Approve</button>
+    <button class="btn btn-danger btn-sm" onclick="bulkReviewAction('reject')">Reject</button>
     <button class="btn btn-outline btn-sm" onclick="clearReviewSelection()">Cancel</button>
   </div>
-  <div id="review-list"><div class="empty">Loadingâ€¦</div></div>
+  <div id="review-list"><div class="empty">Loading…</div></div>
 </section>
 
 <!-- JOBS -->
 <section id="tab-jobs">
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
     <div style="display:flex;gap:4px;flex-wrap:wrap" id="jobs-filters">
-      <button class="btn btn-outline btn-sm active" id="jf-all" onclick="setJobsFilter('all',this)">Todos</button>
-      <button class="btn btn-outline btn-sm" id="jf-running" onclick="setJobsFilter('running',this)">En curso</button>
-      <button class="btn btn-outline btn-sm" id="jf-completed" onclick="setJobsFilter('completed',this)">Completados</button>
-      <button class="btn btn-outline btn-sm" id="jf-failed" onclick="setJobsFilter('failed',this)">Fallidos</button>
+      <button class="btn btn-outline btn-sm active" id="jf-all" onclick="setJobsFilter('all',this)">All</button>
+      <button class="btn btn-outline btn-sm" id="jf-running" onclick="setJobsFilter('running',this)">Running</button>
+      <button class="btn btn-outline btn-sm" id="jf-completed" onclick="setJobsFilter('completed',this)">Completed</button>
+      <button class="btn btn-outline btn-sm" id="jf-failed" onclick="setJobsFilter('failed',this)">Failed</button>
     </div>
     <span id="jobs-count" style="font-size:12px;color:#888;margin-left:4px"></span>
     <span style="flex:1"></span>
-    <button class="btn btn-outline btn-sm" onclick="loadJobs()">â†» Actualizar</button>
+    <button class="btn btn-outline btn-sm" onclick="loadJobs()">Refresh</button>
   </div>
   <div class="tbl-wrap">
     <table>
-      <thead><tr><th>Job ID</th><th>Fuente</th><th>Estado</th><th>Clips</th><th>Creado</th><th>Acciones</th></tr></thead>
-      <tbody id="jobs-body"><tr><td colspan="6" class="empty">Cargandoâ€¦</td></tr></tbody>
+      <thead><tr><th>Job ID</th><th>Source</th><th>Status</th><th>Clips</th><th>Created</th><th>Actions</th></tr></thead>
+      <tbody id="jobs-body"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
     </table>
   </div>
 </section>
@@ -775,7 +775,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     <div class="sec-hdr" style="margin:0">Video Analysis</div>
     <select id="analysis-job-select" onchange="loadAnalysis(this.value)"
       style="background:#111;border:1px solid #333;color:#aaa;padding:6px 12px;border-radius:6px;font-size:13px;min-width:260px">
-      <option value="">Select a completed jobâ€¦</option>
+      <option value="">Select a completed job…</option>
     </select>
     <button class="btn btn-primary btn-sm" onclick="loadAnalysis(document.getElementById('analysis-job-select').value)">Refresh</button>
   </div>
@@ -783,10 +783,10 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
   <!-- Stats row -->
   <div id="analysis-stats" style="display:none;margin-bottom:24px">
     <div class="grid">
-      <div class="card"><div class="lbl">Duration</div><div class="val" id="a-duration">â€”</div></div>
-      <div class="card"><div class="lbl">Candidates</div><div class="val" id="a-candidates">â€”</div></div>
-      <div class="card"><div class="lbl">High Virality</div><div class="val" id="a-high" style="color:#ff6b35">â€”</div></div>
-      <div class="card"><div class="lbl">Series</div><div class="val" id="a-series" style="color:#8b5cf6">â€”</div></div>
+      <div class="card"><div class="lbl">Duration</div><div class="val" id="a-duration">—</div></div>
+      <div class="card"><div class="lbl">Candidates</div><div class="val" id="a-candidates">—</div></div>
+      <div class="card"><div class="lbl">High Virality</div><div class="val" id="a-high" style="color:#ff6b35">—</div></div>
+      <div class="card"><div class="lbl">Series</div><div class="val" id="a-series" style="color:#8b5cf6">—</div></div>
     </div>
   </div>
 
@@ -829,7 +829,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         <label class="nj-label">Video URL <span class="nj-required">*</span></label>
         <div class="nj-url-wrap">
           <input type="text" id="nj-url-input" class="nj-input"
-            placeholder="https://youtube.com/watch?v=â€¦ Â· youtu.be/â€¦ Â· tiktok.com/â€¦"
+            placeholder="https://youtube.com/watch?v=… · youtu.be/… · tiktok.com/…"
             oninput="njUrlChanged(this.value)">
           <span class="nj-url-spinner" id="nj-url-spinner"></span>
         </div>
@@ -846,7 +846,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
       </div>
       <!-- Duplicate warning -->
       <div class="nj-dup-warning" id="nj-dup" style="display:none">
-        <span class="nj-dup-icon">âš </span>
+        <span class="nj-dup-icon">⚠</span>
         <span id="nj-dup-text">This video already exists in your library.</span>
         <div class="nj-dup-links" id="nj-dup-links"></div>
       </div>
@@ -859,19 +859,19 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         ondrop="njDrop(event)"
         ondragover="event.preventDefault();this.classList.add('drag-over')"
         ondragleave="this.classList.remove('drag-over')">
-        <div class="nj-drop-icon">â†‘</div>
+        <div class="nj-drop-icon">↑</div>
         <div class="nj-drop-text">Drop a video here or <span class="link">browse</span></div>
-        <div class="nj-drop-sub">MP4, MOV, MKV â€” up to 10 GB</div>
+        <div class="nj-drop-sub">MP4, MOV, MKV — up to 10 GB</div>
         <input type="file" id="nj-file-input" accept="video/*" style="display:none"
           onchange="njFileSelected(this)">
       </div>
       <div class="nj-file-info" id="nj-file-info" style="display:none">
-        <span class="nj-file-icon">â–¶</span>
+        <span class="nj-file-icon">▶</span>
         <div class="nj-file-detail">
           <div class="nj-file-name-el" id="nj-file-name-display"></div>
           <div class="nj-file-size-el" id="nj-file-size-display"></div>
         </div>
-        <button class="nj-file-clear" onclick="njClearFile()">âœ•</button>
+        <button class="nj-file-clear" onclick="njClearFile()">✕</button>
       </div>
     </div>
 
@@ -882,7 +882,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
       <label class="nj-label">Creator <span class="nj-optional">optional</span></label>
       <div class="creator-sel-wrap">
         <input type="text" id="creator-sel-display" class="nj-input"
-          placeholder="Select or type creator nameâ€¦"
+          placeholder="Select or type creator name…"
           autocomplete="off"
           oninput="creatorSelInput(this.value)"
           onfocus="openCreatorSel()"
@@ -933,7 +933,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         <div class="nj-field" style="margin-top:10px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#aaa">
             <input type="checkbox" id="nj-eval-mode" style="width:14px;height:14px;cursor:pointer">
-            <span><strong style="color:#f59e0b">Eval mode</strong> â€” re-run without dedup (para experimentos de configuraciÃ³n)</span>
+            <span><strong style="color:#f59e0b">Eval mode</strong> — re-run without dedup (skips duplicate check)</span>
           </label>
         </div>
       </div>
@@ -953,10 +953,10 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- ANALYTICS -->
 <section id="tab-analytics">
   <div class="sec-hdr">Performance by Platform</div>
-  <div id="analytics-body"><div class="empty">Loadingâ€¦</div></div>
+  <div id="analytics-body"><div class="empty">Loading…</div></div>
   <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
-    <button class="btn btn-outline" onclick="collectAnalytics()">Collect metrics now</button>
-    <button class="btn btn-outline" onclick="runAutopsy()">Run content autopsy</button>
+    <button class="btn btn-outline" onclick="collectAnalytics()">Collect Metrics</button>
+    <button class="btn btn-outline" onclick="runAutopsy()">Run Autopsy</button>
   </div>
   <div id="autopsy-result" style="margin-top:16px;font-size:12px;color:#888;white-space:pre-wrap;font-family:monospace"></div>
 </section>
@@ -964,23 +964,23 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- OAUTH -->
 <section id="tab-oauth">
   <div class="sec-hdr">Platform Authorization</div>
-  <p style="font-size:13px;color:#888;margin-bottom:20px">Connect accounts via OAuth. Tokens go in your .env file.</p>
+  <p style="font-size:13px;color:#888;margin-bottom:20px">Connect platform accounts. Credentials are stored in your .env file.</p>
   <div style="display:flex;flex-direction:column;gap:10px;max-width:480px">
     <div class="card" style="display:flex;align-items:center;gap:14px">
       <div style="flex:1"><div style="font-weight:600">TikTok</div><div style="font-size:12px;color:#888">Content Publishing API v2</div></div>
       <button class="btn btn-primary btn-sm" onclick="startOAuth('tiktok')">Connect</button>
     </div>
     <div class="card" style="display:flex;align-items:center;gap:14px">
-      <div style="flex:1"><div style="font-weight:600">Instagram</div><div style="font-size:12px;color:#888">Graph API â€” Reels</div></div>
+      <div style="flex:1"><div style="font-weight:600">Instagram</div><div style="font-size:12px;color:#888">Graph API — Reels</div></div>
       <button class="btn btn-primary btn-sm" onclick="startOAuth('instagram')">Connect</button>
     </div>
     <div class="card" style="display:flex;flex-direction:column;gap:10px" id="yt-connect-card">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="flex:1">
           <div style="font-weight:600">YouTube</div>
-          <div style="font-size:12px;color:#888">Data API v3 â€” Shorts (private uploads)</div>
+          <div style="font-size:12px;color:#888">Data API v3 — Shorts (private uploads)</div>
         </div>
-        <div id="yt-connect-status" style="font-size:11px;color:#888">Checkingâ€¦</div>
+        <div id="yt-connect-status" style="font-size:11px;color:#888">Checking…</div>
       </div>
       <div id="yt-channel-info" style="display:none;padding:8px 10px;background:#111;border-radius:6px;font-size:12px;color:#aaa"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -996,13 +996,13 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
   <div id="oauth-result" style="margin-top:14px;font-size:12px;color:#888;white-space:pre-wrap;font-family:monospace;max-width:560px"></div>
 
   <!-- Storage summary -->
-  <div class="sec-hdr" style="margin-top:28px">Almacenamiento</div>
+  <div class="sec-hdr" style="margin-top:28px">Storage</div>
   <div id="storage-summary" style="max-width:560px;margin-top:12px">
-    <div style="font-size:12px;color:#888">Cargandoâ€¦</div>
+    <div style="font-size:12px;color:#888">Loading…</div>
   </div>
   <div style="display:flex;gap:8px;margin-top:10px">
-    <button class="btn btn-outline btn-sm" onclick="loadStorageSummary()">Actualizar</button>
-    <button class="btn btn-outline btn-sm" onclick="runStorageScan()">Escanear archivos</button>
+    <button class="btn btn-outline btn-sm" onclick="loadStorageSummary()">Refresh</button>
+    <button class="btn btn-outline btn-sm" onclick="runStorageScan()">Scan files</button>
   </div>
 </section>
 
@@ -1034,13 +1034,13 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     <div class="pub-nav-item" id="pn-queue" onclick="pubNav('queue')">
       Recommended
     </div>
-    <div class="pub-sidebar-title" style="margin-top:10px">Subida</div>
+    <div class="pub-sidebar-title" style="margin-top:10px">Upload</div>
     <div class="pub-nav-item" id="pn-batches" onclick="pubNav('batches')">
-      Lotes <span class="pub-nav-badge" id="pnb-batches"></span>
+      Batches <span class="pub-nav-badge" id="pnb-batches"></span>
     </div>
-    <div class="pub-sidebar-title" style="margin-top:10px">Paquetes</div>
+    <div class="pub-sidebar-title" style="margin-top:10px">Packages</div>
     <div class="pub-nav-item" id="pn-packages" onclick="pubNav('packages')">
-      Paquetes <span class="pub-nav-badge" id="pnb-packages"></span>
+      Packages <span class="pub-nav-badge" id="pnb-packages"></span>
     </div>
   </div>
 
@@ -1082,7 +1082,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 
     <!-- Content -->
     <div id="pub-content">
-      <div class="pub-empty"><p>Loadingâ€¦</p></div>
+      <div class="pub-empty"><p>Loading…</p></div>
     </div>
   </div>
 </div>
@@ -1091,7 +1091,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- Publication edit modal -->
 <div class="pub-modal-overlay" id="pub-edit-modal" onclick="if(event.target===this)closePubModal()">
   <div class="pub-modal">
-    <button class="pub-modal-close" onclick="closePubModal()">âœ•</button>
+    <button class="pub-modal-close" onclick="closePubModal()">✕</button>
     <h2 id="pem-heading">Publication Details</h2>
     <div class="pub-field">
       <label>Title</label>
@@ -1107,7 +1107,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     </div>
     <div class="pub-field">
       <label>Notes (internal)</label>
-      <input id="pem-notes" placeholder="Notesâ€¦">
+      <input id="pem-notes" placeholder="Notes…">
     </div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px">
       <button class="btn btn-outline btn-sm" onclick="copyPubField('title')">Copy Title</button>
@@ -1117,14 +1117,14 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     </div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-primary btn-sm" onclick="savePubEdit()">Save</button>
-      <button class="btn btn-outline btn-sm" onclick="regenPubMetadata()">â†» Regen Metadata</button>
+      <button class="btn btn-outline btn-sm" onclick="regenPubMetadata()">Regenerate metadata</button>
       <button class="btn btn-success btn-sm" id="pem-ready-btn" onclick="pubMarkReady()">Mark Ready</button>
-      <button class="btn btn-outline btn-sm" onclick="downloadPubClip()">â†“ Download MP4</button>
+      <button class="btn btn-outline btn-sm" onclick="downloadPubClip()">Download MP4</button>
       <button class="btn btn-outline btn-sm" onclick="openPubPreviewFromModal()">Preview</button>
-      <button class="btn btn-danger btn-sm" onclick="deletePubFromModal()">Delete Publication</button>
+      <button class="btn btn-danger btn-sm" onclick="deletePubFromModal()">Delete</button>
     </div>
     <div id="pem-status-bar" style="margin-top:12px;font-size:12px;color:#888"></div>
-    <!-- YouTube upload section â€” shown only for youtube_shorts publications -->
+    <!-- YouTube upload section — shown only for youtube_shorts publications -->
     <div id="pem-yt-section" style="display:none;margin-top:14px;border-top:1px solid #1e1e1e;padding-top:14px">
       <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">YouTube Upload</div>
       <div id="pem-yt-form">
@@ -1147,24 +1147,24 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           &#9888; YouTube not connected. Go to OAuth tab to connect.
         </div>
         <div style="margin-bottom:10px">
-          <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Visibilidad</div>
+          <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Visibility</div>
           <div style="display:flex;gap:14px;font-size:12px;color:#ccc">
             <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
-              <input type="radio" name="pem-privacy" value="public" checked onchange="updatePemUploadBtn()"> PÃºblico
+              <input type="radio" name="pem-privacy" value="public" checked onchange="updatePemUploadBtn()"> Público
             </label>
             <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
               <input type="radio" name="pem-privacy" value="unlisted" onchange="updatePemUploadBtn()"> No listado
             </label>
             <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
-              <input type="radio" name="pem-privacy" value="private" onchange="updatePemUploadBtn()"> Privado
+              <input type="radio" name="pem-privacy" value="private" onchange="updatePemUploadBtn()"> Private
             </label>
           </div>
           <div id="pem-privacy-warning" style="font-size:11px;color:#fbbf24;margin-top:4px">
-            âš  Proyectos sin auditorÃ­a de API pueden quedar restringidos a Privado aunque se solicite PÃºblico.
+            ⚠ API projects without content review may be restricted to Private regardless of requested visibility.
           </div>
         </div>
         <button class="btn btn-success" id="pem-yt-upload-btn" onclick="startYtUpload()" disabled>
-          Publicar en pÃºblico
+          Upload to YouTube
         </button>
         <div style="font-size:11px;color:#888;margin-top:5px">
           Requires evaluation decision "Publish as-is".
@@ -1181,7 +1181,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         </div>
       </div>
     </div>
-    <!-- Metrics section â€” shown only for published pubs -->
+    <!-- Metrics section — shown only for published pubs -->
     <div id="pem-metrics-section" style="display:none;margin-top:16px;border-top:1px solid #2a2a2a;padding-top:14px">
       <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Performance Metrics</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
@@ -1198,7 +1198,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- Mark published modal -->
 <div class="pub-modal-overlay" id="pub-mark-modal" onclick="if(event.target===this)closePubMarkModal()">
   <div class="pub-mark-modal">
-    <button class="pub-modal-close" onclick="closePubMarkModal()">âœ•</button>
+    <button class="pub-modal-close" onclick="closePubMarkModal()">✕</button>
     <h2 style="font-size:14px;font-weight:600;color:#fff;margin-bottom:12px">Mark as Published</h2>
     <div id="pmm-series-warning" style="display:none;background:#1a1200;border:1px solid #854d0e;border-radius:6px;padding:8px 12px;font-size:12px;color:#fbbf24;margin-bottom:12px"></div>
     <p style="font-size:12px;color:#888;margin-bottom:14px">Record that you have manually published this clip on the platform.</p>
@@ -1215,7 +1215,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     </div>
     <div style="display:flex;gap:8px;margin-top:10px">
       <button class="btn btn-outline btn-sm" onclick="closePubMarkModal()">Cancel</button>
-      <button class="btn btn-success btn-sm" onclick="confirmMarkPublished()">Confirm Published</button>
+      <button class="btn btn-success btn-sm" onclick="confirmMarkPublished()">Confirm</button>
     </div>
   </div>
 </div>
@@ -1223,33 +1223,33 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- â•â•â•â•â•â•â•â•â•â•â•â•â• BATCH UPLOAD MODAL â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <div class="pub-modal-overlay" id="batch-upload-modal" onclick="if(event.target===this)closeBatchUploadModal()">
   <div class="pub-modal" style="max-width:560px">
-    <button class="pub-modal-close" onclick="closeBatchUploadModal()">âœ•</button>
-    <h2 style="font-size:14px;font-weight:600;color:#fff;margin-bottom:4px">Revisar y subir a YouTube</h2>
-    <p style="font-size:12px;color:#888;margin-bottom:12px">Los clips se subirÃ¡n uno a uno en segundo plano. Esta acciÃ³n no se puede deshacer para los ya enviados.</p>
+    <button class="pub-modal-close" onclick="closeBatchUploadModal()">✕</button>
+    <h2 style="font-size:14px;font-weight:600;color:#fff;margin-bottom:4px">Upload to YouTube</h2>
+    <p style="font-size:12px;color:#888;margin-bottom:12px">Clips will be uploaded one by one in the background. Uploads already sent cannot be undone.</p>
     <div id="bum-channel-info" style="background:#111;border-radius:6px;padding:8px 12px;font-size:12px;color:#aaa;margin-bottom:12px"></div>
     <div id="bum-item-list" style="max-height:200px;overflow-y:auto;margin-bottom:12px"></div>
     <div style="margin-bottom:12px">
-      <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Visibilidad</div>
+      <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Visibility</div>
       <div style="display:flex;gap:18px;font-size:13px;color:#ccc">
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
-          <input type="radio" name="bum-privacy" value="public" checked onchange="updateBumButton()"> PÃºblico
+          <input type="radio" name="bum-privacy" value="public" checked onchange="updateBumButton()"> Público
         </label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
           <input type="radio" name="bum-privacy" value="unlisted" onchange="updateBumButton()"> No listado
         </label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
-          <input type="radio" name="bum-privacy" value="private" onchange="updateBumButton()"> Privado
+          <input type="radio" name="bum-privacy" value="private" onchange="updateBumButton()"> Private
         </label>
       </div>
       <div id="bum-privacy-warning" style="font-size:11px;color:#fbbf24;margin-top:6px">
-        âš  Proyectos de API sin auditorÃ­a de contenido pueden quedar restringidos a Privado aunque se solicite PÃºblico. Se indicarÃ¡ la visibilidad real que devuelva YouTube.
+        ⚠ API projects without content review may be restricted to Private. YouTube will return the actual visibility.
       </div>
     </div>
     <div id="bum-skip-info" style="font-size:11px;color:#888;margin-bottom:12px;display:none"></div>
     <div id="bum-error" style="display:none;background:#1a0a0a;border:1px solid #7f1d1d;border-radius:6px;padding:8px 12px;font-size:12px;color:#fca5a5;margin-bottom:12px"></div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-outline btn-sm" onclick="closeBatchUploadModal()">Cancelar</button>
-      <button class="btn btn-success" id="bum-confirm-btn" onclick="confirmBatchUpload()">Publicar <span id="bum-count">0</span> clips en pÃºblico</button>
+      <button class="btn btn-outline btn-sm" onclick="closeBatchUploadModal()">Cancel</button>
+      <button class="btn btn-success" id="bum-confirm-btn" onclick="confirmBatchUpload()">Upload <span id="bum-count">0</span> clips</button>
     </div>
   </div>
 </div>
@@ -1257,20 +1257,20 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- â•â•â•â•â•â•â•â•â•â•â•â•â• SAVE PACKAGE MODAL â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <div class="pub-modal-overlay" id="save-package-modal" onclick="if(event.target===this)closeSavePackageModal()">
   <div class="pub-modal" style="max-width:420px">
-    <button class="pub-modal-close" onclick="closeSavePackageModal()">âœ•</button>
-    <h2 style="font-size:14px;font-weight:600;color:#fff;margin-bottom:12px">Guardar como paquete</h2>
+    <button class="pub-modal-close" onclick="closeSavePackageModal()">✕</button>
+    <h2 style="font-size:14px;font-weight:600;color:#fff;margin-bottom:12px">Save as Package</h2>
     <div class="pub-field">
-      <label>Nombre del paquete</label>
-      <input id="spm-name" placeholder="Nombreâ€¦" oninput="document.getElementById('spm-save-btn').disabled=!this.value.trim()">
+      <label>Package name</label>
+      <input id="spm-name" placeholder="Name…" oninput="document.getElementById('spm-save-btn').disabled=!this.value.trim()">
     </div>
     <div class="pub-field">
-      <label>DescripciÃ³n (opcional)</label>
-      <input id="spm-desc" placeholder="DescripciÃ³nâ€¦">
+      <label>Description (optional)</label>
+      <input id="spm-desc" placeholder="Description…">
     </div>
-    <div style="font-size:12px;color:#888;margin-bottom:12px"><span id="spm-count">0</span> clips seleccionados</div>
+    <div style="font-size:12px;color:#888;margin-bottom:12px"><span id="spm-count">0</span> clips selected</div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-outline btn-sm" onclick="closeSavePackageModal()">Cancelar</button>
-      <button class="btn btn-primary" id="spm-save-btn" disabled onclick="confirmSavePackage()">Guardar paquete</button>
+      <button class="btn btn-outline btn-sm" onclick="closeSavePackageModal()">Cancel</button>
+      <button class="btn btn-primary" id="spm-save-btn" disabled onclick="confirmSavePackage()">Save package</button>
     </div>
   </div>
 </div>
@@ -1280,15 +1280,15 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• DELETE CREATOR MODAL â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <div class="lib-modal-overlay" id="dc-modal" onclick="if(event.target===this)closeDcModal()">
   <div class="lib-modal" style="max-width:480px">
-    <button class="lib-modal-close" onclick="closeDcModal()">âœ•</button>
+    <button class="lib-modal-close" onclick="closeDcModal()">✕</button>
     <h2 id="dc-heading">Delete Creator</h2>
-    <div id="dc-impact"><div style="color:#888;font-size:12px;padding:8px 0">Loadingâ€¦</div></div>
+    <div id="dc-impact"><div style="color:#888;font-size:12px;padding:8px 0">Loading…</div></div>
     <div id="dc-jobs-warn" style="display:none"></div>
     <div id="dc-options">
       <div class="dc-option active" id="dc-opt-a" onclick="dcSelectOption('unassign')">
         <input type="radio" name="dc-opt" id="dc-opt-unassign" value="unassign" checked>
         <label for="dc-opt-unassign">
-          <strong>Delete creator only â€” keep content</strong>
+          <strong>Delete creator only — keep content</strong>
           <span>All videos, clips, series and publications move to Unassigned. Nothing is lost.</span>
         </label>
       </div>
@@ -1303,11 +1303,11 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     <div id="dc-confirm-wrap" style="display:none;margin-top:12px">
       <p style="font-size:12px;color:#888;margin-bottom:6px">Type <strong id="dc-confirm-hint" style="color:#ddd"></strong> to confirm permanent deletion:</p>
       <input type="text" id="dc-confirm-input" class="lib-modal-input"
-        placeholder="Creator nameâ€¦" oninput="dcCheckConfirm()">
+        placeholder="Creator name…" oninput="dcCheckConfirm()">
     </div>
     <div class="lib-modal-actions">
       <button class="btn btn-outline" onclick="closeDcModal()">Cancel</button>
-      <button class="btn btn-outline" id="dc-submit" onclick="executeDeleteCreator()">Delete Creator</button>
+      <button class="btn btn-outline" id="dc-submit" onclick="executeDeleteCreator()">Delete</button>
     </div>
   </div>
 </div>
@@ -1315,7 +1315,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <!-- Video player modal with caption editor -->
 <div id="video-modal" onclick="if(event.target===this)closePlayer()">
   <div class="modal-inner">
-    <span class="modal-close" onclick="closePlayer()">âœ•</span>
+    <span class="modal-close" onclick="closePlayer()">✕</span>
 
     <!-- LEFT: video + actions -->
     <div class="modal-left">
@@ -1327,7 +1327,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         <button class="btn btn-outline btn-sm" id="modal-approve-btn" onclick="modalAction('approve')" style="display:none">Approve</button>
         <button class="btn btn-danger btn-sm" id="modal-reject-btn" onclick="modalAction('reject')" style="display:none">Reject</button>
         <a id="modal-download-link" href="#" download>
-          <button class="btn btn-primary btn-sm">â†“ Download</button>
+          <button class="btn btn-primary btn-sm">Download</button>
         </a>
       </div>
       <div class="modal-publish-prep">
@@ -1338,7 +1338,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           <label><input type="checkbox" id="prep-ig" checked> Instagram Reels</label>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-          <button class="btn btn-primary btn-sm" onclick="prepareClipForPublishing(_currentClipId)">+ Add to Publishing Center</button>
+          <button class="btn btn-primary btn-sm" onclick="prepareClipForPublishing(_currentClipId)">Add to Publishing</button>
           <button class="btn btn-outline btn-sm" id="modal-change-creator-btn" onclick="changeClipCreator()" style="display:none">Change Creator</button>
         </div>
       </div>
@@ -1366,13 +1366,13 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Preset</div>
         <div class="preset-grid" id="preset-grid">
           <button class="preset-btn active" data-preset="impact" onclick="selectPreset('impact',this)">
-            <div class="picon">âš¡</div><div class="pname">Impact</div>
+            <div class="picon">⚡</div><div class="pname">Impact</div>
           </button>
           <button class="preset-btn" data-preset="aura" onclick="selectPreset('aura',this)">
-            <div class="picon">âœ¨</div><div class="pname">Aura</div>
+            <div class="picon">✨</div><div class="pname">Aura</div>
           </button>
           <button class="preset-btn" data-preset="glowing_bold" onclick="selectPreset('glowing_bold',this)">
-            <div class="picon">ðŸ”¥</div><div class="pname">Glowing</div>
+            <div class="picon">🔥</div><div class="pname">Glowing</div>
           </button>
           <button class="preset-btn" data-preset="minimal" onclick="selectPreset('minimal',this)">
             <div class="picon">â—»</div><div class="pname">Minimal</div>
@@ -1436,9 +1436,9 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
       <div class="cap-panel" id="cap-position">
         <div style="font-size:11px;color:#888;margin-bottom:10px">Quick position presets</div>
         <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
-          <button class="btn btn-outline pos-btn" onclick="setPosition('top',this)">â†‘ Top</button>
-          <button class="btn btn-outline pos-btn" onclick="setPosition('center',this)">â†• Center</button>
-          <button class="btn btn-outline pos-btn" onclick="setPosition('lower_third',this)" style="border-color:#3b82f6;color:#3b82f6">â†“ Lower Third (Default)</button>
+          <button class="btn btn-outline pos-btn" onclick="setPosition('top',this)">Top</button>
+          <button class="btn btn-outline pos-btn" onclick="setPosition('center',this)">Center</button>
+          <button class="btn btn-outline pos-btn" onclick="setPosition('lower_third',this)" style="border-color:#3b82f6;color:#3b82f6">Lower Third</button>
         </div>
         <div class="cap-row">
           <label>Margin bottom</label>
@@ -1460,56 +1460,56 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         <div class="eval-section">
           <div class="eval-section-label">Decision</div>
           <div class="eval-decision-row">
-            <button class="eval-dec-btn" id="eval-dec-publish" onclick="evalSetDecision('publish_as_is')">âœ“ Publicable</button>
-            <button class="eval-dec-btn" id="eval-dec-edit" onclick="evalSetDecision('publish_after_edit')">âœ Editar</button>
+            <button class="eval-dec-btn" id="eval-dec-publish" onclick="evalSetDecision('publish_as_is')">✓ Publish</button>
+            <button class="eval-dec-btn" id="eval-dec-edit" onclick="evalSetDecision('publish_after_edit')">✏ Needs edit</button>
             <button class="eval-dec-btn" id="eval-dec-reject" onclick="evalSetDecision('rejected')">âœ— Rechazar</button>
           </div>
         </div>
 
         <!-- Rejection reasons -->
         <div class="eval-section" id="eval-reasons-section">
-          <div class="eval-section-label">Motivos</div>
+          <div class="eval-section-label">Reasons</div>
           <div class="eval-reasons">
-            <button class="eval-reason-btn" data-reason="seleccion_floja" onclick="evalToggleReason('seleccion_floja',this)">SelecciÃ³n floja</button>
-            <button class="eval-reason-btn" data-reason="falta_contexto" onclick="evalToggleReason('falta_contexto',this)">Falta contexto</button>
-            <button class="eval-reason-btn" data-reason="corte_incompleto" onclick="evalToggleReason('corte_incompleto',this)">Corte incompleto</button>
-            <button class="eval-reason-btn" data-reason="duplicado" onclick="evalToggleReason('duplicado',this)">Duplicado</button>
-            <button class="eval-reason-btn" data-reason="transcripcion" onclick="evalToggleReason('transcripcion',this)">TranscripciÃ³n</button>
+            <button class="eval-reason-btn" data-reason="seleccion_floja" onclick="evalToggleReason('seleccion_floja',this)">Weak selection</button>
+            <button class="eval-reason-btn" data-reason="falta_contexto" onclick="evalToggleReason('falta_contexto',this)">Missing context</button>
+            <button class="eval-reason-btn" data-reason="corte_incompleto" onclick="evalToggleReason('corte_incompleto',this)">Incomplete cut</button>
+            <button class="eval-reason-btn" data-reason="duplicado" onclick="evalToggleReason('duplicado',this)">Duplicate</button>
+            <button class="eval-reason-btn" data-reason="transcripcion" onclick="evalToggleReason('transcripcion',this)">Transcript</button>
             <button class="eval-reason-btn" data-reason="captions" onclick="evalToggleReason('captions',this)">Captions</button>
-            <button class="eval-reason-btn" data-reason="encuadre" onclick="evalToggleReason('encuadre',this)">Encuadre</button>
-            <button class="eval-reason-btn" data-reason="otros" onclick="evalToggleReason('otros',this)">Otros</button>
+            <button class="eval-reason-btn" data-reason="encuadre" onclick="evalToggleReason('encuadre',this)">Framing</button>
+            <button class="eval-reason-btn" data-reason="otros" onclick="evalToggleReason('otros',this)">Other</button>
           </div>
         </div>
 
         <!-- Notes -->
         <div class="eval-section">
           <div class="eval-section-label">Notas</div>
-          <textarea class="eval-notes" id="eval-notes" placeholder="Observaciones opcionalesâ€¦" rows="3"></textarea>
+          <textarea class="eval-notes" id="eval-notes" placeholder="Optional notes…" rows="3"></textarea>
         </div>
 
         <!-- Timer -->
         <div class="eval-section">
-          <div class="eval-section-label">Tiempo de ediciÃ³n</div>
+          <div class="eval-section-label">Edit time</div>
           <div class="eval-timer-row">
             <span class="eval-timer-display" id="eval-timer-display">0:00</span>
-            <button class="eval-timer-btn" id="eval-timer-toggle" onclick="evalTimerToggle()">â–¶ Start</button>
-            <button class="eval-timer-btn" onclick="evalTimerReset()">â†º Reset</button>
+            <button class="eval-timer-btn" id="eval-timer-toggle" onclick="evalTimerToggle()">▶ Start</button>
+            <button class="eval-timer-btn" onclick="evalTimerReset()">↺ Reset</button>
           </div>
         </div>
 
         <!-- Save -->
-        <button class="eval-save-btn" id="eval-save-btn" onclick="evalSave()">Guardar evaluaciÃ³n</button>
-        <div class="eval-saved-badge" id="eval-saved-badge">âœ“ Guardado</div>
+        <button class="eval-save-btn" id="eval-save-btn" onclick="evalSave()">Save</button>
+        <div class="eval-saved-badge" id="eval-saved-badge">✓ Saved</div>
 
         <!-- Missed moments -->
         <div class="eval-section" style="margin-top:16px">
-          <div class="eval-section-label">Momentos perdidos</div>
+          <div class="eval-section-label">Missed moments</div>
           <div class="missed-list" id="missed-list"></div>
           <div class="missed-add-row">
-            <input class="missed-ts-input" id="missed-start" type="number" min="0" step="0.1" placeholder="Inicio s">
-            <input class="missed-ts-input" id="missed-end" type="number" min="0" step="0.1" placeholder="Fin s">
-            <input class="missed-notes-input" id="missed-notes" type="text" placeholder="Notasâ€¦" maxlength="200">
-            <button class="missed-add-btn" onclick="evalAddMoment()">+ AÃ±adir</button>
+            <input class="missed-ts-input" id="missed-start" type="number" min="0" step="0.1" placeholder="Start s">
+            <input class="missed-ts-input" id="missed-end" type="number" min="0" step="0.1" placeholder="End s">
+            <input class="missed-notes-input" id="missed-notes" type="text" placeholder="Notes…" maxlength="200">
+            <button class="missed-add-btn" onclick="evalAddMoment()">+ Add</button>
           </div>
         </div>
 
@@ -1518,7 +1518,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
       <!-- Footer: save + re-render -->
       <div style="padding:12px;border-top:1px solid #1c1c1c;display:flex;gap:8px">
         <button class="btn btn-outline btn-sm" onclick="saveCapSettings()" style="flex:1">Save style</button>
-        <button class="rerender-btn btn-sm" id="rerender-btn" onclick="reRender()" style="flex:1;padding:7px">Re-render MP4</button>
+        <button class="rerender-btn btn-sm" id="rerender-btn" onclick="reRender()" style="flex:1;padding:7px">Re-render</button>
       </div>
     </div>
   </div>
@@ -1526,7 +1526,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 
 <script>
 const API = 'http://localhost:8000';
-const _watchedJobs = {};   // job_id â†’ EventSource
+const _watchedJobs = {};   // job_id → EventSource
 let _refreshTimer = null;
 
 // â”€â”€ Tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1551,7 +1551,7 @@ function loadTab(t) {
 // â”€â”€ Video player + Caption editor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 let _currentClipId = null;
-let _currentClipVideoId = null;    // video_id for this clip (from candidateâ†’video join)
+let _currentClipVideoId = null;    // video_id for this clip (from candidate→video join)
 let _currentClipCreatorId = null;  // creator_id for this clip's video
 let _capData    = null;   // {words:[...], has_audio}
 let _capSettings = null;  // {preset, font_size, text_color, ...}
@@ -1737,7 +1737,7 @@ function evalTimerPause() {
   clearInterval(_evalTimer.interval);
   evalTimerRender();
   const btn = document.getElementById('eval-timer-toggle');
-  if (btn) btn.textContent = 'â–¶ Start';
+  if (btn) btn.textContent = '▶ Start';
 }
 
 function evalTimerReset() {
@@ -1763,7 +1763,7 @@ function evalTimerRender() {
 async function evalSave() {
   if (!_currentClipId) return;
   const btn = document.getElementById('eval-save-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Guardandoâ€¦'; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
     await api(`/clips/${_currentClipId}/evaluate`, {
       method: 'POST',
@@ -1779,9 +1779,9 @@ async function evalSave() {
     if (badge) { badge.style.display = 'block'; setTimeout(() => badge.style.display = 'none', 2500); }
     loadReview(); loadOverview();
   } catch(e) {
-    toast('Error al guardar: ' + e.message, 'error');
+    toast('Error saving: ' + e.message, 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Guardar evaluaciÃ³n'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
   }
 }
 
@@ -1798,7 +1798,7 @@ function evalRenderMissedList(moments) {
   if (!list) return;
   list.innerHTML = moments.map(m => `
     <div class="missed-item" data-id="${m.id}">
-      <span class="mi-ts">${m.start_s.toFixed(1)}s â†’ ${m.end_s.toFixed(1)}s</span>
+      <span class="mi-ts">${m.start_s.toFixed(1)}s → ${m.end_s.toFixed(1)}s</span>
       <span class="mi-notes">${_esc(m.notes || '')}</span>
       <button class="mi-del" onclick="evalDeleteMoment('${m.id}',this.closest('.missed-item'))" title="Eliminar">Ã—</button>
     </div>
@@ -1856,7 +1856,7 @@ async function selectPreset(name, btn) {
   } catch(e) { toast('Could not load preset', 'error'); }
 }
 
-// â”€â”€ Sync UI â†’ settings object â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€ Sync UI → settings object â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function _syncCapUI(toUI = true) {
   if (!_capSettings) return;
   const s = _capSettings;
@@ -1881,7 +1881,7 @@ function _syncCapUI(toUI = true) {
       b.classList.toggle('active', b.dataset.preset === s.preset);
     });
   } else {
-    // UI â†’ settings
+    // UI → settings
     s.enabled       = g('cap-enabled').checked;
     s.font_size     = parseInt(g('cap-size').value);
     s.max_words     = parseInt(g('cap-maxwords').value);
@@ -2065,7 +2065,7 @@ function saveWordEdits() {
   _capGroups = _buildGroups(_capData.words, _capSettings?.max_words || 4);
   _onTimeUpdate();
   _capDirty = true;
-  toast('Words updated â€” click "Save style" to persist', 'info');
+  toast('Words updated — click Save style to apply', 'info');
 }
 
 // â”€â”€ Persist + re-render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -2089,13 +2089,13 @@ async function reRender() {
   if (!_currentClipId) return;
   const btn = document.getElementById('rerender-btn');
   btn.disabled = true;
-  btn.textContent = 'Renderingâ€¦';
+  btn.textContent = 'Rendering…';
   try {
     await saveCapSettings();
     await api(`/clips/${_currentClipId}/re-render`, {method:'POST'});
     // Refresh download link to new captioned file
     document.getElementById('modal-download-link').href = `${API}/clips/${_currentClipId}/download`;
-    toast('Re-render complete â€” download updated', 'success');
+    toast('Re-render complete — download updated', 'success');
   } catch(e) {
     toast('Render failed: ' + e.message, 'error');
   } finally {
@@ -2163,7 +2163,7 @@ function watchJob(jobId, cardEl) {
       const title = data.result?.source_title || data.result?.video_slug || jobId.substring(0,8);
       const creator = data.result?.creator || '';
       const count = data.result?.stats?.clips_generated || '?';
-      showBanner(`Done! "${title}" by ${creator} â€” ${count} clips ready for review`);
+      showBanner(`"${title}" — ${count} clips ready for review`);
       es.close();
       loadReview();
       loadOverview();
@@ -2189,7 +2189,7 @@ function updateJobCard(el, data) {
   if (data.result) {
     const stats = data.result.stats || {};
     el.querySelector('.job-stats').innerHTML =
-      `${stats.clips_generated||0} clips â€” ${stats.publish||0} publish / ${stats.review||0} review / ${stats.reject||0} reject`;
+      `${stats.clips_generated||0} clips — ${stats.publish||0} publish / ${stats.review||0} review / ${stats.reject||0} reject`;
   }
 }
 
@@ -2207,7 +2207,7 @@ async function loadOverview() {
     const llmBadge = document.getElementById('llm-badge');
     llmBadge.style.display = '';
     if (health.llm_enabled) {
-      llmBadge.textContent = 'âœ¦ LLM ON';
+      llmBadge.textContent = 'LLM';
       llmBadge.style.background = '#052e16';
       llmBadge.style.color = '#4ade80';
     } else {
@@ -2229,7 +2229,7 @@ async function loadOverview() {
     document.getElementById('recent-clips-body').innerHTML = clips.length
       ? clips.slice(0, 20).map(c => `<tr style="cursor:pointer" onclick="openPlayer('${c.id}',false)" title="Play clip">
           <td>${monoId(c.id)}</td>
-          <td style="color:#888;font-size:12px">${_esc(c.creator_slug||'â€”')}</td>
+          <td style="color:#888;font-size:12px">${_esc(c.creator_slug||'—')}</td>
           <td>${sc(c.hook_score)}</td>
           <td>${sc(c.virality_score)}</td>
           <td>${sc(c.prepublish_score||c.virality_score)}</td>
@@ -2243,7 +2243,7 @@ async function loadOverview() {
   }
 }
 
-// â”€â”€ Library â€” creator-first redesign â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€ Library — creator-first redesign â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 let _libView = 'grid';          // 'grid' | 'list'
 let _libSelectMode = false;
@@ -2351,7 +2351,7 @@ function libSearchChanged(q) {
 async function showCreatorsGrid() {
   setBreadcrumb('Library');
   const el = document.getElementById('lib-content');
-  el.innerHTML = '<div class="empty">Loadingâ€¦</div>';
+  el.innerHTML = '<div class="empty">Loading…</div>';
   try {
     const creators = _libSearchQ
       ? _libCreators.filter(c => c.name.toLowerCase().includes(_libSearchQ.toLowerCase()))
@@ -2362,7 +2362,7 @@ async function showCreatorsGrid() {
 
     if (!creators.length && !unassignedVideos.length) {
       el.innerHTML = `<div class="lib-empty">
-        <div class="lib-empty-icon">ðŸ“š</div>
+        <div class="lib-empty-icon">📚</div>
         <p>No creators yet.</p>
         <p style="color:#333">Add a video and we'll organize it by creator.</p>
         <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="showTab('upload',document.querySelectorAll('nav button')[5])">+ Add Video</button>
@@ -2383,7 +2383,7 @@ async function showCreatorsGrid() {
         <div class="cc-avatar" style="background:${c.avatar_color||'#3b82f6'}">${initials(c.name)}</div>
         <div class="cc-name">${_esc(c.name)}</div>
         <div class="cc-stats">
-          <strong>${c.video_count||0}</strong> videos &nbsp;Â·&nbsp; <strong>${c.clip_count||0}</strong> clips
+          <strong>${c.video_count||0}</strong> videos &nbsp;·&nbsp; <strong>${c.clip_count||0}</strong> clips
           ${c.last_activity ? `<br>Last activity ${relTime(c.last_activity)}` : ''}
         </div>
         <button class="cc-menu-btn" onclick="event.stopPropagation();startDeleteCreator('${c.id}')" title="Delete creator">&#8942;</button>
@@ -2406,7 +2406,7 @@ async function showCreatorsGrid() {
 async function showCreatorDetail(creatorId) {
   _libCurrentCreatorId = creatorId;
   const el = document.getElementById('lib-content');
-  el.innerHTML = '<div class="empty">Loadingâ€¦</div>';
+  el.innerHTML = '<div class="empty">Loading…</div>';
 
   const isUnassigned = creatorId === '__unassigned__';
   let creator = null;
@@ -2418,7 +2418,7 @@ async function showCreatorDetail(creatorId) {
   const name = isUnassigned ? 'Unassigned' : creator.name;
   const color = isUnassigned ? '#555' : (creator.avatar_color || '#3b82f6');
 
-  setBreadcrumb(`<span onclick="libNav('creators',document.getElementById('lnav-creators'))">Library</span><span class="sep">â€º</span><span class="cur">${_esc(name)}</span>`);
+  setBreadcrumb(`<span onclick="libNav('creators',document.getElementById('lnav-creators'))">Library</span><span class="sep">›</span><span class="cur">${_esc(name)}</span>`);
 
   const params = new URLSearchParams();
   params.set('creator_id', creatorId);
@@ -2437,7 +2437,7 @@ async function showCreatorDetail(creatorId) {
         <div class="ch-stat"><div class="val">${videos.length}</div><div class="lbl">Videos</div></div>
         ${creator ? `
           <div class="ch-stat"><div class="val">${creator.clip_count||0}</div><div class="lbl">Clips</div></div>
-          <div class="ch-stat"><div class="val">${creator.best_score ? Math.round(creator.best_score) : 'â€”'}</div><div class="lbl">Best Score</div></div>
+          <div class="ch-stat"><div class="val">${creator.best_score ? Math.round(creator.best_score) : '—'}</div><div class="lbl">Best Score</div></div>
         ` : ''}
       </div>
     </div>
@@ -2476,7 +2476,7 @@ function switchCreatorTab(tab, btn) {
 async function showCreatorClips(creatorId) {
   const el = document.getElementById('creator-tab-content');
   if (!el) return;
-  el.innerHTML = '<div class="empty">Loading clipsâ€¦</div>';
+  el.innerHTML = '<div class="empty">Loading clips…</div>';
   const clips = await api(`/clips?creator_id=${encodeURIComponent(creatorId)}&limit=200`).catch(()=>[]);
   if (!clips.length) {
     el.innerHTML = '<div class="empty">No clips yet for this creator</div>'; return;
@@ -2484,10 +2484,10 @@ async function showCreatorClips(creatorId) {
   el.innerHTML = clips.map((c, i) => {
     const vs = Math.round(c.virality_score || c.prepublish_score || 0);
     const vsColor = vs >= 80 ? '#ff6b35' : vs >= 60 ? '#ffa502' : '#747d8c';
-    const videoTitle = c.source_title || c.video_slug || 'â€”';
+    const videoTitle = c.source_title || c.video_slug || '—';
     return `<div class="review-card" id="clipcard-${c.id}" style="margin-bottom:8px">
       <div style="background:#111;border-radius:6px;width:70px;height:124px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid #222;overflow:hidden;flex-shrink:0" onclick="openPlayer('${c.id}',false)">
-        <span style="font-size:20px;color:#444">â–¶</span>
+        <span style="font-size:20px;color:#444">▶</span>
       </div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;gap:8px;margin-bottom:4px;align-items:center;flex-wrap:wrap">
@@ -2496,13 +2496,13 @@ async function showCreatorClips(creatorId) {
           <span style="font-size:11px;font-weight:700;color:${vsColor}">â–² ${vs}</span>
         </div>
         <div style="font-size:12px;color:#444;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(videoTitle)}">${_esc(videoTitle)}</div>
-        <div style="font-size:12px;color:#888;margin-bottom:8px">${c.duration_s ? c.duration_s.toFixed(0) + 's' : 'â€”'}</div>
+        <div style="font-size:12px;color:#888;margin-bottom:8px">${c.duration_s ? c.duration_s.toFixed(0) + 's' : '—'}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn btn-outline btn-sm" onclick="openPlayer('${c.id}',false)">â–¶ Play</button>
-          <a href="${API}/clips/${c.id}/download" download><button class="btn btn-outline btn-sm">â†“</button></a>
-          <button class="btn btn-outline btn-sm" onclick="prepareClipForPublishing('${c.id}')">+ Publicar</button>
+          <button class="btn btn-outline btn-sm" onclick="openPlayer('${c.id}',false)">Play</button>
+          <a href="${API}/clips/${c.id}/download" download><button class="btn btn-outline btn-sm">Download</button></a>
+          <button class="btn btn-outline btn-sm" onclick="prepareClipForPublishing('${c.id}')">Add to Publishing</button>
           ${(c.prepublish_decision==='PUBLISH'||c.prepublish_decision==='REJECT')
-            ? `<button class="btn btn-outline btn-sm" style="color:#fbbf24;border-color:#4a3800" onclick="resetClipReview('${c.id}',document.getElementById('clipcard-${c.id}'))">â†© Pendiente</button>`
+            ? `<button class="btn btn-outline btn-sm" style="color:#fbbf24;border-color:#4a3800" onclick="resetClipReview('${c.id}',document.getElementById('clipcard-${c.id}'))">Reset to Pending</button>`
             : ''}
           <button class="btn btn-danger btn-sm" onclick="deleteClip('${c.id}')">Delete</button>
         </div>
@@ -2513,9 +2513,9 @@ async function showCreatorClips(creatorId) {
 
 // â”€â”€ All Videos view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function showAllVideos() {
-  setBreadcrumb(`<span onclick="libNav('creators',document.getElementById('lnav-creators'))">Library</span><span class="sep">â€º</span><span class="cur">All Videos</span>`);
+  setBreadcrumb(`<span onclick="libNav('creators',document.getElementById('lnav-creators'))">Library</span><span class="sep">›</span><span class="cur">All Videos</span>`);
   const el = document.getElementById('lib-content');
-  el.innerHTML = '<div class="empty">Loadingâ€¦</div>';
+  el.innerHTML = '<div class="empty">Loading…</div>';
   const params = new URLSearchParams({limit:'100'});
   _applyFilterParams(params);
   if (_libSearchQ) params.set('search', _libSearchQ);
@@ -2525,12 +2525,12 @@ async function showAllVideos() {
 
 // â”€â”€ Processing view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function showProcessing() {
-  setBreadcrumb(`<span onclick="libNav('creators',document.getElementById('lnav-creators'))">Library</span><span class="sep">â€º</span><span class="cur">Processing</span>`);
+  setBreadcrumb(`<span onclick="libNav('creators',document.getElementById('lnav-creators'))">Library</span><span class="sep">›</span><span class="cur">Processing</span>`);
   const el = document.getElementById('lib-content');
   const jobs = await api('/jobs').catch(()=>[]);
   const proc = jobs.filter(j => !['COMPLETED','FAILED','completed','failed'].includes(j.status||''));
   if (!proc.length) {
-    el.innerHTML = '<div class="lib-empty"><div class="lib-empty-icon">â³</div><p>No jobs processing right now</p></div>'; return;
+    el.innerHTML = '<div class="lib-empty"><div class="lib-empty-icon">⏳</div><p>No jobs processing right now</p></div>'; return;
   }
   el.innerHTML = proc.map(j => `<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:14px">
     <div style="flex:1">
@@ -2544,18 +2544,18 @@ async function showProcessing() {
 
 // â”€â”€ Failed view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function showFailed() {
-  setBreadcrumb(`<span onclick="libNav('creators',document.getElementById('lnav-creators'))">Library</span><span class="sep">â€º</span><span class="cur">Failed</span>`);
+  setBreadcrumb(`<span onclick="libNav('creators',document.getElementById('lnav-creators'))">Library</span><span class="sep">›</span><span class="cur">Failed</span>`);
   const el = document.getElementById('lib-content');
   const jobs = await api('/jobs').catch(()=>[]);
   const failed = jobs.filter(j => ['FAILED','failed'].includes(j.status||''));
   if (!failed.length) {
-    el.innerHTML = '<div class="lib-empty"><div class="lib-empty-icon">âœ“</div><p>No failed jobs</p></div>'; return;
+    el.innerHTML = '<div class="lib-empty"><p>No failed jobs.</p></div>'; return;
   }
   el.innerHTML = failed.map(j => `<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
     <div style="flex:1">
       <div style="font-size:13px;font-weight:500;color:#ccc;margin-bottom:4px">${_esc(j.source_title||j.source_url||j.id.substring(0,8))}</div>
       <div style="font-size:12px;color:#f87171;margin-bottom:2px">${_esc(j.error||'Unknown error')}</div>
-      <div style="font-size:12px;color:#444">${_esc(j.creator||'')} Â· ${fmt(j.created_at)}</div>
+      <div style="font-size:12px;color:#444">${_esc(j.creator||'')} · ${fmt(j.created_at)}</div>
     </div>
     ${chip('failed')}
     <button class="btn btn-outline btn-sm" onclick="retryJob('${j.id}')">Retry</button>
@@ -2575,8 +2575,8 @@ async function retryJob(jobId) {
 function renderVideoCards(videos, container, creatorId) {
   if (!videos.length) {
     const emptyMsg = creatorId === '__unassigned__'
-      ? '<div class="lib-empty"><div class="lib-empty-icon">ðŸ“</div><p>No unassigned videos â€” all videos have creators.</p></div>'
-      : '<div class="lib-empty"><div class="lib-empty-icon">ðŸŽ¬</div><p>No videos yet.</p><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="showTab(\'upload\',document.querySelectorAll(\'nav button\')[5])">+ Add Video</button></div>';
+      ? '<div class="lib-empty"><div class="lib-empty-icon">📁</div><p>No unassigned videos — all videos have creators.</p></div>'
+      : '<div class="lib-empty"><div class="lib-empty-icon">🎬</div><p>No videos yet.</p><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="showTab(\'upload\',document.querySelectorAll(\'nav button\')[5])">+ Add Video</button></div>';
     container.innerHTML = emptyMsg; return;
   }
 
@@ -2599,12 +2599,12 @@ function renderVideoCards(videos, container, creatorId) {
 
     html += `<div class="${cardClass}" id="vc-${v.id}">
       <div class="vc-checkbox ${selMode?'show':''} ${isSelected?'checked':''}" onclick="toggleSelect('${v.id}',this)">
-        ${isSelected?'âœ“':''}
+        ${isSelected?'✓':''}
       </div>
       <div class="vc-thumb" onclick="${selMode?`toggleSelect('${v.id}',document.querySelector('#vc-${v.id} .vc-checkbox'))`:`openVideoDetail('${v.id}','${v.job_id||''}')`}">
         <img src="${thumbSrc}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.opacity='1'" style="display:block">
-        <span style="font-size:28px;color:#333;position:absolute;opacity:0.4">ðŸŽ¬</span>
-        <div class="vc-play">â–¶</div>
+        <span style="font-size:28px;color:#333;position:absolute;opacity:0.4">🎬</span>
+        <div class="vc-play">▶</div>
       </div>
       <div class="vc-body">
         <div class="vc-title" title="${_esc(title)}">${_esc(title)}</div>
@@ -2620,7 +2620,7 @@ function renderVideoCards(videos, container, creatorId) {
           ${status==='COMPLETED' && !clips ? `<button class="btn btn-primary btn-sm" onclick="openVideoJobs('${v.job_id||v.id}')">Generate</button>` : ''}
           ${status!=='COMPLETED' ? `<button class="btn btn-outline btn-sm" onclick="openVideoJobs('${v.job_id||v.id}')">Open</button>` : ''}
           ${vs ? `<span class="vc-score" style="color:${vsColor};background:#1a1a1a">â–²${vs}</span>` : ''}
-          <button class="btn btn-outline btn-sm" style="margin-left:auto;color:#f87171;border-color:#f87171;padding:4px 8px" onclick="showDeleteConfirm(['${v.id}'])">ðŸ—‘</button>
+          Delete<DeletebDeleteuDeletetDeletetDeleteoDeletenDelete DeletecDeletelDeleteaDeletesDeletesDelete=Delete"DeletebDeletetDeletenDelete DeletebDeletetDeletenDelete-DeleteoDeleteuDeletetDeletelDeleteiDeletenDeleteeDelete DeletebDeletetDeletenDelete-DeletesDeletemDelete"Delete DeletesDeletetDeleteyDeletelDeleteeDelete=Delete"DeletemDeleteaDeleterDeletegDeleteiDeletenDelete-DeletelDeleteeDeletefDeletetDelete:DeleteaDeleteuDeletetDeleteoDelete;DeletecDeleteoDeletelDeleteoDeleterDelete:Delete#DeletefDelete8Delete7Delete1Delete7Delete1Delete;DeletebDeleteoDeleterDeletedDeleteeDeleterDelete-DeletecDeleteoDeletelDeleteoDeleterDelete:Delete#DeletefDelete8Delete7Delete1Delete7Delete1Delete;DeletepDeleteaDeletedDeletedDeleteiDeletenDeletegDelete:Delete4DeletepDeletexDelete Delete8DeletepDeletexDelete"Delete DeleteoDeletenDeletecDeletelDeleteiDeletecDeletekDelete=Delete"DeletesDeletehDeleteoDeletewDeleteDDeleteeDeletelDeleteeDeletetDeleteeDeleteCDeleteoDeletenDeletefDeleteiDeleterDeletemDelete(Delete[Delete'Delete$Delete{DeletevDelete.DeleteiDeletedDelete}Delete'Delete]Delete)Delete"Delete>DeleteðDeleteŸDelete—Delete‘Delete<Delete/DeletebDeleteuDeletetDeletetDeleteoDeletenDelete>Delete
         </div>
         ${creatorId ? `<div style="margin-top:6px">
           <button class="btn btn-outline btn-sm" style="font-size:10px;padding:3px 8px" onclick="showAssignModal(['${v.id}'])">Move Creator</button>
@@ -2652,24 +2652,24 @@ function openVideoJobs(jobId) {
 // â”€â”€ Clips-in-Library view for a specific video â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function showVideoClips(jobId, videoTitle) {
   // Show clips for one video, staying in Library context.
-  // Uses /clips?job_id=X â€” no navigation to Analysis tab.
+  // Uses /clips?job_id=X — no navigation to Analysis tab.
   const el = document.getElementById('creator-tab-content') || document.getElementById('lib-content');
   if (!el) return;
-  el.innerHTML = '<div class="empty">Loading clipsâ€¦</div>';
+  el.innerHTML = '<div class="empty">Loading clips…</div>';
 
   const clips = await api(`/clips?job_id=${encodeURIComponent(jobId)}&limit=200`).catch(()=>[]);
 
   const backHtml = `<div style="margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-    <button class="btn btn-outline btn-sm" onclick="reloadCurrentView()">â† Back</button>
+    <button class="btn btn-outline btn-sm" onclick="reloadCurrentView()">← Back</button>
     <span style="font-size:13px;color:#888">${_esc(videoTitle)}</span>
     <button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="openVideoJobs('${jobId}')">Analyze â†—</button>
   </div>`;
 
   if (!clips.length) {
     el.innerHTML = backHtml + `<div class="lib-empty">
-      <div class="lib-empty-icon">ðŸŽ¬</div>
+      <div class="lib-empty-icon">🎬</div>
       <p>No clips generated yet for this video.</p>
-      <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="openVideoJobs('${jobId}')">Go to Analysis â†’ Generate Clips</button>
+      <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="openVideoJobs('${jobId}')">Generate Clips</button>
     </div>`;
     return;
   }
@@ -2679,7 +2679,7 @@ async function showVideoClips(jobId, videoTitle) {
     const vsColor = vs >= 80 ? '#ff6b35' : vs >= 60 ? '#ffa502' : '#747d8c';
     return `<div class="review-card" id="clipcard-${c.id}" style="margin-bottom:8px">
       <div style="background:#111;border-radius:6px;width:70px;height:124px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid #222;overflow:hidden;flex-shrink:0" onclick="openPlayer('${c.id}',false)">
-        <span style="font-size:20px;color:#444">â–¶</span>
+        <span style="font-size:20px;color:#444">▶</span>
       </div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;gap:8px;margin-bottom:4px;align-items:center;flex-wrap:wrap">
@@ -2689,11 +2689,11 @@ async function showVideoClips(jobId, videoTitle) {
           ${c.duration_s ? `<span style="font-size:11px;color:#888">${c.duration_s.toFixed(0)}s</span>` : ''}
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn btn-outline btn-sm" onclick="openPlayer('${c.id}',true)">â–¶ Play</button>
-          <a href="${API}/clips/${c.id}/download" download><button class="btn btn-outline btn-sm">â†“ Download</button></a>
-          <button class="btn btn-outline btn-sm" onclick="prepareClipForPublishing('${c.id}')">+ Publicar</button>
+          <button class="btn btn-outline btn-sm" onclick="openPlayer('${c.id}',true)">Play</button>
+          <a href="${API}/clips/${c.id}/download" download><button class="btn btn-outline btn-sm">Download</button></a>
+          <button class="btn btn-outline btn-sm" onclick="prepareClipForPublishing('${c.id}')">Add to Publishing</button>
           ${(c.prepublish_decision==='PUBLISH'||c.prepublish_decision==='REJECT')
-            ? `<button class="btn btn-outline btn-sm" style="color:#fbbf24;border-color:#4a3800" onclick="resetClipReview('${c.id}',document.getElementById('clipcard-${c.id}'))">â†© Pendiente</button>`
+            ? `<button class="btn btn-outline btn-sm" style="color:#fbbf24;border-color:#4a3800" onclick="resetClipReview('${c.id}',document.getElementById('clipcard-${c.id}'))">Reset to Pending</button>`
             : ''}
           <button class="btn btn-danger btn-sm" onclick="deleteClip('${c.id}')">Delete</button>
         </div>
@@ -2747,7 +2747,7 @@ function toggleSelect(videoId, cbEl) {
     document.getElementById(`vc-${videoId}`)?.classList.remove('selected');
   } else {
     _libSelected.add(videoId);
-    cbEl.classList.add('checked'); cbEl.textContent = 'âœ“';
+    cbEl.classList.add('checked'); cbEl.textContent = '✓';
     document.getElementById(`vc-${videoId}`)?.classList.add('selected');
   }
   updateBulkBar();
@@ -2787,9 +2787,9 @@ async function bulkPublishFlow() {
     } catch(_) {}
   }
   if (!allClips.length) {
-    toast('No hay clips aprobados en los vÃ­deos seleccionados', 'error'); return;
+    toast('No approved clips in the selected videos', 'error'); return;
   }
-  if (!confirm(`Enviar ${allClips.length} clip(s) al Publishing Center?\n\nSe usarÃ¡ YouTube Shorts como plataforma.`)) return;
+  if (!confirm(`Add ${allClips.length} clip(s) to Publishing Center?\n\nPlatform: YouTube Shorts.`)) return;
   await prepareClipsForPublishing(allClips.map(c => c.id));
   clearSelection();
 }
@@ -2803,7 +2803,7 @@ async function showDeleteConfirm(videoIds) {
   const loading = document.getElementById('dm-impact-loading');
   grid.style.display = 'none';
   loading.style.display = 'block';
-  loading.textContent = 'Calculating impactâ€¦';
+  loading.textContent = 'Calculating impact…';
   document.getElementById('delete-modal').classList.add('open');
   try {
     const impact = await api('/videos/bulk-delete-impact', {
@@ -2963,7 +2963,7 @@ function renderFilterChips() {
   };
   // Sort chip (always visible)
   html += `<span class="fc-chip fc-sort" title="Sort order">
-    â†• ${labelMap[f.sort]||f.sort}
+    ↕ ${labelMap[f.sort]||f.sort}
     <span class="fc-x" onclick="openFcPanel(event,'sort')">â–¾</span>
   </span>`;
   if (f.status) html += `<span class="fc-chip">Status: ${labelMap[f.status]||f.status}
@@ -2977,7 +2977,7 @@ function renderFilterChips() {
   }
   if (f.date_range) {
     const dateLabel = f.date_range === 'custom'
-      ? `${f.date_from||'?'} â†’ ${f.date_to||'?'}`
+      ? `${f.date_from||'?'} → ${f.date_to||'?'}`
       : (labelMap[f.date_range]||f.date_range);
     html += `<span class="fc-chip">Date: ${dateLabel}
       <span class="fc-x" onclick="clearFilter('date_range')">Ã—</span></span>`;
@@ -3097,17 +3097,17 @@ function clearAllFilters() {
 // â”€â”€ Collections â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function showCollectionView(collectionId) {
   const el = document.getElementById('lib-content');
-  el.innerHTML = '<div class="empty">Loadingâ€¦</div>';
+  el.innerHTML = '<div class="empty">Loading…</div>';
   const coll = await api(`/collections/${collectionId}`).catch(()=>null);
   if (!coll) { el.innerHTML = '<div class="empty">Collection not found</div>'; return; }
-  setBreadcrumb(`<span onclick="libNav('creators',document.getElementById('lnav-creators'))">Library</span><span class="sep">â€º</span><span class="cur">${_esc(coll.name)}</span>`);
+  setBreadcrumb(`<span onclick="libNav('creators',document.getElementById('lnav-creators'))">Library</span><span class="sep">›</span><span class="cur">${_esc(coll.name)}</span>`);
   const params = new URLSearchParams({limit:'200', collection_id: collectionId});
   _applyFilterParams(params);
   if (_libSearchQ) params.set('search', _libSearchQ);
   const videos = await api('/videos?' + params).catch(()=>[]);
   let headerHtml = `<div class="coll-view-header">
     <div class="cv-dot" style="background:${coll.color||'#3b82f6'}20;border:1px solid ${coll.color||'#3b82f6'}40">
-      <span style="font-size:24px">ðŸ“</span>
+      <span style="font-size:24px">📁</span>
     </div>
     <div style="flex:1">
       <div class="cv-name">${_esc(coll.name)}</div>
@@ -3173,7 +3173,7 @@ async function saveCollection() {
 }
 
 async function deleteCollectionConfirm(collId, collName) {
-  if (!confirm(`Delete collection "${collName}"?\n\nThis will NOT delete the videos â€” only the collection grouping.`)) return;
+  if (!confirm(`Delete collection "${collName}"?\n\nVideos will not be deleted — only the collection grouping.`)) return;
   try {
     await api(`/collections/${collId}`, {method:'DELETE'});
     toast('Collection deleted', 'success');
@@ -3324,7 +3324,7 @@ function openDeleteCreatorModal(creatorId, name) {
   _dcOption = 'unassign';
   document.getElementById('dc-heading').textContent = `Delete "${name}"`;
   document.getElementById('dc-impact').innerHTML =
-    '<div style="color:#888;font-size:12px;padding:8px 0">Loading impactâ€¦</div>';
+    '<div style="color:#888;font-size:12px;padding:8px 0">Loading impact…</div>';
   document.getElementById('dc-jobs-warn').style.display = 'none';
   document.getElementById('dc-confirm-wrap').style.display = 'none';
   document.getElementById('dc-confirm-input').value = '';
@@ -3412,7 +3412,7 @@ async function executeDeleteCreator() {
   }
   btn.disabled = true;
   const origText = btn.textContent;
-  btn.textContent = 'Deletingâ€¦';
+  btn.textContent = 'Deleting…';
   try {
     const resp = await fetch(`${API}/creators/${_dcCreatorId}?action=${_dcOption}`, {method: 'DELETE'});
     if (!resp.ok) {
@@ -3522,10 +3522,10 @@ async function loadReview() {
   document.getElementById('review-count').textContent = pending || '';
 
   const emptyMsgs = {
-    REVIEW: 'No hay clips pendientes de revisiÃ³n. Â¡EnvÃ­a un vÃ­deo para empezar!',
-    PUBLISH: 'No hay clips aprobados aÃºn.',
-    REJECT: 'No hay clips rechazados.',
-    '': 'No hay clips aÃºn.',
+    REVIEW: 'No clips pending review. Submit a video to get started!',
+    PUBLISH: 'No approved clips yet.',
+    REJECT: 'No rejected clips.',
+    '': 'No clips yet.',
   };
   if (!clips.length) {
     document.getElementById('review-list').innerHTML = `<div class="empty">${emptyMsgs[filter] || emptyMsgs['']}</div>`;
@@ -3539,13 +3539,13 @@ async function loadReview() {
     const isPending = c.decision === 'REVIEW' || c.decision === 'PENDING';
     const isSelected = _reviewSelected.has(c.id);
     const selCb = _reviewSelectMode
-      ? `<div class="vc-checkbox show ${isSelected?'checked':''}" onclick="toggleReviewSelect('${c.id}',this)" style="position:relative;flex-shrink:0;margin-right:4px">${isSelected?'âœ“':''}</div>`
+      ? `<div class="vc-checkbox show ${isSelected?'checked':''}" onclick="toggleReviewSelect('${c.id}',this)" style="position:relative;flex-shrink:0;margin-right:4px">${isSelected?'✓':''}</div>`
       : '';
     return `
       <div class="review-card" id="rcard-${c.id}">
         ${selCb}
         <div style="background:#0d0d0d;border-radius:8px;width:80px;height:142px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid #222;overflow:hidden" onclick="${_reviewSelectMode?`toggleReviewSelect('${c.id}',document.querySelector('#rcard-${c.id} .vc-checkbox'))`:`openPlayer('${c.id}',true)`}">
-          <span style="font-size:24px;color:#444">â–¶</span>
+          <span style="font-size:24px;color:#444">▶</span>
         </div>
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
@@ -3559,11 +3559,11 @@ async function loadReview() {
             ${c.created_at ? `<span style="color:#444">${(c.created_at||'').substring(0,10)}</span>` : ''}
           </div>
           <div class="actions" style="flex-wrap:wrap;gap:6px">
-            ${!_reviewSelectMode ? `<button class="btn btn-primary btn-sm" onclick="openPlayer('${c.id}',true)">â–¶ Play</button>` : ''}
-            ${!approved && !_reviewSelectMode ? `<button class="btn btn-success btn-sm" onclick="reviewAction('${c.id}','approve')">âœ“ Aprobar</button>` : ''}
-            ${!rejected && !_reviewSelectMode ? `<button class="btn btn-danger btn-sm" onclick="reviewAction('${c.id}','reject')">âœ• Rechazar</button>` : ''}
-            ${!isPending && !_reviewSelectMode ? `<button class="btn btn-outline btn-sm" onclick="resetClipReview('${c.id}',document.getElementById('rcard-${c.id}'))">â†© Volver a pendiente</button>` : ''}
-            ${!_reviewSelectMode ? `<a href="${API}/clips/${c.id}/download" download="clip_${i+1}.mp4"><button class="btn btn-outline btn-sm">â†“ Descargar</button></a>` : ''}
+            ${!_reviewSelectMode ? `<button class="btn btn-primary btn-sm" onclick="openPlayer('${c.id}',true)">▶ Play</button>` : ''}
+            ${!approved && !_reviewSelectMode ? `<button class="btn btn-success btn-sm" onclick="reviewAction('${c.id}','approve')">Approve</button>` : ''}
+            ${!rejected && !_reviewSelectMode ? `<button class="btn btn-danger btn-sm" onclick="reviewAction('${c.id}','reject')">Reject</button>` : ''}
+            ${!isPending && !_reviewSelectMode ? `<button class="btn btn-outline btn-sm" onclick="resetClipReview('${c.id}',document.getElementById('rcard-${c.id}'))">Reset to Pending</button>` : ''}
+            ${!_reviewSelectMode ? `<a href="${API}/clips/${c.id}/download" download="clip_${i+1}.mp4"><button class="btn btn-outline btn-sm">↓ Download</button></a>` : ''}
           </div>
         </div>
       </div>`;
@@ -3573,7 +3573,7 @@ async function loadReview() {
 async function resetClipReview(clipId, cardEl) {
   try {
     await api(`/clips/${clipId}/return-to-review`, {method:'POST'});
-    toast('Clip devuelto a pendientes', 'success');
+    toast('Clip reset to pending', 'success');
     cardEl?.remove();
     loadReview();
     loadOverview();
@@ -3622,7 +3622,7 @@ function toggleReviewSelect(id, cbEl) {
     cbEl.classList.remove('checked'); cbEl.textContent = '';
   } else {
     _reviewSelected.add(id);
-    cbEl.classList.add('checked'); cbEl.textContent = 'âœ“';
+    cbEl.classList.add('checked'); cbEl.textContent = '✓';
   }
   updateReviewBulkBar();
 }
@@ -3642,7 +3642,7 @@ async function bulkReviewAction(action) {
   if (!_reviewSelected.size) return;
   const ids = [..._reviewSelected];
   const word = action === 'approve' ? 'Approving' : 'Rejecting';
-  toast(`${word} ${ids.length} clip${ids.length!==1?'s':''}â€¦`, 'info');
+  toast(`${word} ${ids.length} clip${ids.length!==1?'s':''}…`, 'info');
   try {
     await Promise.all(ids.map(id => api(`/review/${id}/${action}`, {method:'POST'})));
     toast(`${ids.length} clip${ids.length!==1?'s':''} ${action}d`, 'success');
@@ -3684,39 +3684,39 @@ async function loadJobs() {
   document.getElementById('jobs-body').innerHTML = jobs.length
     ? jobs.map(j => {
         const src = j.source_title || j.source_url || j.source || '';
-        const srcDisplay = src.length > 55 ? src.substring(0,55)+'â€¦' : src;
-        const clips = j.result?.stats?.clips_generated ?? j.clips_requested ?? 'â€”';
+        const srcDisplay = src.length > 55 ? src.substring(0,55)+'…' : src;
+        const clips = j.result?.stats?.clips_generated ?? j.clips_requested ?? '—';
         const canRetry = (j.status||'').toLowerCase() === 'failed';
         const isRunning = _JOBS_RUNNING_STATUSES.has((j.status||'').toLowerCase());
         const actions = canRetry
-          ? `<button class="btn btn-outline btn-sm" onclick="retryJobFromTable('${j.id}',this)">â†º Reintentar</button>`
+          ? `<button class="btn btn-outline btn-sm" onclick="retryJobFromTable('${j.id}',this)">↺ Reintentar</button>`
           : isRunning
           ? `<button class="btn btn-outline btn-sm" onclick="showTab('analysis',document.querySelectorAll('nav button')[4]);loadAnalysis('${j.id}')">Ver</button>`
           : j.status?.toLowerCase() === 'completed'
-          ? `<button class="btn btn-outline btn-sm" onclick="showTab('analysis',document.querySelectorAll('nav button')[4]);loadAnalysis('${j.id}')">AnÃ¡lisis</button>`
-          : 'â€”';
+          ? `<button class="btn btn-outline btn-sm" onclick="showTab('analysis',document.querySelectorAll('nav button')[4]);loadAnalysis('${j.id}')">Análisis</button>`
+          : '—';
         return `<tr>
           <td>${monoId(j.id)}</td>
           <td style="font-size:12px;color:#888;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-              title="${_esc(src)}">${_esc(srcDisplay) || 'â€”'}</td>
+              title="${_esc(src)}">${_esc(srcDisplay) || '—'}</td>
           <td>${chip(j.status)}</td>
           <td>${clips}</td>
           <td style="color:#444;font-size:12px">${fmt(j.created_at)}</td>
           <td>${actions}</td>
         </tr>`;
       }).join('')
-    : `<tr><td colspan="6" class="empty">${_jobsFilter==='failed'?'Sin trabajos fallidos':_jobsFilter==='running'?'Sin trabajos en curso':'No hay trabajos aÃºn'}</td></tr>`;
+    : `<tr><td colspan="6" class="empty">${_jobsFilter==='failed'?'No failed jobs':_jobsFilter==='running'?'No running jobs':'No jobs yet'}</td></tr>`;
 }
 
 async function retryJobFromTable(jobId, btn) {
-  if (btn) { btn.disabled = true; btn.textContent = 'â€¦'; }
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
     await api(`/jobs/${jobId}/retry`, {method:'POST'});
     toast('Trabajo reencolado', 'success');
     loadJobs();
   } catch(e) {
     toast('Error: ' + e.message, 'error');
-    if (btn) { btn.disabled = false; btn.textContent = 'â†º Reintentar'; }
+    if (btn) { btn.disabled = false; btn.textContent = '↺ Reintentar'; }
   }
 }
 
@@ -3791,7 +3791,7 @@ async function njFetchMetadata(url) {
     document.getElementById('nj-preview-title').textContent = data.title || 'Untitled';
     const parts = [data.channel, data.duration_s ? _njFmtDur(data.duration_s) : '',
       data.view_count ? _njFmtViews(data.view_count) : ''].filter(Boolean);
-    document.getElementById('nj-preview-meta').textContent = parts.join(' Â· ');
+    document.getElementById('nj-preview-meta').textContent = parts.join(' · ');
     document.getElementById('nj-preview-plat').innerHTML =
       data.platform ? `<span class="nj-plat-pill">${data.platform}</span>` : '';
     document.getElementById('nj-preview').style.display = '';
@@ -3813,7 +3813,7 @@ async function njFetchMetadata(url) {
     njCheckDuplicate(url);
     njUpdateSubmitState();
   } catch(e) {
-    st.textContent = 'Network error â€” is the server running?';
+    st.textContent = 'Cannot reach server';
     st.className = 'nj-url-status err';
     njUpdateSubmitState();
   } finally {
@@ -3898,7 +3898,7 @@ async function njSubmit() {
   const btn = document.getElementById('nj-submit');
   if (btn.disabled) return;
   btn.disabled = true;
-  btn.textContent = 'Creatingâ€¦';
+  btn.textContent = 'Creating…';
 
   const creatorDisplay = document.getElementById('creator-sel-display').value.trim() || '';
   const creatorId = document.getElementById('creator-sel-id').value || '';
@@ -4037,10 +4037,10 @@ async function loadAnalytics() {
           <td>${(r.avg_engagement*100).toFixed(2)}%</td>
         </tr>`).join('')}</tbody>
       </table></div>`
-    : '<div class="empty">No analytics yet â€” publish clips and collect metrics first</div>';
+    : '<div class="empty">No analytics yet — publish clips and collect metrics first</div>';
 }
 function collectAnalytics() {
-  toast('Analytics collection is not active â€” publish clips and enter metrics manually via the Publishing Center', 'info');
+  toast('Automatic collection is not active — enter metrics manually in the Publishing Center', 'info');
 }
 function runAutopsy() {
   document.getElementById('autopsy-result').textContent =
@@ -4052,7 +4052,7 @@ async function startOAuth(platform) {
   try {
     const r = await api(`/oauth/${platform}/start`);
     document.getElementById('oauth-result').textContent =
-      `Auth URL for ${platform}:\n${r.auth_url}\n\nOpening in a new tabâ€¦`;
+      `Auth URL for ${platform}:\n${r.auth_url}\n\nOpening in a new tab…`;
     window.open(r.auth_url,'_blank');
   } catch(e) {
     document.getElementById('oauth-result').textContent = 'Error: ' + e.message;
@@ -4067,7 +4067,7 @@ async function populateAnalysisJobSelect() {
   const sel = document.getElementById('analysis-job-select');
   const completed = (jobs||[]).filter(j=>j.status==='completed'||j.status==='COMPLETED');
   const current = sel.value;
-  sel.innerHTML = '<option value="">Select a completed jobâ€¦</option>' +
+  sel.innerHTML = '<option value="">Select a completed job…</option>' +
     completed.map(j=>{
       const title = j.source_title || j.video_slug || j.id.substring(0,8);
       const dt = j.created_at ? j.created_at.substring(0,10) : '';
@@ -4099,10 +4099,10 @@ async function loadAnalysis(jobId) {
 
   const v = data.video || {};
   const s = data.stats || {};
-  document.getElementById('a-duration').textContent = v.duration_s ? fmtDur(v.duration_s) : 'â€”';
-  document.getElementById('a-candidates').textContent = s.total_candidates ?? 'â€”';
-  document.getElementById('a-high').textContent = s.high_virality_count ?? 'â€”';
-  document.getElementById('a-series').textContent = s.series_count ?? 'â€”';
+  document.getElementById('a-duration').textContent = v.duration_s ? fmtDur(v.duration_s) : '—';
+  document.getElementById('a-candidates').textContent = s.total_candidates ?? '—';
+  document.getElementById('a-high').textContent = s.high_virality_count ?? '—';
+  document.getElementById('a-series').textContent = s.series_count ?? '—';
 
   renderAnalysisClips(data.top_clips || []);
   renderSeriesList(data.series || []);
@@ -4137,7 +4137,7 @@ function renderAnalysisClips(clips) {
     const score = Math.round(c.virality_score||0);
     const scoreClass = viralScoreClass(score);
     const dur = Math.round((c.end_s||0)-(c.start_s||0));
-    const ts = `${fmtTs(c.start_s||0)} â†’ ${fmtTs(c.end_s||0)}`;
+    const ts = `${fmtTs(c.start_s||0)} → ${fmtTs(c.end_s||0)}`;
     let reasons = [];
     try { reasons = Array.isArray(c.virality_reasons) ? c.virality_reasons : JSON.parse(c.virality_reasons||'[]'); } catch(e){}
     const reasonTags = reasons.slice(0,4).map(r=>`<span class="reason-tag">${r}</span>`).join('');
@@ -4175,7 +4175,7 @@ function renderSeriesList(series) {
       const dur = Math.round((p.end_s||0)-(p.start_s||0));
       return `<div class="part-card">
         <div class="part-num">Part ${p.series_part||pi+1}</div>
-        <div class="part-ts">${fmtTs(p.start_s||0)} â†’ ${fmtTs(p.end_s||0)}</div>
+        <div class="part-ts">${fmtTs(p.start_s||0)} → ${fmtTs(p.end_s||0)}</div>
         <div class="part-dur">${dur}s</div>
       </div>`;
     }).join('');
@@ -4184,7 +4184,7 @@ function renderSeriesList(series) {
       <div class="series-header">
         <div class="series-score-badge">${score}/100</div>
         <div>
-          <div class="series-title">${_esc(s.title||'Narrative Series')} â€” ${(s.parts||[]).length} parts</div>
+          <div class="series-title">${_esc(s.title||'Narrative Series')} — ${(s.parts||[]).length} parts</div>
           <div class="viral-reasons" style="margin-top:4px">${reasonTags}</div>
         </div>
         <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="generateSeries('${s.id}')">Generate All</button>
@@ -4196,11 +4196,11 @@ function renderSeriesList(series) {
 
 async function generateTopClips(n) {
   if (!_analysisJobId) { toast('Select a job first', 'error'); return; }
-  toast(`Generating top ${n} clipsâ€¦`, 'success');
+  toast(`Generating top ${n} clips…`, 'success');
   try {
     const r = await api(`/jobs/${_analysisJobId}/generate-top?n=${n}`, {method:'POST'});
     const cnt = r.count || 0;
-    toast(`Generated ${cnt} clip${cnt!==1?'s':''}${cnt>0?' â€” check Review tab':''}`, 'success');
+    toast(`Generated ${cnt} clip${cnt!==1?'s':''}${cnt>0?' — check Review tab':''}`, 'success');
     if (cnt > 0) loadReview();
     loadAnalysis(_analysisJobId);
   } catch(e) { toast('Error: ' + e.message, 'error'); }
@@ -4208,11 +4208,11 @@ async function generateTopClips(n) {
 
 async function generateSeries(seriesId) {
   if (!_analysisJobId) { toast('Select a job first', 'error'); return; }
-  toast('Generating series clipsâ€¦', 'success');
+  toast('Generating series clips…', 'success');
   try {
     const r = await api(`/jobs/${_analysisJobId}/generate-series/${seriesId}`, {method:'POST'});
     const cnt = r.count || 0;
-    toast(`Generated ${cnt} series clip${cnt!==1?'s':''}${cnt>0?' â€” check Review tab':''}`, 'success');
+    toast(`Generated ${cnt} series clip${cnt!==1?'s':''}${cnt>0?' — check Review tab':''}`, 'success');
     if (cnt > 0) loadReview();
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
@@ -4226,7 +4226,7 @@ async function generateBestSeries() {
 
 async function generateSingleCandidate(candidateId) {
   if (!_analysisJobId) { toast('No job selected', 'error'); return; }
-  toast('Generating clipâ€¦', 'success');
+  toast('Generating clip…', 'success');
   try {
     const r = await api(`/jobs/${_analysisJobId}/generate-top?n=1&candidate_id=${candidateId}`, {method:'POST'});
     if (r.count === 0 && r.message) {
@@ -4361,8 +4361,8 @@ function renderPubCard(p) {
   <div class="pub-card${sel?' selected':''}" id="pubcard-${p.id}">
     <div class="pub-card-thumb">
       ${thumbSrc ? `<img src="${thumbSrc}" loading="lazy" onerror="this.style.display='none'">` : ''}
-      <div class="pub-card-score ${cls}">ðŸ”¥ ${score}</div>
-      <div class="pub-card-chk${sel?' checked':''}" onclick="event.stopPropagation();togglePubSel('${p.id}')">${sel?'âœ“':''}</div>
+      <div class="pub-card-score ${cls}">${score}</div>
+      <div class="pub-card-chk${sel?' checked':''}" onclick="event.stopPropagation();togglePubSel('${p.id}')">${sel?'✓':''}</div>
     </div>
     <div class="pub-card-body">
       <div class="pub-card-creator">${_esc(p.creator_name||'Unknown')} ${seriesBadge}</div>
@@ -4377,7 +4377,7 @@ function renderPubCard(p) {
         <button class="btn btn-outline btn-sm" onclick="openPubEdit('${p.id}')">Edit</button>
         ${hasFile ? `<button class="btn btn-outline btn-sm" onclick="openPlayer('${p.clip_id}',false)">Preview</button>` : ''}
         ${p.status!=='published'
-          ? `<button class="btn btn-success btn-sm" onclick="openMarkPublished('${p.id}')">Publish âœ“</button>` : ''}
+          ? `<button class="btn btn-success btn-sm" onclick="openMarkPublished('${p.id}')">Mark Published</button>` : ''}
       </div>
     </div>
   </div>`;
@@ -4394,12 +4394,12 @@ function renderPubListRow(p) {
     ${thumbSrc ? `<img class="pub-list-thumb" src="${thumbSrc}" loading="lazy">` : '<div class="pub-list-thumb"></div>'}
     <div class="pub-list-info">
       <div class="pub-list-title">${_esc(p.title||p.source_title||'Untitled')}</div>
-      <div class="pub-list-sub">${_esc(p.creator_name||'')} Â· ${_platLabel(p.platform)} Â· ${_statusDot(p.status)} ${p.status}${dur?' Â· '+dur:''}</div>
+      <div class="pub-list-sub">${_esc(p.creator_name||'')} · ${_platLabel(p.platform)} · ${_statusDot(p.status)} ${p.status}${dur?' · '+dur:''}</div>
     </div>
     <div class="pub-list-score score ${scoreCls}">${score}</div>
     <div class="pub-list-actions">
       <button class="btn btn-outline btn-sm" onclick="openPubEdit('${p.id}')">Edit</button>
-      ${p.status!=='published' ? `<button class="btn btn-success btn-sm" onclick="openMarkPublished('${p.id}')">Publish âœ“</button>` : ''}
+      ${p.status!=='published' ? `<button class="btn btn-success btn-sm" onclick="openMarkPublished('${p.id}')">Mark Published</button>` : ''}
     </div>
   </div>`;
 }
@@ -4425,7 +4425,7 @@ function togglePubSel(pubId) {
   if (card) {
     card.classList.toggle('selected', _pubSelected.has(pubId));
     const box = card.querySelector('.pub-card-chk');
-    if (box) { box.classList.toggle('checked', _pubSelected.has(pubId)); box.textContent = _pubSelected.has(pubId)?'âœ“':''; }
+    if (box) { box.classList.toggle('checked', _pubSelected.has(pubId)); box.textContent = _pubSelected.has(pubId)?'✓':''; }
   }
   updatePubBulkBar();
 }
@@ -4481,7 +4481,7 @@ async function openPubEdit(pubId) {
     const p = await api('/publications/' + pubId);
     _pubCurrentPub = p;
     document.getElementById('pem-heading').textContent =
-      `${_platLabel(p.platform)} Â· ${p.creator_name||'Unknown'}`;
+      `${_platLabel(p.platform)} · ${p.creator_name||'Unknown'}`;
     document.getElementById('pem-title').value   = p.title   || '';
     document.getElementById('pem-caption').value = p.caption || '';
     const tags = Array.isArray(p.hashtags) ? p.hashtags.join(' ') : (p.hashtags||'');
@@ -4496,10 +4496,10 @@ async function openPubEdit(pubId) {
 
     const statusBar = document.getElementById('pem-status-bar');
     if (statusBar) {
-      const icons = {draft:'â¬œ',ready:'ðŸ”µ',published:'âœ…',failed:'âŒ',scheduled:'ðŸ•',cancelled:'â›”'};
+      const icons = {draft:'⬜',ready:'🔵',published:'✅',failed:'❌',scheduled:'🕐',cancelled:'⛔'};
       statusBar.innerHTML = `${icons[p.status]||''} Status: <b>${p.status}</b>
-        ${p.published_at ? `Â· Published: ${p.published_at.slice(0,10)}` : ''}
-        ${p.external_url ? `Â· <a href="${_esc(p.external_url)}" target="_blank" style="color:#4ade80">Open Post â†—</a>` : ''}`;
+        ${p.published_at ? `· Published: ${p.published_at.slice(0,10)}` : ''}
+        ${p.external_url ? `· <a href="${_esc(p.external_url)}" target="_blank" style="color:#4ade80">Open Post â†—</a>` : ''}`;
     }
     document.getElementById('pub-edit-modal').classList.add('open');
     loadYtUploadSection(p);
@@ -4633,7 +4633,7 @@ async function openMarkPublished(pubId) {
   try {
     const p = await api('/publications/' + pubId);
     if (p.series_id && (p.series_part || 0) > 1 && warn) {
-      warn.textContent = `âš  This is Part ${p.series_part} of a series. Make sure Part ${p.series_part - 1} is published first for best viewer experience.`;
+      warn.textContent = `⚠ This is Part ${p.series_part} of a series. Make sure Part ${p.series_part - 1} is published first for best viewer experience.`;
       warn.style.display = '';
     }
   } catch(e) {}
@@ -4658,7 +4658,7 @@ async function confirmMarkPublished() {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(body),
     });
-    toast('Marked as Published! âœ…', 'success');
+    toast('Marked as Published! ✅', 'success');
     closePubMarkModal();
     if (_pubCurrentPub) { closePubModal(); }
     reloadPub();
@@ -4686,7 +4686,7 @@ async function checkYoutubeStatus() {
     const disconnectBtn = document.getElementById('yt-disconnect-btn');
     if (!statusEl) return;
     if (_ytStatus && _ytStatus.connected) {
-      statusEl.textContent = 'âœ“ Connected';
+      statusEl.textContent = 'Connected';
       statusEl.style.color = '#4ade80';
       if (channelEl && _ytStatus.channel_title) {
         channelEl.style.display = '';
@@ -4706,7 +4706,7 @@ async function checkYoutubeStatus() {
 
 function connectYoutube() {
   window.open('/youtube/connect', '_blank');
-  toast('Abriendo autorizaciÃ³n de YouTubeâ€¦', 'info');
+  toast('Opening YouTube authorization…', 'info');
   setTimeout(checkYoutubeStatus, 8000);
 }
 
@@ -4773,8 +4773,8 @@ async function loadYtUploadSection(pub) {
     const dur = pub.duration_s;
     if (dur) {
       compatEl.textContent = dur > 60
-        ? `âš  Duration ${dur.toFixed(0)}s > 60s â€” may not qualify as Short`
-        : `âœ“ Duration ${dur.toFixed(0)}s â€” Short-compatible`;
+        ? `⚠ Duration ${dur.toFixed(0)}s > 60s — may not qualify as Short`
+        : `✓ Duration ${dur.toFixed(0)}s — Short-compatible`;
       compatEl.style.color = dur > 60 ? '#fbbf24' : '#4ade80';
     } else {
       compatEl.textContent = '';
@@ -4794,20 +4794,20 @@ function renderYtStatus(session) {
   statusDiv.style.display = '';
 
   const labels = {
-    pending:     'En cola para subirâ€¦',
-    uploading:   'Subiendoâ€¦',
-    processing:  'Subido â€” YouTube estÃ¡ procesandoâ€¦',
-    public:      'Disponible en YouTube (PÃºblico)',
-    unlisted:    'Disponible en YouTube (No listado)',
-    private:     'Disponible en YouTube (Privado)',
-    error:       'Error al subir',
-    needs_check: 'Subido â€” visibilidad no confirmada. Verifica en YouTube Studio.',
-    cancelled:   'Cancelado',
+    pending:     'Queued for upload…',
+    uploading:   'Uploading…',
+    processing:  'Uploaded — YouTube is processing…',
+    public:      'Live on YouTube (Public)',
+    unlisted:    'Live on YouTube (Unlisted)',
+    private:     'Live on YouTube (Private)',
+    error:       'Upload failed',
+    needs_check: 'Uploaded — visibility unconfirmed. Check YouTube Studio.',
+    cancelled:   'Cancelled',
   };
   if (statusText) {
     statusText.textContent = labels[session.status] || session.status;
     if (session.error_code === 'VISIBILITY_MISMATCH') {
-      statusText.textContent = 'âš  Visibilidad no coincide â€” YouTube puede haber ignorado la visibilidad solicitada por restricciÃ³n del proyecto API. Comprueba en YouTube Studio.';
+      statusText.textContent = '⚠ Visibility mismatch — YouTube may have overridden the visibility due to API project restrictions. Check YouTube Studio.';
       statusText.style.color = '#fbbf24';
     } else if (session.error_message && session.status === 'error') {
       statusText.textContent += ': ' + session.error_message;
@@ -4849,7 +4849,7 @@ function updatePemUploadBtn() {
   if (warn) warn.style.display = (v === 'public' || v === 'unlisted') ? '' : 'none';
   const btn = document.getElementById('pem-yt-upload-btn');
   if (btn && !btn.disabled) {
-    const labels = {public: 'Publicar en pÃºblico', unlisted: 'Subir como No listado', private: 'Subir en privado'};
+    const labels = {public: 'Upload as Public', unlisted: 'Upload as Unlisted', private: 'Upload as Private'};
     btn.textContent = labels[v] || 'Subir';
   }
 }
@@ -4864,13 +4864,13 @@ async function startYtUpload() {
   const tags = rawTags.split(/[\s,\n]+/).filter(Boolean).map(t => t.startsWith('#') ? t.slice(1) : t);
 
   const channel = (_ytStatus && _ytStatus.channel_title) || 'Connected channel';
-  const visLabel = {public: 'PÃºblico', unlisted: 'No listado', private: 'Privado'}[privacy_status] || privacy_status;
+  const visLabel = {public: 'Public', unlisted: 'Unlisted', private: 'Private'}[privacy_status] || privacy_status;
   if (!confirm(
-    `Subir este clip a YouTube como ${visLabel.toUpperCase()}?\n\n` +
+    `Upload this clip to YouTube as ${visLabel.toUpperCase()}?\n\n` +
     `Canal: ${channel}\n` +
     `Visibilidad: ${visLabel}\n` +
-    `Audiencia: ${isForKids ? 'Para niÃ±os' : 'No para niÃ±os'}\n\n` +
-    `Esta acciÃ³n enviarÃ¡ el archivo a YouTube. Â¿Continuar?`
+    `Audience: ${isForKids ? 'Made for kids' : 'Not for kids'}\n\n` +
+    `This will upload the file to YouTube. Continue?`
   )) return;
 
   try {
@@ -4912,7 +4912,7 @@ async function prepareClipForPublishing(clipId, opts={}) {
     });
     const n = (r.created||[]).length;
     const sk = (r.skipped||[]).length;
-    const msg = `${n} publicaciÃ³n${n!==1?'es':''} creada${n!==1?'s':''}${sk?' ('+sk+' ya existÃ­an)':''}`;
+    const msg = `${n} publication${n!==1?'s':''} created${sk?' ('+sk+' already existed)':''}`;
     toast(msg, 'success');
     // Navigate to Publishing tab unless explicitly suppressed
     if (!opts.noNavigate) {
@@ -4935,7 +4935,7 @@ async function prepareClipsForPublishing(clipIds) {
       skipped += (r.skipped||[]).length;
     } catch(_) {}
   }
-  toast(`${created} publicaciÃ³n${created!==1?'es':''} creada${created!==1?'s':''}${skipped?' ('+skipped+' ya existÃ­an)':''}`, 'success');
+  toast(`${created} publication${created!==1?'s':''} created${skipped?' ('+skipped+' already existed)':''}`, 'success');
   const pubBtn = document.querySelector('nav button[onclick*="publishing"]');
   if (pubBtn) showTab('publishing', pubBtn);
 }
@@ -4952,8 +4952,8 @@ function updateBumButton() {
   const n = document.getElementById('bum-count')?.textContent || '0';
   const btn = document.getElementById('bum-confirm-btn');
   if (!btn) return;
-  const labels = {public: `Publicar ${n} clip(s) en pÃºblico`, unlisted: `Subir ${n} clip(s) como No listados`, private: `Subir ${n} clip(s) en privado`};
-  btn.textContent = labels[v] || `Subir ${n} clip(s)`;
+  const labels = {public: `Upload ${n} clip(s) as Public`, unlisted: `Upload ${n} clip(s) as Unlisted`, private: `Upload ${n} clip(s) as Private`};
+  btn.textContent = labels[v] || `Upload ${n} clip(s)`;
 }
 
 function openBatchUploadModal() {
@@ -4970,7 +4970,7 @@ function openBatchUploadModal() {
   if (_ytStatus && _ytStatus.connected) {
     channelEl.textContent = `Canal: ${_ytStatus.channel_title || _ytStatus.channel_id || 'YouTube'}`;
   } else {
-    channelEl.textContent = 'YouTube no conectado â€” conecta tu cuenta en la pestaÃ±a OAuth';
+    channelEl.textContent = 'YouTube not connected — go to Settings to connect your account';
   }
   const listEl = document.getElementById('bum-item-list');
   listEl.innerHTML = _batchPubIds.map(id => {
@@ -4990,7 +4990,7 @@ async function confirmBatchUpload() {
   const btn = document.getElementById('bum-confirm-btn');
   const privacy_status = document.querySelector('input[name="bum-privacy"]:checked')?.value || 'public';
   btn.disabled = true;
-  btn.textContent = 'Enviandoâ€¦';
+  btn.textContent = 'Sending…';
   const errEl = document.getElementById('bum-error');
   errEl.style.display = 'none';
   try {
@@ -5018,7 +5018,7 @@ async function confirmBatchUpload() {
       skipEl.textContent = `Omitidos: ${skipped.length} (${skipped.map(s => s.reason).join(', ')})`;
       skipEl.style.display = '';
     }
-    toast(`${r.queued} clip(s) en cola para subir a YouTube`, 'success');
+    toast(`${r.queued} clip(s) queued for YouTube upload`, 'success');
     closeBatchUploadModal();
     clearPubSelection();
     if (r.batch_id) {
@@ -5057,7 +5057,7 @@ async function confirmSavePackage() {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({name, description, pub_ids: [..._pubSelected]}),
     });
-    toast(`Paquete "${name}" guardado`, 'success');
+    toast(`Package "${name}" saved`, 'success');
     closeSavePackageModal();
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
@@ -5067,13 +5067,13 @@ async function confirmSavePackage() {
 async function loadBatchList() {
   const el = document.getElementById('pub-content');
   const titleEl = document.getElementById('pub-view-title');
-  if (titleEl) titleEl.textContent = 'Lotes de Subida';
-  el.innerHTML = '<div class="pub-empty"><p>Cargandoâ€¦</p></div>';
+  if (titleEl) titleEl.textContent = 'Upload Batches';
+  el.innerHTML = '<div class="pub-empty"><p>Loading…</p></div>';
   try {
     const batches = await api('/upload-batches?limit=50');
     if (!batches.length) {
-      el.innerHTML = `<div class="pub-empty"><p>No hay lotes todavÃ­a.</p>
-        <p style="font-size:12px;color:#888">Selecciona clips en "All" y haz clic en <b>"Upload Selected"</b>.</p></div>`;
+      el.innerHTML = `<div class="pub-empty"><p>No batches yet.</p>
+        <p style="font-size:12px;color:#888">Select clips in "All" and click <b>"Upload Selected"</b>.</p></div>`;
       return;
     }
     el.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;padding:4px 0">
@@ -5100,7 +5100,7 @@ function renderBatchRow(b) {
       <div style="flex:1;font-size:13px;font-weight:600;color:#fff">${_esc(b.name||'Lote sin nombre')}</div>
       <span style="font-size:11px;color:${col};font-weight:600">${b.derived_status||'?'}</span>
     </div>
-    <div style="font-size:11px;color:#888;margin-bottom:6px">${b.created_at ? b.created_at.slice(0,16).replace('T',' ') : ''} Â· ${done}/${total} subidos${err?' Â· '+err+' error(s)':''}</div>
+    <div style="font-size:11px;color:#888;margin-bottom:6px">${b.created_at ? b.created_at.slice(0,16).replace('T',' ') : ''} · ${done}/${total} subidos${err?' · '+err+' error(s)':''}</div>
     <div style="background:#1a1a1a;border-radius:3px;height:4px;margin-bottom:8px">
       <div style="background:${col};width:${pct}%;height:4px;border-radius:3px;transition:width .3s"></div>
     </div>
@@ -5120,20 +5120,20 @@ async function viewBatchDetail(batchId) {
       const pct = i.file_size > 0 ? Math.round((i.bytes_sent/i.file_size)*100) : 0;
       const statusCols = {pending:'#666',uploading:'#3b82f6',processing:'#f59e0b',public:'#4ade80',unlisted:'#34d399',private:'#4ade80',error:'#ef4444',paused:'#f59e0b',cancelled:'#555',needs_check:'#fbbf24'};
       const col = statusCols[i.status] || '#666';
-      const statusLabel = {public:'PÃºblico',unlisted:'No listado',private:'Privado',needs_check:'Visibilidad no confirmada',error:'Error',uploading:'Subiendo',processing:'Procesando',pending:'En cola',paused:'Pausado',cancelled:'Cancelado'}[i.status] || i.status;
+      const statusLabel = {public:'Public',unlisted:'Unlisted',private:'Private',needs_check:'Visibility unconfirmed',error:'Error',uploading:'Uploading',processing:'Processing',pending:'Queued',paused:'Paused',cancelled:'Cancelled'}[i.status] || i.status;
       const mismatch = i.error_code === 'VISIBILITY_MISMATCH';
       return `<div style="padding:5px 0;border-bottom:1px solid #1a1a1a;font-size:12px">
         <span style="color:#ccc">${_esc(i.title||i.pub_id)}</span>
         <span style="color:${col};margin-left:8px">${statusLabel}</span>
         ${i.status==='uploading'?` <span style="color:#888">${pct}%</span>`:''}
-        ${mismatch?` <span style="color:#fbbf24">âš  Visibilidad no coincide â€” verifica en YouTube Studio</span>`:''}
+        ${mismatch?` <span style="color:#fbbf24">⚠ Visibilidad no coincide — verifica en YouTube Studio</span>`:''}
         ${(!mismatch&&i.error_message&&i.status==='error')?` <span style="color:#ef4444">${_esc(i.error_message)}</span>`:''}
       </div>`;
     }).join('');
-    toast(`Lote: ${b.name||b.id} Â· ${b.derived_status}`, 'info');
+    toast(`Batch: ${b.name||b.id} · ${b.derived_status}`, 'info');
     const el = document.getElementById('pub-content');
     el.innerHTML = `<div style="padding:8px 0">
-      <button class="btn btn-outline btn-sm" style="margin-bottom:12px" onclick="loadBatchList()">â† Volver a lotes</button>
+      <button class="btn btn-outline btn-sm" style="margin-bottom:12px" onclick="loadBatchList()">← Back to batches</button>
       <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:8px">${_esc(b.name||'Lote')}</div>
       <div>${items}</div>
     </div>`;
@@ -5149,7 +5149,7 @@ async function resumeBatch(id) {
   catch(e) { toast(e.message,'error'); }
 }
 async function retryBatchErrors(id) {
-  try { await api('/upload-batches/'+id+'/retry-errors',{method:'POST'}); toast('Reintentando errores','success'); loadBatchList(); }
+  try { await api('/upload-batches/'+id+'/retry-errors',{method:'POST'}); toast('Retrying errors','success'); loadBatchList(); }
   catch(e) { toast(e.message,'error'); }
 }
 
@@ -5158,15 +5158,15 @@ async function retryBatchErrors(id) {
 async function loadPackageList() {
   const el = document.getElementById('pub-content');
   const titleEl = document.getElementById('pub-view-title');
-  if (titleEl) titleEl.textContent = 'Paquetes';
-  el.innerHTML = '<div class="pub-empty"><p>Cargandoâ€¦</p></div>';
+  if (titleEl) titleEl.textContent = 'Packages';
+  el.innerHTML = '<div class="pub-empty"><p>Loading…</p></div>';
   try {
     const pkgs = await api('/packages');
     const badge = document.getElementById('pnb-packages');
     if (badge) badge.textContent = pkgs.length || '';
     if (!pkgs.length) {
-      el.innerHTML = `<div class="pub-empty"><p>No hay paquetes todavÃ­a.</p>
-        <p style="font-size:12px;color:#888">Selecciona clips y haz clic en <b>"Save as Package"</b>.</p></div>`;
+      el.innerHTML = `<div class="pub-empty"><p>No packages yet.</p>
+        <p style="font-size:12px;color:#888">Select clips and click <b>"Save as Package"</b>.</p></div>`;
       return;
     }
     el.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;padding:4px 0">
@@ -5194,7 +5194,7 @@ function renderPackageRow(p) {
 }
 
 async function deletePackage(id, name) {
-  if (!confirm(`Eliminar paquete "${name}"? Los clips no se borrarÃ¡n.`)) return;
+  if (!confirm(`Delete package "${name}"? Clips will not be deleted.`)) return;
   try {
     await api('/packages/'+id, {method:'DELETE'});
     toast('Paquete eliminado','success');
@@ -5206,7 +5206,7 @@ async function uploadPackage(packageId) {
   try {
     const pkg = await api('/packages/' + packageId);
     const pubIds = (pkg.items||[]).map(i => i.pub_id);
-    if (!pubIds.length) { toast('El paquete estÃ¡ vacÃ­o','error'); return; }
+    if (!pubIds.length) { toast('Package is empty','error'); return; }
     _pubSelected = new Set(pubIds);
     openBatchUploadModal();
   } catch(e) { toast(e.message,'error'); }
@@ -5217,23 +5217,23 @@ async function uploadPackage(packageId) {
 async function loadStorageSummary() {
   const el = document.getElementById('storage-summary');
   if (!el) return;
-  el.innerHTML = '<div style="font-size:12px;color:#888">Cargandoâ€¦</div>';
+  el.innerHTML = '<div style="font-size:12px;color:#888">Loading…</div>';
   try {
     const s = await api('/storage/summary');
     const rows = [
-      ['Base de datos', s.db_size_mb + ' MB', s.db_path],
-      ['Downloads', (s.dirs?.downloads?.size_mb||0) + ' MB', s.dirs?.downloads?.files + ' archivos'],
-      ['Uploads', (s.dirs?.uploads?.size_mb||0) + ' MB', s.dirs?.uploads?.files + ' archivos'],
-      ['Audio', (s.dirs?.audio?.size_mb||0) + ' MB', s.dirs?.audio?.files + ' archivos'],
-      ['Proxies', (s.dirs?.proxies?.size_mb||0) + ' MB', s.dirs?.proxies?.files + ' archivos'],
-      ['Clips', (s.dirs?.clips?.size_mb||0) + ' MB', s.dirs?.clips?.files + ' archivos'],
-      ['Thumbnails', (s.dirs?.thumbnails?.size_mb||0) + ' MB', s.dirs?.thumbnails?.files + ' archivos'],
+      ['Database', s.db_size_mb + ' MB', s.db_path],
+      ['Downloads', (s.dirs?.downloads?.size_mb||0) + ' MB', s.dirs?.downloads?.files + ' files'],
+      ['Uploads', (s.dirs?.uploads?.size_mb||0) + ' MB', s.dirs?.uploads?.files + ' files'],
+      ['Audio', (s.dirs?.audio?.size_mb||0) + ' MB', s.dirs?.audio?.files + ' files'],
+      ['Proxies', (s.dirs?.proxies?.size_mb||0) + ' MB', s.dirs?.proxies?.files + ' files'],
+      ['Clips', (s.dirs?.clips?.size_mb||0) + ' MB', s.dirs?.clips?.files + ' files'],
+      ['Thumbnails', (s.dirs?.thumbnails?.size_mb||0) + ' MB', s.dirs?.thumbnails?.files + ' files'],
     ];
     // Add per-creator render dirs if present
     const creatorDirs = s.creator_dirs || {};
     const creatorEntries = Object.entries(creatorDirs).sort((a,b) => b[1].size_mb - a[1].size_mb);
     if (creatorEntries.length) {
-      rows.push(['Renders por creador', (s.other_dirs_mb||0).toFixed(1) + ' MB', creatorEntries.length + ' carpeta(s)']);
+      rows.push(['Renders by creator', (s.other_dirs_mb||0).toFixed(1) + ' MB', creatorEntries.length + ' folder(s)']);
     }
     const diskPct = s.disk?.used_pct || 0;
     const diskCol = diskPct > 85 ? '#ef4444' : diskPct > 70 ? '#f59e0b' : '#4ade80';
@@ -5262,11 +5262,11 @@ async function loadStorageSummary() {
       ${creatorDetail}
       ${s.missing_clips>0||s.missing_videos>0 ? `
       <div style="margin-top:8px;background:#1a0a0a;border:1px solid #7f1d1d;border-radius:6px;padding:8px 12px;font-size:11px;color:#fca5a5">
-        âš  Archivos faltantes: ${s.missing_clips} clip(s), ${s.missing_videos} video(s)
-        ${s.missing_details?.videos?.length ? '<br>' + s.missing_details.videos.map(v=>'â€¢ '+v.path).join('<br>') : ''}
-        <br><span style="color:#888;font-size:10px">El vÃ­deo original fue borrado o movido. Los clips derivados pueden estar intactos.</span>
-      </div>` : `<div style="font-size:11px;color:#4ade80;margin-top:6px">âœ“ Todos los archivos presentes</div>`}
-      <div style="font-size:10px;color:#333;margin-top:6px">Actualizado: ${s.scanned_at?.slice(0,16)||''}</div>`;
+        ⚠ Missing files: ${s.missing_clips} clip(s), ${s.missing_videos} video(s)
+        ${s.missing_details?.videos?.length ? '<br>' + s.missing_details.videos.map(v=>'• '+v.path).join('<br>') : ''}
+        <br><span style="color:#888;font-size:10px">Original video was deleted or moved. Derived clips may still be intact.</span>
+      </div>` : `<div style="font-size:11px;color:#4ade80;margin-top:6px">✓ All files present</div>`}
+      <div style="font-size:10px;color:#333;margin-top:6px">Scanned: ${s.scanned_at?.slice(0,16)||''}</div>`;
   } catch(e) {
     el.innerHTML = `<div style="font-size:12px;color:#ef4444">Error: ${_esc(e.message)}</div>`;
   }
