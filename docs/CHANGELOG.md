@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-09-21 — Duplicate diagnosis + data integrity + UI cleanup
+
+### Bug fixes
+- **Ghost data cleaned up**: archived 36 fake test jobs (`/fake/path.mp4`), 36 ghost clips (no valid video), 19 orphaned candidates into `_archived_*` tables. Reversible via `python cleanup_ghost_data.py --restore`.
+- **Sidebar "All Videos" count**: was showing total job count (41). Now fetches `/videos?limit=200` for actual video count.
+- **Review tab**: `GET /review/pending` now does `JOIN videos` (inner) on `ca.video_id` — ghost clips with no real video are excluded. Adds `source_title` and `video_duration` fields to response. Review card now shows source title.
+- **URL dedup race condition**: `POST /jobs/from-url` now creates the `jobs` DB row immediately at API time (before `pool.submit`). Previously, the dedup check ran against a DB with no row yet, allowing a second identical URL submission to bypass dedup during the worker startup window.
+
+### Text / UI cleanup
+- Remaining Spanish toast messages translated: "Paquete eliminado", "Abre un clip asociado a un job", "Fin debe ser mayor que inicio", "Error al eliminar", "Subir" fallback.
+
+### Tooling
+- `cleanup_ghost_data.py` — dry-run / apply / restore tool for ghost data. Creates DB backup before applying.
+- `verify_cleanup.py` — post-cleanup state verification.
+
 ## 2026-09-19 — QA Repair + Series Sequential Upload
 
 ### Bug fixes & UX improvements

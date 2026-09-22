@@ -15,9 +15,14 @@ header h1{font-size:16px;font-weight:600;color:#fff}
 .badge-review{background:#78350f;color:#fbbf24}
 .badge-auto{background:#14532d;color:#4ade80}
 nav{background:#111;border-bottom:1px solid #222;display:flex;overflow-x:auto}
-nav button{background:none;border:none;color:#888;padding:11px 18px;cursor:pointer;font-size:13px;white-space:nowrap;border-bottom:2px solid transparent;transition:color .15s}
-nav button:hover{color:#ccc}
-nav button.active{color:#fff;border-bottom-color:#3b82f6}
+nav > button{background:none;border:none;color:#888;padding:11px 18px;cursor:pointer;font-size:13px;white-space:nowrap;border-bottom:2px solid transparent;transition:color .15s}
+nav > button:hover{color:#ccc}
+nav > button.active{color:#fff;border-bottom-color:#3b82f6}
+#nav-more-btn{background:none;border:none;color:#666;padding:11px 18px;cursor:pointer;font-size:13px;white-space:nowrap;border-bottom:2px solid transparent;transition:color .15s;margin-left:auto}
+#nav-more-btn:hover{color:#aaa}
+#nav-more-btn.active{color:#fff;border-bottom-color:#3b82f6}
+#more-menu button{display:block;width:100%;text-align:left;padding:9px 16px;background:none;border:none;color:#aaa;cursor:pointer;font-size:13px}
+#more-menu button:hover{background:#222;color:#fff}
 main{padding:24px;max-width:1280px;margin:0 auto}
 section{display:none}
 section.active{display:block}
@@ -100,6 +105,10 @@ input[type=file]{font-size:13px;color:#888}
 
 /* Toast */
 #toast{position:fixed;bottom:20px;right:20px;background:#1c1c1c;border-radius:8px;padding:11px 18px;font-size:13px;z-index:200;display:none;box-shadow:0 4px 16px rgba(0,0,0,.7);max-width:320px}
+/* Undo snackbar */
+#undo-snack{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1c1c1c;border:1px solid #333;border-radius:8px;padding:10px 16px;font-size:13px;z-index:210;display:none;align-items:center;gap:14px;box-shadow:0 4px 20px rgba(0,0,0,.8);white-space:nowrap}
+#undo-snack .undo-btn{background:#3b82f6;border:none;color:#fff;padding:4px 13px;border-radius:5px;cursor:pointer;font-size:12px;font-weight:600}
+#undo-snack .undo-btn:hover{background:#2563eb}
 
 /* Video player modal — caption editor layout */
 #video-modal{display:none;position:fixed;inset:0;z-index:500;background:#000c;align-items:center;justify-content:center;padding:12px}
@@ -120,6 +129,7 @@ input[type=file]{font-size:13px;color:#888}
 .cap-tab.active{color:#3b82f6;border-bottom-color:#3b82f6}
 .cap-panel{flex:1;overflow-y:auto;padding:14px}
 .cap-panel:not(.active){display:none}
+#cap-eval.active{display:flex;flex-direction:column;gap:0}
 /* Caption controls */
 .cap-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
 .cap-row label{font-size:11px;color:#888;min-width:80px;text-transform:uppercase;letter-spacing:.4px}
@@ -544,11 +554,16 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
   <button onclick="showTab('library',this)">Library</button>
   <button class="active" onclick="showTab('review',this)">Review <span id="review-count" style="background:#78350f;color:#fbbf24;border-radius:99px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px"></span></button>
   <button onclick="showTab('jobs',this)">Jobs</button>
-  <button onclick="showTab('analysis',this)">Analysis</button>
-  <button onclick="showTab('upload',this)">+ New Job</button>
-  <button onclick="showTab('publishing',this)">Publishing</button>
-  <button onclick="showTab('analytics',this)">Stats</button>
-  <button onclick="showTab('oauth',this)">OAuth</button>
+  <button id="nav-new-job" onclick="showTab('upload',this)">+ New Job</button>
+  <div style="position:relative;display:flex;align-items:stretch;margin-left:auto">
+    <button id="nav-more-btn" onclick="toggleMoreMenu()">⋯</button>
+    <div id="more-menu" style="display:none;position:absolute;top:100%;right:0;background:#161616;border:1px solid #333;border-radius:8px;z-index:300;min-width:140px;padding:4px 0;box-shadow:0 4px 16px rgba(0,0,0,.7)">
+      <button onclick="showSecondaryTab('analysis')">Analysis</button>
+      <button onclick="showSecondaryTab('publishing')">Publishing</button>
+      <button onclick="showSecondaryTab('analytics')">Stats</button>
+      <button onclick="showSecondaryTab('oauth')">OAuth</button>
+    </div>
+  </div>
 </nav>
 
 <main>
@@ -1286,6 +1301,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 </div>
 </main>
 <div id="toast"></div>
+<div id="undo-snack"><span class="undo-msg"></span><button class="undo-btn" onclick="undoReviewAction()">Undo</button></div>
 
 <!-- ══════════════ DELETE CREATOR MODAL ══════════════ -->
 <div class="lib-modal-overlay" id="dc-modal" onclick="if(event.target===this)closeDcModal()">
@@ -1329,6 +1345,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 
     <!-- LEFT: video + actions -->
     <div class="modal-left">
+      <div id="modal-clip-context" style="font-size:11px;color:#555;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
       <div class="modal-video-wrap">
         <video id="modal-video" controls playsinline></video>
         <canvas id="caption-canvas"></canvas>
@@ -1340,7 +1357,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           <button class="btn btn-primary btn-sm">Download</button>
         </a>
       </div>
-      <div class="modal-publish-prep">
+      <div class="modal-publish-prep" id="modal-publish-prep">
         <div class="modal-publish-label">Add to Publishing</div>
         <div class="modal-publish-plats">
           <label><input type="checkbox" id="prep-tiktok" checked> TikTok</label>
@@ -1464,7 +1481,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
       </div>
 
       <!-- EVAL panel -->
-      <div class="cap-panel" id="cap-eval" style="display:flex;flex-direction:column;gap:0;overflow-y:auto;padding-bottom:8px">
+      <div class="cap-panel" id="cap-eval" style="overflow-y:auto;padding-bottom:8px">
 
         <!-- Decision -->
         <div class="eval-section">
@@ -1472,7 +1489,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           <div class="eval-decision-row">
             <button class="eval-dec-btn" id="eval-dec-publish" onclick="evalSetDecision('publish_as_is')">✓ Publish</button>
             <button class="eval-dec-btn" id="eval-dec-edit" onclick="evalSetDecision('publish_after_edit')">✏ Needs edit</button>
-            <button class="eval-dec-btn" id="eval-dec-reject" onclick="evalSetDecision('rejected')">✗ Rechazar</button>
+            <button class="eval-dec-btn" id="eval-dec-reject" onclick="evalSetDecision('rejected')">✗ Reject</button>
           </div>
         </div>
 
@@ -1493,7 +1510,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 
         <!-- Notes -->
         <div class="eval-section">
-          <div class="eval-section-label">Notas</div>
+          <div class="eval-section-label">Notes</div>
           <textarea class="eval-notes" id="eval-notes" placeholder="Optional notes…" rows="3"></textarea>
         </div>
 
@@ -1542,7 +1559,8 @@ let _refreshTimer = null;
 // â”€â”€ Tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function showTab(name, btn) {
   document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('nav > button').forEach(b => b.classList.remove('active'));
+  document.getElementById('nav-more-btn').classList.remove('active');
   document.getElementById('tab-' + name).classList.add('active');
   btn.classList.add('active');
   clearInterval(_refreshTimer);
@@ -1551,6 +1569,21 @@ function showTab(name, btn) {
     _refreshTimer = setInterval(() => loadTab(name), 8000);
   }
 }
+function showSecondaryTab(name) {
+  document.getElementById('more-menu').style.display = 'none';
+  showTab(name, document.getElementById('nav-more-btn'));
+}
+function toggleMoreMenu() {
+  const m = document.getElementById('more-menu');
+  m.style.display = m.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', e => {
+  const menu = document.getElementById('more-menu');
+  const btn = document.getElementById('nav-more-btn');
+  if (menu && btn && !btn.contains(e.target) && !menu.contains(e.target)) {
+    menu.style.display = 'none';
+  }
+});
 function loadTab(t) {
   ({overview:loadOverview, library:loadLibrary, review:loadReview,
     jobs:loadJobs, analytics:loadAnalytics, publishing:loadPublishing})[t]?.();
@@ -1579,14 +1612,21 @@ async function openPlayer(clipId, showReviewBtns) {
   document.getElementById('modal-download-link').href = `${API}/clips/${clipId}/download`;
   document.getElementById('modal-approve-btn').style.display = showReviewBtns ? '' : 'none';
   document.getElementById('modal-reject-btn').style.display = showReviewBtns ? '' : 'none';
+  // Hide publishing prep during review — not needed at decision time
+  document.getElementById('modal-publish-prep').style.display = showReviewBtns ? 'none' : '';
+  // Default to Eval tab in review mode, Style tab when editing from Library
+  const _defaultTab = showReviewBtns ? 'eval' : 'style';
+  capTab(_defaultTab, document.querySelector(`.cap-tab[onclick="capTab('${_defaultTab}',this)"]`));
   document.getElementById('video-modal').classList.add('open');
 
-  // Fetch clip details to get video_id and creator_id for Change Creator feature
+  // Fetch clip details: source title, video_id, creator_id
   api(`/clips/${clipId}`).then(clip => {
     _currentClipVideoId = clip.video_id || null;
     _currentClipCreatorId = clip.creator_id || null;
     const btn = document.getElementById('modal-change-creator-btn');
     if (btn) btn.style.display = _currentClipVideoId ? '' : 'none';
+    const ctx = document.getElementById('modal-clip-context');
+    if (ctx) ctx.textContent = clip.source_title || '';
   }).catch(() => {});
 
   // Bind timeupdate for caption canvas
@@ -1610,6 +1650,7 @@ async function openPlayer(clipId, showReviewBtns) {
   // Reset and load evaluation state
   evalReset();
   evalTimerReset();
+  if (showReviewBtns) evalTimerStart();
   api(`/clips/${clipId}/evaluation`).then(ev => evalLoad(ev)).catch(() => {});
   // Load missed moments (need job_id from clip)
   api(`/clips/${clipId}`).then(c => {
@@ -1628,15 +1669,17 @@ function closePlayer() {
 
 async function modalAction(action) {
   if (!_currentClipId) return;
-  try {
-    await api(`/review/${_currentClipId}/${action}`, {method:'POST'});
-    toast('Clip ' + action + 'd', action==='approve'?'success':'error');
-    closePlayer();
-    loadReview();
-    loadOverview();
-  } catch(e) {
-    toast('Action failed: ' + e.message, 'error');
-  }
+  const id = _currentClipId;
+  closePlayer();
+  _showUndoSnack(action === 'approve' ? 'Clip approved' : 'Clip rejected',
+    async () => {
+      try {
+        await api(`/review/${id}/${action}`, {method:'POST'});
+        loadReview(); loadOverview();
+      } catch(e) { toast('Action failed: ' + e.message, 'error'); }
+    },
+    () => { loadReview(); }
+  );
 }
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
@@ -1816,7 +1859,7 @@ function evalRenderMissedList(moments) {
 }
 
 async function evalAddMoment() {
-  if (!_evalMissedJobId) { toast('Abre un clip asociado a un job', 'error'); return; }
+  if (!_evalMissedJobId) { toast('Open a clip associated with a job first', 'error'); return; }
   const startEl = document.getElementById('missed-start');
   const endEl = document.getElementById('missed-end');
   const notesEl = document.getElementById('missed-notes');
@@ -1824,7 +1867,7 @@ async function evalAddMoment() {
   const end_s = parseFloat(endEl?.value);
   const notes = notesEl?.value.trim() || '';
   if (isNaN(start_s) || isNaN(end_s) || end_s <= start_s) {
-    toast('Fin debe ser mayor que inicio', 'error'); return;
+    toast('End must be greater than start', 'error'); return;
   }
   try {
     await api(`/jobs/${_evalMissedJobId}/missed-moments`, {
@@ -1846,7 +1889,7 @@ async function evalDeleteMoment(momentId, el) {
     await api(`/missed-moments/${momentId}`, {method: 'DELETE'});
     el?.remove();
   } catch(e) {
-    toast('Error al eliminar', 'error');
+    toast('Delete failed', 'error');
   }
 }
 
@@ -2133,6 +2176,29 @@ function toast(msg, type='info') {
   setTimeout(() => t.style.display='none', 4000);
 }
 
+let _undoPending = null;
+function _showUndoSnack(label, commit, undo) {
+  // Flush any outstanding undo — operator moved on
+  if (_undoPending) { clearTimeout(_undoPending.timer); _undoPending.commit(); _undoPending = null; }
+  const snack = document.getElementById('undo-snack');
+  snack.querySelector('.undo-msg').textContent = label;
+  snack.style.display = 'flex';
+  const timer = setTimeout(() => {
+    snack.style.display = 'none';
+    _undoPending = null;
+    commit();
+  }, 4000);
+  _undoPending = { timer, commit, undo };
+}
+function undoReviewAction() {
+  if (!_undoPending) return;
+  clearTimeout(_undoPending.timer);
+  const { undo } = _undoPending;
+  _undoPending = null;
+  document.getElementById('undo-snack').style.display = 'none';
+  undo();
+}
+
 async function api(path, opts={}) {
   const r = await fetch(API + path, opts);
   if (!r.ok) throw new Error(await r.text());
@@ -2186,6 +2252,16 @@ function watchJob(jobId, cardEl) {
   es.onerror = () => es.close();
 }
 
+const _STAGE_LABEL = {
+  QUEUED:'Queued', INGESTING:'Ingesting…', TRANSCRIBING:'Transcribing…',
+  ANALYZING:'Analyzing…', RENDERING:'Rendering…', QA:'QA check…',
+  COMPLETED:'Done', FAILED:'Failed'
+};
+const _STAGE_PCT = {
+  QUEUED:5, INGESTING:15, TRANSCRIBING:35, ANALYZING:55,
+  RENDERING:80, QA:92, COMPLETED:100, FAILED:100
+};
+
 function updateJobCard(el, data) {
   if (!el) return;
   const status = data.status;
@@ -2193,8 +2269,14 @@ function updateJobCard(el, data) {
   const bar = el.querySelector('.progress-fill');
   if (bar) {
     bar.className = `progress-fill ${status}`;
-    if (status === 'running') bar.style.width = '60%';
-    if (status === 'queued')  bar.style.width = '10%';
+    if (status === 'running') bar.style.width = (_STAGE_PCT[data.stage] || 60) + '%';
+    if (status === 'queued')  bar.style.width = '5%';
+  }
+  const stageEl = el.querySelector('.jstage');
+  if (stageEl) {
+    const lbl = (status === 'running' && data.stage) ? (_STAGE_LABEL[data.stage] || data.stage) : '';
+    stageEl.textContent = lbl;
+    stageEl.style.display = lbl ? '' : 'none';
   }
   if (data.result) {
     const stats = data.result.stats || {};
@@ -2285,8 +2367,9 @@ async function refreshSidebarCounts() {
     const proc = jobs.filter(j=>!['COMPLETED','FAILED','completed','failed'].includes(j.status||'')).length;
     const fail = jobs.filter(j=>['FAILED','failed'].includes(j.status||'')).length;
     const unassigned = await api('/videos?creator_id=__unassigned__&limit=200').catch(()=>[]);
+    const allVideos = await api('/videos?limit=200').catch(()=>[]);
 
-    document.getElementById('lnc-videos').textContent = jobs.length || '';
+    document.getElementById('lnc-videos').textContent = allVideos.length || '';
     document.getElementById('lnc-processing').textContent = proc || '';
     document.getElementById('lnc-failed').textContent = fail || '';
     document.getElementById('lnc-unassigned').textContent = unassigned.length || '';
@@ -2375,7 +2458,7 @@ async function showCreatorsGrid() {
         <div class="lib-empty-icon">📚</div>
         <p>No creators yet.</p>
         <p style="color:#333">Add a video and we'll organize it by creator.</p>
-        <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="showTab('upload',document.querySelectorAll('nav button')[5])">+ Add Video</button>
+        <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="showTab('upload',document.getElementById('nav-new-job'))">+ Add Video</button>
       </div>`; return;
     }
 
@@ -2454,7 +2537,7 @@ async function showCreatorDetail(creatorId) {
     <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">
       ${!isUnassigned ? `<button class="btn btn-outline btn-sm" onclick="showCreatorModal('${creatorId}')">Edit</button>` : ''}
       ${!isUnassigned ? `<button class="btn btn-outline btn-sm" style="color:#f87171;border-color:#3a1010" onclick="startDeleteCreator('${creatorId}')">Delete</button>` : ''}
-      <button class="btn btn-primary btn-sm" onclick="showTab('upload',document.querySelectorAll('nav button')[5]);setTimeout(()=>preselectCreator('${isUnassigned ? '' : creatorId}','${_esc(name)}'),100)">+ Add Video</button>
+      <button class="btn btn-primary btn-sm" onclick="showTab('upload',document.getElementById('nav-new-job'));setTimeout(()=>preselectCreator('${isUnassigned ? '' : creatorId}','${_esc(name)}'),100)">+ Add Video</button>
     </div>
   </div>`;
 
@@ -2586,7 +2669,7 @@ function renderVideoCards(videos, container, creatorId) {
   if (!videos.length) {
     const emptyMsg = creatorId === '__unassigned__'
       ? '<div class="lib-empty"><div class="lib-empty-icon">📁</div><p>No unassigned videos — all videos have creators.</p></div>'
-      : '<div class="lib-empty"><div class="lib-empty-icon">🎬</div><p>No videos yet.</p><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="showTab(\'upload\',document.querySelectorAll(\'nav button\')[5])">+ Add Video</button></div>';
+      : '<div class="lib-empty"><div class="lib-empty-icon">🎬</div><p>No videos yet.</p><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="showTab(\'upload\',document.getElementById(\'nav-new-job\'))">+ Add Video</button></div>';
     container.innerHTML = emptyMsg; return;
   }
 
@@ -3611,8 +3694,9 @@ async function loadReview() {
     return `
       <div class="review-card" id="rcard-${c.id}">
         ${selCb}
-        <div style="background:#0d0d0d;border-radius:8px;width:80px;height:142px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid #222;overflow:hidden" onclick="${_reviewSelectMode?`toggleReviewSelect('${c.id}',document.querySelector('#rcard-${c.id} .vc-checkbox'))`:`openPlayer('${c.id}',true)`}">
-          <span style="font-size:24px;color:#444">▶</span>
+        <div style="background:#0d0d0d;border-radius:8px;width:80px;height:142px;flex-shrink:0;cursor:pointer;border:1px solid #222;overflow:hidden;position:relative" onclick="${_reviewSelectMode?`toggleReviewSelect('${c.id}',document.querySelector('#rcard-${c.id} .vc-checkbox'))`:`openPlayer('${c.id}',true)`}">
+          <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:24px;color:#444">▶</span>
+          <img src="${API}/clips/${c.id}/thumbnail" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'" loading="lazy">
         </div>
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
@@ -3620,6 +3704,7 @@ async function loadReview() {
             ${decChip}
             <span style="color:#888;font-size:11px">${(c.start_s||0).toFixed(0)}s – ${(c.end_s||0).toFixed(0)}s</span>
           </div>
+          ${c.source_title ? `<div style="font-size:12px;color:#666;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(c.source_title)}">${_esc(c.source_title)}</div>` : ''}
           <div style="font-size:12px;color:#888;display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px">
             <span>Hook <strong style="color:#ccc">${Math.round(c.hook_score||0)}</strong></span>
             <span>Viral <strong style="color:#ccc">${Math.round(c.viral_score||0)}</strong></span>
@@ -3648,15 +3733,21 @@ async function resetClipReview(clipId, cardEl) {
 }
 
 async function reviewAction(id, action) {
-  try {
-    await api(`/review/${id}/${action}`, {method:'POST'});
-    toast('Clip ' + action + 'd', action==='approve'?'success':'error');
-    if (_reviewSelectMode) _reviewSelected.delete(id);
-    loadReview();
-    loadOverview();
-  } catch(e) {
-    toast('Action failed: ' + e.message, 'error');
-  }
+  const card = document.getElementById(`rcard-${id}`);
+  if (card) card.style.opacity = '0.4';
+  _showUndoSnack(action === 'approve' ? 'Clip approved' : 'Clip rejected',
+    async () => {
+      try {
+        await api(`/review/${id}/${action}`, {method:'POST'});
+        if (_reviewSelectMode) _reviewSelected.delete(id);
+        loadReview(); loadOverview();
+      } catch(e) {
+        if (card) card.style.opacity = '';
+        toast('Action failed: ' + e.message, 'error');
+      }
+    },
+    () => { if (card) card.style.opacity = ''; }
+  );
 }
 
 // â”€â”€ Review select mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -4084,7 +4175,8 @@ function createJobCard(jobId, source, status) {
     <div class="jid">${jobId.substring(0,8)}</div>
     <div style="font-size:13px;color:#888;margin-bottom:8px;word-break:break-all">${_esc(source)}</div>
     <div class="jstatus">${chip(status)}</div>
-    <div class="progress-bar"><div class="progress-fill ${status}" style="width:10%"></div></div>
+    <div class="progress-bar"><div class="progress-fill ${status}" style="width:5%"></div></div>
+    <div class="jstage" style="font-size:11px;color:#666;margin-top:4px;display:none"></div>
     <div class="job-stats" style="font-size:12px;color:#888;margin-top:8px"></div>`;
   return div;
 }
@@ -4917,7 +5009,7 @@ function updatePemUploadBtn() {
   const btn = document.getElementById('pem-yt-upload-btn');
   if (btn && !btn.disabled) {
     const labels = {public: 'Upload as Public', unlisted: 'Upload as Unlisted', private: 'Upload as Private'};
-    btn.textContent = labels[v] || 'Subir';
+    btn.textContent = labels[v] || 'Upload';
   }
 }
 
@@ -5264,7 +5356,7 @@ async function deletePackage(id, name) {
   if (!confirm(`Delete package "${name}"? Clips will not be deleted.`)) return;
   try {
     await api('/packages/'+id, {method:'DELETE'});
-    toast('Paquete eliminado','success');
+    toast('Package deleted','success');
     loadPackageList();
   } catch(e) { toast(e.message,'error'); }
 }

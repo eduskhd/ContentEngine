@@ -409,20 +409,29 @@ async def create_job_from_url(
         "error": None,
     }
 
+    # Create DB row now so the dedup check (j.source_path=url) finds it
+    # immediately — prevents race window where a second submission slips through
+    # before the worker has run create_job.  Worker will call create_job with
+    # preset_id=job_id, find this row, and skip re-insert.
+    snap = _get_pipeline_snapshot()
+    dbmod.create_job(
+        url, mode, clips, platforms.split(","),
+        resolved_creator, content_type or "auto",
+        preset_id=job_id, pipeline_snapshot=snap,
+    )
+    if resolved_creator_id:
+        dbmod.update_job(job_id)  # touch updated_at; creator_id set below
+        with dbmod.db() as conn:
+            conn.execute("UPDATE jobs SET creator_id=? WHERE id=?",
+                         [resolved_creator_id, job_id])
+
     if pool is not None:
         pool.submit(job_id, url, clips, platforms.split(","), mode, resolved_creator)
     else:
         raise HTTPException(503, "Worker pool not available")
 
-    # Persist creator_id, video_name, and pipeline snapshot on DB job record
-    snap = _get_pipeline_snapshot()
-    snap_str = json.dumps(snap)
-    with dbmod.db() as conn:
-        conn.execute("UPDATE jobs SET pipeline_snapshot=? WHERE id=?", [snap_str, job_id])
-        if resolved_creator_id:
-            conn.execute("UPDATE jobs SET creator_id=? WHERE id=?",
-                         [resolved_creator_id, job_id])
-        if video_name:
+    if video_name:
+        with dbmod.db() as conn:
             conn.execute(
                 "UPDATE videos SET source_title=? WHERE job_id=?",
                 [video_name, job_id],
@@ -448,6 +457,7 @@ async def job_events(job_id: str):
     """Server-Sent Events stream — pushes status updates until job completes."""
     async def event_generator() -> AsyncGenerator[str, None]:
         last_status = None
+        last_stage = None
         while True:
             job = _jobs.get(job_id)
             if job is None:
@@ -457,17 +467,29 @@ async def job_events(job_id: str):
                 conn.close()
                 if row:
                     db_status = (row[0] or "").lower()
-                    payload = {"job_id": job_id, "status": db_status, "result": None, "error": row[1]}
+                    payload = {"job_id": job_id, "status": db_status, "stage": row[0], "result": None, "error": row[1]}
                     yield f"data: {json.dumps(payload)}\n\n"
                 else:
                     yield f"data: {json.dumps({'error': 'job not found'})}\n\n"
                 break
             status = job["status"]
-            if status != last_status:
+            # Read pipeline stage from DB — updated at each step by the pipeline
+            db_stage = None
+            try:
+                conn = dbmod.get_db()
+                srow = conn.execute("SELECT status FROM jobs WHERE id=?", [job_id]).fetchone()
+                conn.close()
+                if srow:
+                    db_stage = srow[0]
+            except Exception:
+                pass
+            if status != last_status or db_stage != last_stage:
                 last_status = status
+                last_stage = db_stage
                 payload = {
                     "job_id": job_id,
                     "status": status,
+                    "stage": db_stage,
                     "result": job.get("result"),
                     "error": job.get("error"),
                 }
@@ -585,6 +607,37 @@ async def preview_clip(clip_id: str):
     return FileResponse(path, media_type="video/mp4")
 
 
+@app.get("/clips/{clip_id}/thumbnail")
+async def get_clip_thumbnail(clip_id: str):
+    """Extract and cache a poster frame from a clip for use in review cards."""
+    conn = dbmod.get_db()
+    row = conn.execute(
+        "SELECT captioned_path, output_path FROM clips WHERE id=?", [clip_id]
+    ).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "Clip not found")
+
+    thumb_dir = Path(CONFIG.output_dir) / "thumbnails"
+    thumb_path = thumb_dir / f"clip_{clip_id}.jpg"
+    if thumb_path.exists():
+        return FileResponse(str(thumb_path), media_type="image/jpeg")
+
+    clip_file = _resolve_clip_path(row[0], row[1])
+    if not clip_file:
+        raise HTTPException(404, "Clip file not found on disk")
+
+    thumb_dir.mkdir(parents=True, exist_ok=True)
+    cmd = [CONFIG.ffmpeg_path, "-y", "-ss", "1", "-i", clip_file,
+           "-frames:v", "1", "-q:v", "5", "-vf", "scale=160:-2", str(thumb_path)]
+    try:
+        subprocess.run(cmd, capture_output=True, timeout=15, check=True)
+    except Exception:
+        raise HTTPException(500, "Thumbnail generation failed")
+
+    return FileResponse(str(thumb_path), media_type="image/jpeg")
+
+
 # ── DOWNLOAD ALL ─────────────────────────────────────────────────────────────
 
 @app.get("/jobs/{job_id}/download-all")
@@ -644,9 +697,11 @@ async def pending_review(
     rows = conn.execute(f"""
         SELECT cl.id, cl.captioned_path, cl.output_path, cl.prepublish_score,
                cl.prepublish_decision, cl.created_at, cl.job_id,
-               ca.hook_score, ca.virality_score, ca.start_s, ca.end_s
+               ca.hook_score, ca.virality_score, ca.start_s, ca.end_s,
+               v.source_title, v.duration_s as video_duration
         FROM clips cl
         JOIN candidates ca ON cl.candidate_id = ca.id
+        JOIN videos v ON v.id = ca.video_id
         {where}
         ORDER BY cl.created_at DESC, ca.virality_score DESC
         LIMIT ? OFFSET ?
@@ -664,6 +719,8 @@ async def pending_review(
             "viral_score": r[8],
             "start_s": r[9],
             "end_s": r[10],
+            "source_title": r[11],
+            "video_duration": r[12],
         }
         for r in rows
     ]

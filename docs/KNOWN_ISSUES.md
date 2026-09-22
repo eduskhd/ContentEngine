@@ -45,6 +45,12 @@ Both `GET /jobs/{id}/download-all` and `GET /publications/download-zip` now use 
 
 ---
 
+## ~~KI-004 — Ghost clips from fake test jobs pollute Review tab~~ FIXED 2026-09-21
+
+36 fake FAILED jobs (`/fake/path.mp4`) and their 36 associated ghost clips were archived to `_archived_*` tables. `GET /review/pending` now uses `JOIN videos` (not LEFT JOIN), so orphaned clips are excluded. Restore with `python cleanup_ghost_data.py --restore`.
+
+---
+
 ## KI-003 — Caption word timestamps missing for pre-caption clips
 
 **Symptom:** Clips that were generated before the caption system was added have `caption_data=NULL`. Opening them in the caption editor shows 0 words and the canvas preview is blank. Re-render produces a copy without captions.
