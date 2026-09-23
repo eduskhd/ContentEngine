@@ -1394,6 +1394,64 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
   </div>
 </div>
 
+<!-- YouTube upload modal (from Library) -->
+<div class="lib-modal-overlay" id="lib-yt-modal" onclick="if(event.target===this)closeLibYtModal()">
+  <div class="lib-modal" style="max-width:440px;width:92%">
+    <button class="lib-modal-close" onclick="closeLibYtModal()">&#x2715;</button>
+    <h2 style="display:flex;align-items:center;gap:8px">
+      <span style="color:#ff0000;font-size:18px">&#x25B6;</span> Upload to YouTube
+    </h2>
+
+    <div id="lyt-noconn-warn" style="display:none;background:#1a0a0a;border:1px solid #4a0000;border-radius:6px;padding:10px 12px;margin-bottom:14px;font-size:13px;color:#f87171">
+      YouTube not connected. Go to the <strong>OAuth</strong> tab to connect your channel first.
+    </div>
+
+    <div id="lyt-form">
+      <div style="margin-bottom:12px">
+        <label style="display:block;margin-bottom:6px;font-size:12px;color:#888">Title</label>
+        <input type="text" id="lyt-title" class="lib-modal-input" placeholder="Short title for YouTube">
+      </div>
+
+      <div style="margin-bottom:12px">
+        <label style="display:block;margin-bottom:8px;font-size:12px;color:#888">Visibility</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:#ccc;cursor:pointer">
+            <input type="radio" name="lyt-privacy" value="private" checked> Private
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:#ccc;cursor:pointer">
+            <input type="radio" name="lyt-privacy" value="unlisted"> Unlisted
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:#ccc;cursor:pointer">
+            <input type="radio" name="lyt-privacy" value="public"> Public
+          </label>
+        </div>
+        <div id="lyt-public-warn" style="display:none;font-size:11px;color:#fbbf24;margin-top:4px">
+          &#x26A0; Public uploads are immediately visible on your channel.
+        </div>
+      </div>
+
+      <div style="margin-bottom:4px">
+        <label style="display:block;margin-bottom:8px;font-size:12px;color:#888">Audience (required by YouTube)</label>
+        <div style="display:flex;gap:12px">
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:#ccc;cursor:pointer">
+            <input type="radio" name="lyt-kids" value="false" checked> Not for kids
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:#ccc;cursor:pointer">
+            <input type="radio" name="lyt-kids" value="true"> Made for kids
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="lib-modal-actions" style="margin-top:18px">
+      <button class="btn btn-outline btn-sm" onclick="closeLibYtModal()">Cancel</button>
+      <button class="btn btn-sm" id="lyt-submit" onclick="libYtSubmit()"
+              style="background:#c00;color:#fff;border:none;padding:6px 16px;border-radius:6px;font-size:13px;cursor:pointer"
+              disabled>Upload to YouTube</button>
+    </div>
+  </div>
+</div>
+
 <!-- Video player modal with caption editor -->
 <div id="video-modal" onclick="if(event.target===this)closePlayer()">
   <div class="modal-inner">
@@ -2645,6 +2703,105 @@ async function lumSubmit() {
   }
 }
 
+// ── YouTube upload from Library ───────────────────────────────────────────────────────────────────
+let _lytClipId = null;
+
+async function openLibYtModal(clipId) {
+  _lytClipId = clipId;
+
+  // Ensure YT status is fresh
+  if (!_ytStatus) await checkYoutubeStatus();
+  const connected = !!(_ytStatus && _ytStatus.connected);
+
+  document.getElementById('lyt-noconn-warn').style.display = connected ? 'none' : '';
+  document.getElementById('lyt-form').style.display = connected ? '' : 'none';
+  document.getElementById('lyt-submit').disabled = !connected;
+
+  // Reset fields
+  document.querySelector('input[name=”lyt-privacy”][value=”private”]').checked = true;
+  document.querySelector('input[name=”lyt-kids”][value=”false”]').checked = true;
+  document.getElementById('lyt-public-warn').style.display = 'none';
+
+  // Pre-fill title from metadata
+  document.getElementById('lyt-title').value = '';
+  try {
+    const meta = await api(`/clips/${clipId}/generate-metadata`);
+    document.getElementById('lyt-title').value = meta.title || 'Short';
+  } catch(_) {
+    document.getElementById('lyt-title').value = 'Short';
+  }
+
+  document.getElementById('lib-yt-modal').classList.add('open');
+  if (connected) setTimeout(() => document.getElementById('lyt-title').focus(), 60);
+}
+
+function closeLibYtModal() {
+  document.getElementById('lib-yt-modal').classList.remove('open');
+}
+
+// Show/hide public warning when privacy changes
+document.addEventListener('change', e => {
+  if (e.target.name === 'lyt-privacy') {
+    document.getElementById('lyt-public-warn').style.display =
+      e.target.value !== 'private' ? '' : 'none';
+  }
+});
+
+async function libYtSubmit() {
+  const btn = document.getElementById('lyt-submit');
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = 'Preparing…';
+
+  const title       = (document.getElementById('lyt-title').value || '').trim() || 'Short';
+  const privacy     = document.querySelector('input[name=”lyt-privacy”]:checked')?.value || 'private';
+  const isForKids   = document.querySelector('input[name=”lyt-kids”]:checked')?.value === 'true';
+  const channel     = (_ytStatus && _ytStatus.channel_title) || 'your channel';
+  const visLabel    = {private:'Private', unlisted:'Unlisted', public:'Public'}[privacy] || privacy;
+
+  if (!confirm(
+    `Upload to YouTube as ${visLabel.toUpperCase()}?\n\nChannel: ${channel}\nAudience: ${isForKids ? 'Made for kids' : 'Not for kids'}\n\nThis cannot be undone from here. Continue?`
+  )) {
+    btn.disabled = false;
+    btn.textContent = 'Upload to YouTube';
+    return;
+  }
+
+  try {
+    // Step 1: create youtube_shorts publication (idempotent — reuses if already exists)
+    const prep = await api(`/clips/${_lytClipId}/prepare`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({platforms: ['youtube_shorts']}),
+    });
+    const pubId = prep.created?.[0]?.pub_id || prep.skipped?.[0]?.pub_id;
+    if (!pubId) throw new Error('Could not create publication');
+
+    btn.textContent = 'Uploading…';
+
+    // Step 2: update title on publication then start upload
+    await api(`/publications/${pubId}/youtube-upload`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title, is_for_kids: isForKids, privacy_status: privacy}),
+    });
+
+    toast('Upload queued — check YouTube Studio in a few minutes', 'success');
+    closeLibYtModal();
+
+    // Mark button on clip card as queued
+    const card = document.getElementById(`clipcard-${_lytClipId}`);
+    if (card) {
+      const ytBtn = card.querySelector('.lyt-yt-btn');
+      if (ytBtn) { ytBtn.textContent = '⏳ Queued'; ytBtn.disabled = true; ytBtn.style.opacity = '0.6'; }
+    }
+  } catch(e) {
+    toast('Upload failed: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Upload to YouTube';
+  }
+}
+
 // â”€â”€ Creator grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function showCreatorsGrid() {
   setBreadcrumb('Library');
@@ -2798,7 +2955,8 @@ async function showCreatorClips(creatorId) {
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-outline btn-sm" onclick="openPlayer('${c.id}',false)">Play</button>
           <a href="${API}/clips/${c.id}/download" download><button class="btn btn-outline btn-sm">Download</button></a>
-          <button class="btn btn-outline btn-sm" onclick="prepareClipForPublishing('${c.id}')">Add to Publishing</button>
+          <button class="btn btn-sm lyt-yt-btn" style="background:#c00;color:#fff;border:none;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:12px" onclick="openLibYtModal('${c.id}')">&#x25B6; YouTube</button>
+          <button class="btn btn-outline btn-sm" onclick="prepareClipForPublishing('${c.id}')">Publishing</button>
           ${(c.prepublish_decision==='PUBLISH'||c.prepublish_decision==='REJECT')
             ? `<button class="btn btn-outline btn-sm" style="color:#fbbf24;border-color:#4a3800" onclick="resetClipReview('${c.id}',document.getElementById('clipcard-${c.id}'))">Reset to Pending</button>`
             : ''}
@@ -2989,7 +3147,8 @@ async function showVideoClips(jobId, videoTitle) {
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-outline btn-sm" onclick="openPlayer('${c.id}',true)">Play</button>
           <a href="${API}/clips/${c.id}/download" download><button class="btn btn-outline btn-sm">Download</button></a>
-          <button class="btn btn-outline btn-sm" onclick="prepareClipForPublishing('${c.id}')">Add to Publishing</button>
+          <button class="btn btn-sm lyt-yt-btn" style="background:#c00;color:#fff;border:none;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:12px" onclick="openLibYtModal('${c.id}')">&#x25B6; YouTube</button>
+          <button class="btn btn-outline btn-sm" onclick="prepareClipForPublishing('${c.id}')">Publishing</button>
           ${(c.prepublish_decision==='PUBLISH'||c.prepublish_decision==='REJECT')
             ? `<button class="btn btn-outline btn-sm" style="color:#fbbf24;border-color:#4a3800" onclick="resetClipReview('${c.id}',document.getElementById('clipcard-${c.id}'))">Reset to Pending</button>`
             : ''}
