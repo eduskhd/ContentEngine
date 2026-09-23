@@ -14,6 +14,7 @@ header h1{font-size:16px;font-weight:600;color:#fff}
 .badge{font-size:11px;padding:2px 9px;border-radius:99px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
 .badge-review{background:#78350f;color:#fbbf24}
 .badge-auto{background:#14532d;color:#4ade80}
+.badge-idle{background:#1a1a1a;color:#555}
 nav{background:#111;border-bottom:1px solid #222;display:flex;overflow-x:auto}
 nav > button{background:none;border:none;color:#888;padding:11px 18px;cursor:pointer;font-size:13px;white-space:nowrap;border-bottom:2px solid transparent;transition:color .15s}
 nav > button:hover{color:#ccc}
@@ -543,7 +544,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 
 <header>
   <h1>Content Engine</h1>
-  <span class="badge badge-review" id="mode-badge">REVIEW</span>
+  <span class="badge badge-idle" id="mode-badge">REVIEW</span>
   <span id="llm-badge" style="font-size:11px;padding:2px 8px;border-radius:99px;font-weight:700;letter-spacing:.5px;background:#1a1a1a;color:#888;display:none">LLM</span>
   <span style="margin-left:auto;font-size:12px;color:#888" id="server-status">connecting…</span>
 </header>
@@ -2147,6 +2148,13 @@ const chip = c => `<span class="chip chip-${c}">${c}</span>`;
 const monoId = id => `<span class="mono">${(id||'').substring(0,8)}</span>`;
 const fmt = iso => (iso||'').replace('T',' ').substring(0,16);
 
+function _syncModeBadge(mode, pending) {
+  const badge = document.getElementById('mode-badge');
+  if (!badge) return;
+  badge.textContent = mode || badge.textContent;
+  badge.className = 'badge ' + (mode === 'AUTO' ? 'badge-auto' : (pending > 0 ? 'badge-review' : 'badge-idle'));
+}
+
 function toast(msg, type='info') {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -2272,9 +2280,8 @@ async function loadOverview() {
     ]);
     document.getElementById('server-status').textContent = '● online';
     document.getElementById('server-status').style.color = '#4ade80';
-    const badge = document.getElementById('mode-badge');
-    badge.textContent = health.mode;
-    badge.className = 'badge ' + (health.mode==='AUTO'?'badge-auto':'badge-review');
+    const _pending = parseInt(document.getElementById('review-count').textContent) || 0;
+    _syncModeBadge(health.mode, _pending);
     const llmBadge = document.getElementById('llm-badge');
     llmBadge.style.display = '';
     if (health.llm_enabled) {
@@ -2329,6 +2336,7 @@ let _deleteTargets = [];        // video_ids pending delete confirm
 let _assignTargets = [];        // video_ids pending creator assign
 let _addCollTargets = [];       // video_ids pending add-to-collection
 let _editingCreatorId = null;
+let _creatorModalFromNewJob = false;
 let _editingCollId = null;
 let _fcPanelOpen = false;
 let _libFilters = { status: '', platform: '', sort: 'newest', virality_min: null, virality_max: null, date_range: '', date_from: '', date_to: '' };
@@ -3387,6 +3395,7 @@ function showCreatorModal(editId = null) {
 function closeCreatorModal() {
   document.getElementById('creator-modal').classList.remove('open');
   _editingCreatorId = null;
+  _creatorModalFromNewJob = false;
 }
 
 async function saveCreator() {
@@ -3404,10 +3413,11 @@ async function saveCreator() {
       });
       toast('Creator updated', 'success');
     } else {
-      await api('/creators', {
+      const r = await api('/creators', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify(body),
       });
+      if (_creatorModalFromNewJob) selectCreatorFromDrop(r.id, name);
       toast('Creator created', 'success');
     }
     closeCreatorModal();
@@ -3607,7 +3617,7 @@ function selectCreatorFromDrop(id, name) {
 
 async function createCreatorFromDrop(name) {
   const n = (name||'').trim();
-  if (!n) { closeCreatorSel(); showCreatorModal(); return; }
+  if (!n) { closeCreatorSel(); _creatorModalFromNewJob = true; showCreatorModal(); return; }
   try {
     const r = await api('/creators', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -3649,6 +3659,7 @@ async function loadReview() {
   const pending = filter === 'REVIEW' ? clips.length
     : (await api('/review/pending?status=REVIEW&limit=1000').catch(()=>[])).length;
   document.getElementById('review-count').textContent = pending || '';
+  _syncModeBadge(document.getElementById('mode-badge').textContent, pending);
 
   const emptyMsgs = {
     REVIEW: 'No clips pending review. Submit a video to get started!',
