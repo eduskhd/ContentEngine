@@ -645,6 +645,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           <button class="btn btn-danger btn-sm" onclick="bulkDeleteFlow()">Delete</button>
           <button class="btn btn-outline btn-sm" onclick="clearSelection()">Cancel</button>
         </div>
+        <button class="btn btn-primary btn-sm" style="margin-right:6px" onclick="openLibUploadModal('')">+ Upload</button>
         <button class="lib-select-btn" id="lib-sel-btn" onclick="toggleSelectMode()">Select</button>
         <button class="lib-view-btn active" id="lib-vbtn-grid" onclick="setLibView('grid')" title="Grid">⊞</button>
         <button class="lib-view-btn" id="lib-vbtn-list" onclick="setLibView('list')" title="List">≡</button>
@@ -1330,6 +1331,65 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     <div class="lib-modal-actions">
       <button class="btn btn-outline" onclick="closeDcModal()">Cancel</button>
       <button class="btn btn-outline" id="dc-submit" onclick="executeDeleteCreator()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Library upload modal -->
+<div class="lib-modal-overlay" id="lib-upload-modal" onclick="if(event.target===this)closeLibUploadModal()">
+  <div class="lib-modal" style="max-width:500px;width:92%">
+    <button class="lib-modal-close" onclick="closeLibUploadModal()">✕</button>
+    <h2>Upload Video</h2>
+
+    <div class="nj-source-tabs" style="margin-bottom:16px">
+      <button id="lum-src-url" class="nj-src-btn active" onclick="lumSetSource('url')">YouTube / URL</button>
+      <button id="lum-src-file" class="nj-src-btn" onclick="lumSetSource('file')">Upload File</button>
+    </div>
+
+    <div id="lum-url-pane">
+      <input type="text" id="lum-url" class="lib-modal-input"
+             placeholder="https://youtube.com/watch?v=… · youtu.be/… · tiktok.com/…"
+             oninput="lumUpdateSubmit()" onkeydown="if(event.key==='Enter')lumSubmit()">
+      <div id="lum-url-status" style="font-size:12px;color:#888;min-height:16px;margin-top:4px"></div>
+    </div>
+
+    <div id="lum-file-pane" style="display:none">
+      <div id="lum-drop-zone" class="nj-drop-zone"
+           onclick="document.getElementById('lum-file-input').click()"
+           ondrop="lumDrop(event)"
+           ondragover="event.preventDefault();this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')">
+        <div class="nj-drop-icon">&#x2191;</div>
+        <div class="nj-drop-text">Drop a video or <span class="link">browse</span></div>
+        <div class="nj-drop-sub">MP4, MOV, MKV &#x2014; up to 10 GB</div>
+        <input type="file" id="lum-file-input" accept="video/*" style="display:none"
+               onchange="lumFileSelected(this)">
+      </div>
+      <div id="lum-file-info" style="display:none;align-items:center;gap:10px;margin-top:8px;padding:8px 10px;background:#111;border-radius:6px;border:1px solid #222">
+        <span style="font-size:18px;flex-shrink:0">&#x25BA;</span>
+        <div style="flex:1;min-width:0">
+          <div id="lum-file-name" style="font-size:13px;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+          <div id="lum-file-size" style="font-size:11px;color:#555"></div>
+        </div>
+        <button class="nj-file-clear" onclick="lumClearFile()">&#x2715;</button>
+      </div>
+    </div>
+
+    <div style="margin-top:14px">
+      <label style="display:block;margin-bottom:6px;font-size:12px;color:#888">Creator <span style="color:#444">optional</span></label>
+      <select id="lum-creator-id" style="width:100%;background:#111;border:1px solid #222;color:#ccc;padding:8px 10px;border-radius:6px;font-size:13px;outline:none;cursor:pointer">
+        <option value="">Unassigned</option>
+      </select>
+    </div>
+
+    <div style="margin-top:12px">
+      <label style="display:block;margin-bottom:6px;font-size:12px;color:#888">Video Name <span style="color:#444">optional</span></label>
+      <input type="text" id="lum-video-name" class="lib-modal-input" placeholder="Defaults to source title">
+    </div>
+
+    <div class="lib-modal-actions" style="margin-top:18px">
+      <button class="btn btn-outline btn-sm" onclick="closeLibUploadModal()">Cancel</button>
+      <button class="btn btn-primary" id="lum-submit" onclick="lumSubmit()" disabled>Create Job</button>
     </div>
   </div>
 </div>
@@ -2449,6 +2509,142 @@ function libSearchChanged(q) {
   else showAllVideos();
 }
 
+// ── Library upload modal ──────────────────────────────────────────────────────────────────────────
+let _lumSource = 'url';
+let _lumFile = null;
+
+function openLibUploadModal(creatorId) {
+  const sel = document.getElementById('lum-creator-id');
+  sel.innerHTML = '<option value=””>Unassigned</option>' +
+    _libCreators.map(c => `<option value=”${c.id}”>${_esc(c.name)}</option>`).join('');
+  sel.value = (creatorId && creatorId !== '__unassigned__') ? creatorId : '';
+
+  lumSetSource('url');
+  document.getElementById('lum-url').value = '';
+  document.getElementById('lum-url-status').textContent = '';
+  document.getElementById('lum-video-name').value = '';
+  document.getElementById('lum-submit').disabled = true;
+  lumClearFile();
+
+  document.getElementById('lib-upload-modal').classList.add('open');
+  setTimeout(() => document.getElementById('lum-url').focus(), 60);
+}
+
+function closeLibUploadModal() {
+  document.getElementById('lib-upload-modal').classList.remove('open');
+  lumClearFile();
+}
+
+function lumSetSource(mode) {
+  _lumSource = mode;
+  document.getElementById('lum-url-pane').style.display = mode === 'url' ? '' : 'none';
+  document.getElementById('lum-file-pane').style.display = mode === 'file' ? '' : 'none';
+  document.getElementById('lum-src-url').classList.toggle('active', mode === 'url');
+  document.getElementById('lum-src-file').classList.toggle('active', mode === 'file');
+  lumUpdateSubmit();
+}
+
+function lumUpdateSubmit() {
+  const btn = document.getElementById('lum-submit');
+  if (!btn) return;
+  btn.disabled = _lumSource === 'url'
+    ? !(document.getElementById('lum-url').value || '').trim()
+    : !_lumFile;
+}
+
+function lumFileSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  _lumFile = file;
+  document.getElementById('lum-drop-zone').style.display = 'none';
+  const info = document.getElementById('lum-file-info');
+  info.style.display = 'flex';
+  document.getElementById('lum-file-name').textContent = file.name;
+  document.getElementById('lum-file-size').textContent = (file.size / 1e6).toFixed(1) + ' MB';
+  lumUpdateSubmit();
+}
+
+function lumDrop(e) {
+  e.preventDefault();
+  document.getElementById('lum-drop-zone').classList.remove('drag-over');
+  const file = e.dataTransfer?.files[0];
+  if (!file || !file.type.startsWith('video/')) { toast('Please drop a video file', 'error'); return; }
+  const input = document.getElementById('lum-file-input');
+  try { const dt = new DataTransfer(); dt.items.add(file); input.files = dt.files; } catch(_) {}
+  _lumFile = file;
+  lumFileSelected({ files: [file] });
+}
+
+function lumClearFile() {
+  _lumFile = null;
+  const fi = document.getElementById('lum-file-input');
+  if (fi) fi.value = '';
+  const dz = document.getElementById('lum-drop-zone');
+  if (dz) dz.style.display = '';
+  const info = document.getElementById('lum-file-info');
+  if (info) info.style.display = 'none';
+  lumUpdateSubmit();
+}
+
+async function lumSubmit() {
+  const btn = document.getElementById('lum-submit');
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
+
+  const sel = document.getElementById('lum-creator-id');
+  const creatorId = sel.value || '';
+  const creatorName = sel.selectedOptions[0]?.text || '';
+  const videoName = (document.getElementById('lum-video-name').value || '').trim();
+  const platforms = 'tiktok,instagram,youtube';
+
+  try {
+    let resp;
+    if (_lumSource === 'url') {
+      let raw = (document.getElementById('lum-url').value || '').trim();
+      if (!raw) throw new Error('Enter a URL');
+      const url = /^https?:\/\//i.test(raw) ? raw : 'https://' + raw;
+      resp = await fetch(`${API}/jobs/from-url`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          url, clips: 5, platforms, mode: 'REVIEW',
+          creator: (creatorId && creatorName !== 'Unassigned') ? creatorName : undefined,
+          creator_id: creatorId || undefined,
+          video_name: videoName || undefined,
+        }),
+      });
+    } else {
+      if (!_lumFile) throw new Error('Select a video file');
+      const fd = new FormData();
+      fd.append('video', _lumFile);
+      fd.append('clips', '5');
+      fd.append('platforms', platforms);
+      fd.append('mode', 'REVIEW');
+      if (creatorId) fd.append('creator_id', creatorId);
+      if (creatorId && creatorName !== 'Unassigned') fd.append('creator', creatorName);
+      if (videoName) fd.append('video_name', videoName);
+      resp = await fetch(`${API}/jobs`, {method: 'POST', body: fd});
+    }
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({detail: 'Request failed'}));
+      throw new Error(err.detail || err.message || 'Request failed');
+    }
+
+    toast('Job created — processing in background', 'success');
+    closeLibUploadModal();
+    refreshSidebarCounts();
+    _sidebarRefreshedAt = Date.now();
+    if (_libCurrentView === 'processing') reloadCurrentView();
+
+  } catch(e) {
+    toast(e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Create Job';
+  }
+}
+
 // â”€â”€ Creator grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function showCreatorsGrid() {
   setBreadcrumb('Library');
@@ -2467,7 +2663,7 @@ async function showCreatorsGrid() {
         <div class="lib-empty-icon">📚</div>
         <p>No creators yet.</p>
         <p style="color:#333">Add a video and we'll organize it by creator.</p>
-        <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="showTab('upload',document.getElementById('nav-new-job'))">+ Add Video</button>
+        <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="openLibUploadModal('')">+ Add Video</button>
       </div>`; return;
     }
 
@@ -2546,7 +2742,7 @@ async function showCreatorDetail(creatorId) {
     <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">
       ${!isUnassigned ? `<button class="btn btn-outline btn-sm" onclick="showCreatorModal('${creatorId}')">Edit</button>` : ''}
       ${!isUnassigned ? `<button class="btn btn-outline btn-sm" style="color:#f87171;border-color:#3a1010" onclick="startDeleteCreator('${creatorId}')">Delete</button>` : ''}
-      <button class="btn btn-primary btn-sm" onclick="showTab('upload',document.getElementById('nav-new-job'));setTimeout(()=>preselectCreator('${isUnassigned ? '' : creatorId}','${_esc(name)}'),100)">+ Add Video</button>
+      <button class="btn btn-primary btn-sm" onclick="openLibUploadModal('${isUnassigned ? '' : creatorId}')">+ Add Video</button>
     </div>
   </div>`;
 
@@ -2678,7 +2874,7 @@ function renderVideoCards(videos, container, creatorId) {
   if (!videos.length) {
     const emptyMsg = creatorId === '__unassigned__'
       ? '<div class="lib-empty"><div class="lib-empty-icon">📁</div><p>No unassigned videos — all videos have creators.</p></div>'
-      : '<div class="lib-empty"><div class="lib-empty-icon">🎬</div><p>No videos yet.</p><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="showTab(\'upload\',document.getElementById(\'nav-new-job\'))">+ Add Video</button></div>';
+      : '<div class="lib-empty"><div class="lib-empty-icon">🎬</div><p>No videos yet.</p><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="openLibUploadModal(\''+(_libCurrentCreatorId||'')+'\')" >+ Add Video</button></div>';
     container.innerHTML = emptyMsg; return;
   }
 
