@@ -132,12 +132,16 @@ def _extract_audio(video_path: str, video_id: str = None) -> str:
 
 def _run_whisper(audio_path: str) -> list[dict]:
     try:
-        return _run_hf_whisper(audio_path)
+        result = _run_hf_whisper(audio_path)
+        if result:
+            return result
+        # HF whisper produced no words (timestamp token parse failed) — try next backend
     except Exception:
-        try:
-            return _run_faster_whisper(audio_path)
-        except Exception:
-            return _run_openai_whisper(audio_path)
+        pass
+    try:
+        return _run_faster_whisper(audio_path)
+    except Exception:
+        return _run_openai_whisper(audio_path)
 
 
 def _run_hf_whisper(audio_path: str) -> list[dict]:
