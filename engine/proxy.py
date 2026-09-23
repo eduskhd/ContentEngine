@@ -44,17 +44,26 @@ def generate_proxy(video_id: str, video_path: str) -> str | None:
     out_dir.mkdir(parents=True, exist_ok=True)
     proxy_path = str(out_dir / f"{video_id}_proxy.mp4")
 
-    cmd = [
-        CONFIG.ffmpeg_path, "-y",
-        "-i", video_path,
-        "-vf", "scale=-2:360",    # 360p, width divisible by 2
-        "-r", "2",                 # 2 fps — enough for motion + face
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "32",
-        "-an",                     # no audio track
-        "-movflags", "+faststart",
-        proxy_path,
-    ]
-    result = subprocess.run(cmd, capture_output=True, timeout=300)
+    # Try hardware-accelerated decode (NVDEC) + software encode for fast proxy generation.
+    # Hardware decode significantly reduces CPU load when reading long high-res videos.
+    def _build_cmd(hwaccel: bool) -> list[str]:
+        base = [CONFIG.ffmpeg_path, "-y"]
+        if hwaccel:
+            base += ["-hwaccel", "cuda", "-hwaccel_output_format", "nv12"]
+        base += ["-i", video_path]
+        base += [
+            "-vf", "scale=-2:360",
+            "-r", "2",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "32",
+            "-an",
+            "-movflags", "+faststart",
+            proxy_path,
+        ]
+        return base
+
+    result = subprocess.run(_build_cmd(hwaccel=True), capture_output=True, timeout=300)
+    if result.returncode != 0:
+        result = subprocess.run(_build_cmd(hwaccel=False), capture_output=True, timeout=300)
 
     if result.returncode == 0:
         db.save_proxy_path(video_id, proxy_path)

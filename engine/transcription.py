@@ -13,6 +13,7 @@ Backend priority:
 import re
 import subprocess
 import os
+import tempfile
 from pathlib import Path
 
 from engine.config import CONFIG
@@ -36,7 +37,22 @@ def _get_model():
     global _WHISPER_MODEL
     if _WHISPER_MODEL is None:
         from faster_whisper import WhisperModel
-        _WHISPER_MODEL = WhisperModel(CONFIG.whisper_model, device="cpu", compute_type="int8")
+        try:
+            # Try CUDA — CTranslate2 has GPU support but needs cublas64_12.dll at inference time.
+            # Validate with a silent probe before committing.
+            import numpy as np, soundfile as sf
+            m = WhisperModel(CONFIG.whisper_model, device="cuda", compute_type="float16")
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                sf.write(tmp.name, np.zeros(16000, dtype=np.float32), 16000)
+                list(m.transcribe(tmp.name)[0])  # will raise if cublas missing
+            _WHISPER_MODEL = m
+        except Exception:
+            # Fall back to CPU with max threads for best performance without GPU
+            _WHISPER_MODEL = WhisperModel(
+                CONFIG.whisper_model, device="cpu", compute_type="int8",
+                cpu_threads=min(os.cpu_count() or 4, 8),
+                num_workers=2,
+            )
     return _WHISPER_MODEL
 
 
@@ -131,17 +147,23 @@ def _extract_audio(video_path: str, video_id: str = None) -> str:
 
 
 def _run_whisper(audio_path: str) -> list[dict]:
+    # faster-whisper (CTranslate2) is the primary backend — much faster than HF torch on CPU.
+    # HF Whisper is kept as last resort only (slow, no GPU, timestamp token issues with Spanish).
+    try:
+        return _run_faster_whisper(audio_path)
+    except Exception:
+        pass
+    try:
+        return _run_openai_whisper(audio_path)
+    except Exception:
+        pass
     try:
         result = _run_hf_whisper(audio_path)
         if result:
             return result
-        # HF whisper produced no words (timestamp token parse failed) — try next backend
     except Exception:
         pass
-    try:
-        return _run_faster_whisper(audio_path)
-    except Exception:
-        return _run_openai_whisper(audio_path)
+    return []
 
 
 def _run_hf_whisper(audio_path: str) -> list[dict]:
@@ -258,6 +280,7 @@ def _run_faster_whisper(audio_path: str) -> list[dict]:
             audio_path,
             word_timestamps=True,
             vad_filter=True,
+            beam_size=1,   # greedy — ~2x faster, negligible accuracy loss for captions
         )
     except TypeError:
         segments_gen, _ = model.transcribe(audio_path, word_timestamps=True)
