@@ -1552,6 +1552,21 @@ const API = 'http://localhost:8000';
 const _watchedJobs = {};   // job_id → EventSource
 let _refreshTimer = null;
 
+// Smooth-poll helpers: smartRender only writes DOM when HTML changed and restores scroll.
+const _renderCache = {};
+function smartRender(id, html) {
+  if (_renderCache[id] === html) return;
+  _renderCache[id] = html;
+  const el = document.getElementById(id);
+  if (!el) return;
+  const st = el.scrollTop;
+  el.innerHTML = html;
+  if (st) requestAnimationFrame(() => { el.scrollTop = st; });
+}
+// _pollIsBackground=true while timer fires so render functions skip “Loading…” spinners.
+let _pollIsBackground = false;
+let _sidebarRefreshedAt = 0;
+
 // â”€â”€ Tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function showTab(name, btn) {
   document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
@@ -1561,7 +1576,10 @@ function showTab(name, btn) {
   clearInterval(_refreshTimer);
   loadTab(name);
   if (['overview','jobs','library','review'].includes(name)) {
-    _refreshTimer = setInterval(() => loadTab(name), 8000);
+    _refreshTimer = setInterval(async () => {
+      _pollIsBackground = true;
+      try { await loadTab(name); } finally { _pollIsBackground = false; }
+    }, 8000);
   }
 }
 function loadTab(t) {
@@ -2304,7 +2322,7 @@ async function loadOverview() {
     const pending = clips.filter(c=>c.prepublish_decision==='REVIEW').length;
     document.getElementById('review-count').textContent = pending || '';
 
-    document.getElementById('recent-clips-body').innerHTML = clips.length
+    smartRender('recent-clips-body', clips.length
       ? clips.slice(0, 20).map(c => `<tr style="cursor:pointer" onclick="openPlayer('${c.id}',false)" title="Play clip">
           <td>${monoId(c.id)}</td>
           <td style="color:#888;font-size:12px">${_esc(c.creator_slug||'—')}</td>
@@ -2314,7 +2332,7 @@ async function loadOverview() {
           <td>${chip(c.prepublish_decision||'PENDING')}</td>
           <td style="color:#444;font-size:12px">${fmt(c.created_at)}</td>
         </tr>`).join('')
-      : '<tr><td colspan="7" class="empty">No clips yet</td></tr>';
+      : '<tr><td colspan="7" class="empty">No clips yet</td></tr>');
   } catch(e) {
     document.getElementById('server-status').textContent = '● offline';
     document.getElementById('server-status').style.color = '#f87171';
@@ -2342,7 +2360,11 @@ let _fcPanelOpen = false;
 let _libFilters = { status: '', platform: '', sort: 'newest', virality_min: null, virality_max: null, date_range: '', date_from: '', date_to: '' };
 
 async function loadLibrary() {
-  await refreshSidebarCounts();
+  // During background polls, refresh sidebar at most every 30s (it makes 5 API calls).
+  if (!_pollIsBackground || Date.now() - _sidebarRefreshedAt > 30000) {
+    await refreshSidebarCounts();
+    _sidebarRefreshedAt = Date.now();
+  }
   await reloadCurrentView();
 }
 
@@ -2366,7 +2388,7 @@ async function refreshSidebarCounts() {
     const filtered = _libSearchQ
       ? _libCreators.filter(c => c.name.toLowerCase().includes(_libSearchQ.toLowerCase()))
       : _libCreators;
-    creatorContainer.innerHTML = filtered.map(c => `
+    smartRender('lib-sidebar-creators', filtered.map(c => `
       <div class="lib-nav-item" id="lnav-cr-${c.id}" onclick="libNav('creator:${c.id}',this)">
         <span class="lib-nav-label" style="display:flex;align-items:center;gap:6px">
           <span style="width:8px;height:8px;border-radius:50%;background:${c.avatar_color||'#3b82f6'};flex-shrink:0"></span>
@@ -2374,7 +2396,7 @@ async function refreshSidebarCounts() {
         </span>
         <span class="lib-nav-count">${c.video_count||0}</span>
       </div>
-    `).join('');
+    `).join(''));
 
     // Sidebar collections
     const collContainer = document.getElementById('lib-sidebar-collections');
@@ -2431,7 +2453,7 @@ function libSearchChanged(q) {
 async function showCreatorsGrid() {
   setBreadcrumb('Library');
   const el = document.getElementById('lib-content');
-  el.innerHTML = '<div class="empty">Loading…</div>';
+  if (!_pollIsBackground) el.innerHTML = '<div class="empty">Loading…</div>';
   try {
     const creators = _libSearchQ
       ? _libCreators.filter(c => c.name.toLowerCase().includes(_libSearchQ.toLowerCase()))
@@ -2486,7 +2508,7 @@ async function showCreatorsGrid() {
 async function showCreatorDetail(creatorId) {
   _libCurrentCreatorId = creatorId;
   const el = document.getElementById('lib-content');
-  el.innerHTML = '<div class="empty">Loading…</div>';
+  if (!_pollIsBackground) el.innerHTML = '<div class="empty">Loading…</div>';
 
   const isUnassigned = creatorId === '__unassigned__';
   let creator = null;
@@ -2556,7 +2578,7 @@ function switchCreatorTab(tab, btn) {
 async function showCreatorClips(creatorId) {
   const el = document.getElementById('creator-tab-content');
   if (!el) return;
-  el.innerHTML = '<div class="empty">Loading clips…</div>';
+  if (!_pollIsBackground) el.innerHTML = '<div class="empty">Loading clips…</div>';
   const clips = await api(`/clips?creator_id=${encodeURIComponent(creatorId)}&limit=200`).catch(()=>[]);
   if (!clips.length) {
     el.innerHTML = '<div class="empty">No clips yet for this creator</div>'; return;
@@ -2595,7 +2617,7 @@ async function showCreatorClips(creatorId) {
 async function showAllVideos() {
   setBreadcrumb(`<span onclick="libNav('creators',document.getElementById('lnav-creators'))">Library</span><span class="sep">›</span><span class="cur">All Videos</span>`);
   const el = document.getElementById('lib-content');
-  el.innerHTML = '<div class="empty">Loading…</div>';
+  if (!_pollIsBackground) el.innerHTML = '<div class="empty">Loading…</div>';
   const params = new URLSearchParams({limit:'100'});
   _applyFilterParams(params);
   if (_libSearchQ) params.set('search', _libSearchQ);
@@ -2735,7 +2757,7 @@ async function showVideoClips(jobId, videoTitle) {
   // Uses /clips?job_id=X — no navigation to Analysis tab.
   const el = document.getElementById('creator-tab-content') || document.getElementById('lib-content');
   if (!el) return;
-  el.innerHTML = '<div class="empty">Loading clips…</div>';
+  if (!_pollIsBackground) el.innerHTML = '<div class="empty">Loading clips…</div>';
 
   const clips = await api(`/clips?job_id=${encodeURIComponent(jobId)}&limit=200`).catch(()=>[]);
 
@@ -3234,7 +3256,7 @@ function clearAllFilters() {
 // â”€â”€ Collections â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function showCollectionView(collectionId) {
   const el = document.getElementById('lib-content');
-  el.innerHTML = '<div class="empty">Loading…</div>';
+  if (!_pollIsBackground) el.innerHTML = '<div class="empty">Loading…</div>';
   const coll = await api(`/collections/${collectionId}`).catch(()=>null);
   if (!coll) { el.innerHTML = '<div class="empty">Collection not found</div>'; return; }
   setBreadcrumb(`<span onclick="libNav('creators',document.getElementById('lnav-creators'))">Library</span><span class="sep">›</span><span class="cur">${_esc(coll.name)}</span>`);
@@ -3668,11 +3690,11 @@ async function loadReview() {
     '': 'No clips yet.',
   };
   if (!clips.length) {
-    document.getElementById('review-list').innerHTML = `<div class="empty">${emptyMsgs[filter] || emptyMsgs['']}</div>`;
+    smartRender('review-list', `<div class="empty">${emptyMsgs[filter] || emptyMsgs['']}</div>`);
     return;
   }
 
-  document.getElementById('review-list').innerHTML = clips.map((c, i) => {
+  smartRender('review-list', clips.map((c, i) => {
     const decChip = chip(c.decision || 'PENDING');
     const approved = c.decision === 'PUBLISH';
     const rejected = c.decision === 'REJECT';
@@ -3709,7 +3731,7 @@ async function loadReview() {
           </div>
         </div>
       </div>`;
-  }).join('');
+  }).join(''));
 }
 
 async function resetClipReview(clipId, cardEl) {
@@ -3829,7 +3851,7 @@ async function loadJobs() {
   const countEl = document.getElementById('jobs-count');
   if (countEl) countEl.textContent = jobs.length !== all.length ? `${jobs.length} de ${all.length}` : `${all.length} trabajos`;
 
-  document.getElementById('jobs-body').innerHTML = jobs.length
+  smartRender('jobs-body', (jobs.length
     ? jobs.map(j => {
         const src = j.source_title || j.source_url || j.source || '';
         const srcDisplay = src.length > 55 ? src.substring(0,55)+'…' : src;
@@ -3853,7 +3875,7 @@ async function loadJobs() {
           <td>${actions}</td>
         </tr>`;
       }).join('')
-    : `<tr><td colspan="6" class="empty">${_jobsFilter==='failed'?'No failed jobs':_jobsFilter==='running'?'No running jobs':'No jobs yet'}</td></tr>`;
+    : `<tr><td colspan="6" class="empty">${_jobsFilter==='failed'?'No failed jobs':_jobsFilter==='running'?'No running jobs':'No jobs yet'}</td></tr>`));
 }
 
 async function retryJobFromTable(jobId, btn) {
