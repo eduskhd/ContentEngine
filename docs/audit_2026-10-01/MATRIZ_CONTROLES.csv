@@ -1,0 +1,21 @@
+ID,Área,Escenario,Resultado Esperado,Estado,Evidencia / Notas
+MC-01,Pipeline,Ingest de URL válida con yt-dlp,Descarga + registro en videos table,PASS,8 jobs completados; 9 videos en DB
+MC-02,Pipeline,Detección de URL duplicada en New Job,Respuesta {"duplicate":true} sin crear job nuevo,PASS,Verificado vía JS evaluate en New Job tab
+MC-03,Pipeline,Transcripción faster-whisper en audio claro,words_json con palabras; cached en videos.words_json,PASS,5 de 9 vídeos con transcripción válida (>100 chars)
+MC-04,Pipeline,Transcripción en audio difícil (música/ruido),words_json='[]'; pipeline continúa sin error,FAIL-SILENT,4 vídeos con words_json='[]'; clips generados sin captions
+MC-05,Pipeline,Proxy 360p 2fps generado y cacheado,videos.proxy_path poblado; segunda ejecución reutiliza,PASS,9/9 vídeos con proxy_path en DB
+MC-06,Pipeline,Candidate detection produce candidatos,candidates table con filas; scoring > 0,PASS,231 candidatos en DB (avg 29/job)
+MC-07,Pipeline,Visual + audio analysis paralela en proxy,stage visual_and_audio_analysis completa en <60s,PASS,Avg 27.5s; max 51.3s
+MC-08,Pipeline,Render 1-pass (trim+crop+ASS caption burn),captioned_path existe y es reproducible,PASS,80 clips generados; single FFmpeg call por clip
+MC-09,Pipeline,QA gate FAIL CLOSED,technical_qa=FAIL OR visual_qa=FAIL → clip REJECTED,NOT TESTED,Todos los clips pasaron QA; no se generó caso de fallo en esta sesión
+MC-10,Pipeline,Ingest retry no duplica video record,Mismo job_id + path reutiliza video_id existente,FAIL→FIXED,1 duplicado preexistente (xbuyer); fix aplicado en ingest.py
+MC-11,API,GET /jobs incluye clip_count,Campo clip_count en respuesta JSON,FAIL→FIXED,Subquery añadida; verificado en browser: 5/10/20 etc
+MC-12,API,GET /jobs/{id}/timing devuelve datos de etapas,JSON con duraciones por stage,PASS,Endpoint existente en api/main.py:1392
+MC-13,API,GET /jobs/{id}/series devuelve series,JSON con series y partes,PASS,10 series en DB; endpoint activo
+MC-14,API,POST /review/{id}/approve actualiza clip,prepublish_decision actualizado en DB,PASS,Endpoint activo; Review tab funciona
+MC-15,API,URL dedup check antes de crear job,Retorna job_id existente si misma URL,PASS,Verificado con curl/evaluate durante auditoría
+MC-16,UI,Jobs tab CLIPS column,Número de clips por job visible,FAIL→FIXED,Mostraba —; ahora muestra 5/10/20 tras fix
+MC-17,UI,Publishing default view = Listos para subir,pn-ready activo al abrir Publishing,PASS,_pubView='ready' en JS; verificado en screenshot
+MC-18,UI,Stats tab muestra analytics,Métricas de engagement por clip,SKIP-STUB,analytics/collector.py es stub; esperado por diseño
+MC-19,UI,Analysis tab carga datos de job seleccionado,Gráficos y scores por candidato,NOT TESTED,Tab funcional pero no se seleccionó job en esta auditoría
+MC-20,Storage,Disco libre suficiente para operación,>50 GB libre,PASS,360.3 GB libre (24.3% usado de ~1.5 TB)

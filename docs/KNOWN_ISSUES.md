@@ -69,6 +69,28 @@ The SSE generator now falls back to DB when `job_id` is not in `_jobs`. If found
 
 ---
 
+## KI-006 — Empty transcription for audio-heavy videos (2026-10-01)
+
+**Symptom:** `words_json='[]'` for 4 videos (xbuyer ×2, drafteados, ibai). faster-whisper ran for hours and returned 0 words. Clips were still generated but have no captions.
+
+**Root cause:** No `language` parameter passed to faster-whisper — the model attempts automatic language detection on audio with heavy music or poor SNR and fails silently.
+
+**Affected videos:** 8cce3c56 (drafteados), 17430a89 and 0b744b82 (xbuyer), 3992d1d2 (ibai).
+
+**Fix path:** Pass `language="es"` for Spanish creators + enable `vad_filter=True`. If `len(words) == 0` after transcription, mark video with a quality flag and surface in UI. See MEJORAS_PRIORIZADAS.md P0-01.
+
+---
+
+## KI-007 — Duplicate video record for xbuyer (pre-existing, 2026-10-01)
+
+**Symptom:** Two video records (17430a89, 0b744b82) share `source_url=https://youtu.be/zDuT2rzusnU` and `job_id=1ad8fae3`. Both have 30 candidates but clips reference `job_id`, not `video_id`, so data integrity is intact.
+
+**Root cause:** Pipeline was retried for this job, and the old `ingest()` created a second video record instead of reusing the existing one. **Fix applied in ingest.py (2026-10-01)** — future retries will not create duplicates.
+
+**Current state:** Duplicate row in DB. Does not affect clip output or publishing. To clean up: requires a script to reassign candidates from 0b744b82 → 17430a89 then delete 0b744b82.
+
+---
+
 ## KI-005 — Re-render uses source `output_path`, not original clip
 
 **Symptom:** Re-rendering captions overwrites `_captioned.mp4` using `output_path` (the non-captioned clip) as source. If `output_path` was deleted manually, re-render fails with 400.

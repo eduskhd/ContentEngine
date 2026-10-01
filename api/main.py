@@ -241,7 +241,8 @@ async def list_jobs(
         SELECT j.id, j.source_path, j.status, j.mode, j.creator,
                j.created_at, j.updated_at, j.error,
                v.creator_slug, v.video_slug, v.source_title, v.source_platform, v.source_url,
-               COALESCE(j.creator_id, v.creator_id) as creator_id, v.id as video_id
+               COALESCE(j.creator_id, v.creator_id) as creator_id, v.id as video_id,
+               (SELECT COUNT(*) FROM clips c WHERE c.job_id = j.id) as clip_count
         FROM jobs j
         LEFT JOIN videos v ON v.job_id = j.id
         {where}
@@ -271,6 +272,7 @@ async def list_jobs(
             "source_url": r[12] or r[1] or "",
             "creator_id": r[13],
             "video_id": r[14],
+            "clip_count": r[15] or 0,
             "result": None,
         }
 
@@ -510,6 +512,7 @@ async def list_clips(
     creator_id: str = Query(None),
     job_id: str = Query(None),
     video_id: str = Query(None),
+    series_id: str = Query(None),
     limit: int = Query(50, le=500),
 ):
     conn = dbmod.get_db()
@@ -530,21 +533,29 @@ async def list_clips(
     if video_id:
         conditions.append("v.id=?")
         params.append(video_id)
+    if series_id:
+        conditions.append("ca.series_id=?")
+        params.append(series_id)
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    # When fetching a specific series, return in series_part order
+    order = "ca.series_part ASC, cl.created_at ASC" if series_id else "cl.created_at DESC"
     params.append(limit)
 
     rows = conn.execute(f"""
         SELECT cl.*,
                ca.hook_score, ca.virality_score, ca.visual_score, ca.audio_score,
                ca.start_s, ca.end_s, ca.platform_scores,
+               ca.series_id, ca.series_part,
                v.creator_slug, v.video_slug, v.source_title, v.source_platform,
-               v.creator_id, v.id as video_id
+               v.creator_id, v.id as video_id,
+               cs.title as series_title
         FROM clips cl
         LEFT JOIN candidates ca ON cl.candidate_id = ca.id
         LEFT JOIN videos v ON ca.video_id = v.id
+        LEFT JOIN clip_series cs ON cs.id = ca.series_id
         {where}
-        ORDER BY cl.created_at DESC LIMIT ?
+        ORDER BY {order} LIMIT ?
     """, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -1126,12 +1137,10 @@ async def start_youtube_upload(pub_id: str, body: dict = Body({})):
 
     Security rules enforced here:
     - Publication platform must be youtube_shorts
-    - Clip evaluation decision must be 'publish_as_is'
     - Clip file must exist on disk
     - YouTube account must be connected
     - is_for_kids must be provided as boolean (required by YouTube ToS)
-    - privacyStatus is ALWAYS forced to 'private' server-side
-    - Eval 'publish_as_is' is a quality signal — upload still requires explicit user action
+    - privacyStatus is passed through to YouTube; YouTube may override to 'private' for unaudited API projects
     """
     from publishers import yt_auth
     from publishers.yt_upload import compute_file_hash
@@ -1173,14 +1182,6 @@ async def start_youtube_upload(pub_id: str, body: dict = Body({})):
     if not clip:
         raise HTTPException(404, "Clip not found")
     clip = dict(clip)
-
-    # Check clip evaluation — accept clip_evaluations.decision='publish_as_is'
-    # OR legacy clips.prepublish_decision='PUBLISH' for older processed clips
-    eval_row = dbmod.get_evaluation(pub["clip_id"])
-    eval_ok = (eval_row and eval_row.get("decision") == "publish_as_is") or \
-              (clip.get("prepublish_decision") == "PUBLISH")
-    if not eval_ok:
-        raise HTTPException(400, "Clip must be evaluated as 'publish_as_is' before uploading")
 
     # Verify file
     file_path = clip.get("captioned_path") or clip.get("output_path")
@@ -2558,7 +2559,7 @@ import os as _os
 async def create_upload_batch(body: dict = Body(...)):
     """
     Validate selected publications, create yt_upload_sessions, and group them as a batch.
-    idempotency_key prevents double-submit. privacyStatus is always private (server-enforced).
+    idempotency_key prevents double-submit. privacyStatus is passed through to YouTube.
     """
     from publishers import yt_auth, yt_upload as _uploader
 
@@ -2599,12 +2600,6 @@ async def create_upload_batch(body: dict = Body(...)):
             continue
 
         clip = dbmod.get_clip(pub["clip_id"])
-        eval_row = dbmod.get_evaluation(pub["clip_id"])
-        eval_ok = (eval_row and eval_row.get("decision") == "publish_as_is") or \
-                  (clip and clip.get("prepublish_decision") == "PUBLISH")
-        if not eval_ok:
-            skipped.append({"pub_id": pub_id, "reason": "Not approved (publish_as_is required)"})
-            continue
 
         file_path = None
         if clip:
@@ -2618,9 +2613,49 @@ async def create_upload_batch(body: dict = Body(...)):
             continue
 
         existing_session = dbmod.get_yt_upload_session_by_pub(pub_id)
-        if existing_session and existing_session.get("status") in ("pending", "uploading", "processing", "private"):
-            skipped.append({"pub_id": pub_id, "reason": "Already in an active upload session"})
-            continue
+        if existing_session:
+            status = existing_session.get("status")
+            # Active/in-progress — don't touch, include in batch as-is
+            if status in ("pending", "uploading", "processing", "paused"):
+                queued_pairs.append((pub_id, existing_session["id"]))
+                continue
+            # Already uploaded (terminal) — include in batch so progress is visible, no re-upload
+            if status in ("public", "unlisted", "private", "needs_check"):
+                queued_pairs.append((pub_id, existing_session["id"]))
+                continue
+            # Error/cancelled — reset the existing session so the worker can retry it
+            if existing_session:
+                try:
+                    file_hash = _uploader.compute_file_hash(file_path)
+                except Exception:
+                    skipped.append({"pub_id": pub_id, "reason": "Could not hash file"})
+                    continue
+                file_size = _os.path.getsize(file_path)
+                tags = []
+                try:
+                    raw = pub.get("hashtags") or "[]"
+                    tags = json.loads(raw) if raw.startswith("[") else [t.lstrip("#") for t in raw.split() if t]
+                except Exception:
+                    pass
+                dbmod.update_yt_upload_session(
+                    existing_session["id"],
+                    status="pending",
+                    session_url=None,
+                    remote_video_id=None,
+                    bytes_sent=0,
+                    file_path=file_path,
+                    file_hash=file_hash,
+                    file_size=file_size,
+                    privacy_status=privacy_status,
+                    error_message=None,
+                    error_code=None,
+                    locked_at=None,
+                    locked_by=None,
+                    attempts=0,
+                    updated_at=datetime.datetime.utcnow().isoformat(),
+                )
+                queued_pairs.append((pub_id, existing_session["id"]))
+                continue
 
         try:
             file_hash = _uploader.compute_file_hash(file_path)
@@ -2697,6 +2732,81 @@ async def retry_batch_errors(batch_id: str):
         raise HTTPException(404, "Batch not found")
     dbmod.retry_batch_errors(batch_id)
     return {"status": "retrying"}
+
+
+@app.post("/yt-upload-sessions/{session_id}/update-privacy")
+async def update_session_privacy(session_id: str, body: dict = Body({})):
+    """
+    Change the privacy of an already-uploaded YouTube video.
+    Only valid for sessions in terminal state with a remote_video_id.
+    Calls videos.update via YouTube Data API v3 — no re-upload.
+    """
+    from publishers import yt_auth
+    import urllib.request
+
+    _valid_privacy = {"private", "unlisted", "public"}
+    privacy_status = (body.get("privacy_status") or "").strip()
+    if privacy_status not in _valid_privacy:
+        raise HTTPException(422, f"privacy_status must be one of {sorted(_valid_privacy)}")
+
+    conn = dbmod.get_db()
+    session = conn.execute(
+        "SELECT * FROM yt_upload_sessions WHERE id=?", [session_id]
+    ).fetchone()
+    conn.close()
+    if not session:
+        raise HTTPException(404, "Session not found")
+    session = dict(session)
+
+    video_id = session.get("remote_video_id")
+    if not video_id:
+        raise HTTPException(400, "No remote_video_id — video not yet uploaded to YouTube")
+
+    terminal = {"public", "unlisted", "private", "needs_check"}
+    if session.get("status") not in terminal:
+        raise HTTPException(400, f"Session status '{session.get('status')}' is not in a terminal state")
+
+    if not yt_auth.is_connected():
+        raise HTTPException(400, "YouTube account not connected")
+    token = yt_auth.get_valid_token()
+    if not token:
+        raise HTTPException(400, "YouTube token invalid — re-authenticate via /youtube/connect")
+
+    body_bytes = json.dumps({
+        "id": video_id,
+        "status": {"privacyStatus": privacy_status},
+    }).encode()
+    req = urllib.request.Request(
+        f"https://www.googleapis.com/youtube/v3/videos?part=status",
+        data=body_bytes,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json; charset=UTF-8",
+        },
+        method="PUT",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read())
+        returned_privacy = result.get("status", {}).get("privacyStatus", "unknown")
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode(errors="replace")
+        raise HTTPException(502, f"YouTube API error {e.code}: {err_body[:300]}")
+
+    conn2 = dbmod.get_db()
+    conn2.execute(
+        "UPDATE yt_upload_sessions SET status=?, remote_privacy_status=?, privacy_status=?, updated_at=datetime('now') WHERE id=?",
+        [returned_privacy, returned_privacy, privacy_status, session_id],
+    )
+    conn2.commit()
+    conn2.close()
+
+    mismatch = returned_privacy != privacy_status
+    return {
+        "requested": privacy_status,
+        "returned": returned_privacy,
+        "mismatch": mismatch,
+    }
 
 
 # ── STORAGE SUMMARY ───────────────────────────────────────────────────────────

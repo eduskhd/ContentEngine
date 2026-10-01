@@ -1,0 +1,15 @@
+ID,Escenario,Resultado,Estado,Notas
+QA-01,Nuevo Job: URL válida se ingesta correctamente,pipeline completa hasta clips,PASS,Verificado en sesiones anteriores
+QA-02,Nuevo Job: URL duplicada detecta vídeo existente,alerta de duplicado en modal,PASS,Lógica de duplicate detection activa en New Job
+QA-03,Library: clips se muestran por creador con series agrupadas,grupos con cabecera y parte,PASS,showCreatorClips() funciona
+QA-04,Library: botón "Publicar paquete" selecciona serie completa y abre modal batch,modal batch con clips en orden,PASS,selectSeriesGroup() llama _openBatchUploadDirect()
+QA-05,Publishing: batch de 13 clips se sube como Público sin intervención manual,13/13 Público en YouTube,PASS,Batch encargo 2026-09-23 completado
+QA-06,Publishing: sesión en error puede reintentarse reseteando la sesión,nuevo intento completado,PASS,Reset manual + worker claim funcionó para cTnYJWjnUO8→E5wxZZ2HEbc
+QA-07,Publishing: vídeo privado se puede hacer público vía videos.update,privacyStatus=public en YouTube,PASS,oqbwf8Rdq1I hecho público correctamente
+QA-08,YouTube: reconciliación API confirma estado real de todos los vídeos,26/26 encontrados en API,PASS,videos.list batch query confirmado
+QA-09,DB: publicación duplicada (mismo clip+plataforma) se detecta y archiva,pub duplicada archivada,PASS,5a1b5cf8 archivada; fd8642cb canónica
+QA-10,DB: sesión stuck en 'publishing' se corrige manualmente,status→published con video_id correcto,PASS,2760c252 corregida (t7jPO1NbvpY)
+QA-11,Publishing: batch endpoint falla si sesión ya existe en error (UNIQUE constraint),bloquea re-creación de sesión,KNOWN BUG,Workaround: reset manual de campos; no corregido en este encargo
+QA-12,Publishing: privacy_status race — worker toma sesión antes de que se actualice privacy,puede subir como privado,KNOWN BUG,Workaround: videos.update tras upload; no corregido en este encargo
+QA-13,Publishing UI: vista "Listos para subir" muestra sólo clips pendientes con acción clara,contador y botón por clip,PENDIENTE,Redesign de UI no implementado en este encargo
+QA-14,Clips rechazados (QA fail) no aparecen en Publishing como subibles,ninguno visible en Publishing,PASS,prepublish_decision=PUBLISH requerido para aparecer

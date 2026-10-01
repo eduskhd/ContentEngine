@@ -1,5 +1,64 @@
 # Changelog
 
+## 2026-10-01 — DB prerequisites: FK enforcement, UNIQUE constraint, Alembic
+
+### engine/database.py
+- **FK enforcement in `get_db()`**: added `PRAGMA foreign_keys=ON` — now consistent with `get_connection()`. Foreign key violations are caught on all code paths, including API ad-hoc queries.
+- **UNIQUE index on publications**: `CREATE UNIQUE INDEX idx_pubs_clip_platform ON publications(clip_id, platform) WHERE status != 'archived'` added to the index block in `init_db()`. Prevents duplicate active publications for the same clip+platform (double-click or concurrent process). Archived rows are excluded so superseded publications can coexist with their canonical replacement.
+
+### Alembic (new)
+- `alembic/` directory initialized with SQLite-aware `env.py` (WAL + FK + busy_timeout per connection, `render_as_batch=True`).
+- `alembic/versions/0001_initial_schema.py` — full current schema (all 28 tables + 24 indexes) as the baseline. New installs can run `alembic upgrade head` to get the complete schema.
+- `alembic/versions/0002_publications_unique_clip_platform.py` — the UNIQUE partial index as first real migration.
+- Existing DB stamped at `0001`, then `upgrade head` applied `0002`. Current state: `0002 (head)`.
+- `requirements.txt` updated: `alembic>=1.13.0`, `sqlalchemy>=2.0.0`.
+- `CLAUDE.md` updated with migration workflow and rules.
+
+## 2026-10-01 — Auditoría Integral: bug fixes + benchmark + audit docs
+
+### Bug fixes
+- **Jobs CLIPS column fixed** (`api/main.py:241`, `dashboard/index.html:4344`): `/jobs` API now includes `clip_count` via SQL subquery; dashboard uses it as fallback. Column now shows real clip counts (5, 10, 20) instead of "—".
+- **Ingest duplicate video record on retry fixed** (`engine/ingest.py:41`): `ingest()` now checks for existing `(job_id, path)` match before creating a new video record. Prevents duplicate rows when pipeline retries the same job.
+
+### Audit documents (new)
+- `docs/audit_2026-10-01/INFORME_AUDITORIA.md` — full audit with UI findings, pipeline analysis, bugs, data integrity
+- `docs/audit_2026-10-01/BENCHMARK.md` — per-job pipeline timing data (8 jobs, 11 stages)
+- `docs/audit_2026-10-01/MATRIZ_CONTROLES.csv` — 20-scenario QA/controls matrix
+- `docs/audit_2026-10-01/EVALUACION_CALIDAD.md` — clip quality evaluation (captions, scoring, transcription)
+- `docs/audit_2026-10-01/MEJORAS_PRIORIZADAS.md` — prioritized improvement backlog (P0–P3)
+
+### Key findings
+- Transcription is the dominant bottleneck: avg 5254s, max 43495s (12h for 37min Spanish video → 0 words)
+- 4/9 videos have empty transcription (`words_json='[]'`): xbuyer ×2, drafteados, ibai
+- 80 clips all QA PASS; 22 PUBLISH, 58 REVIEW; 27 published on YouTube
+- YouTube connected (ContentEngine channel); TikTok/Instagram inactive by design
+
+## 2026-09-23 — Encargo Publishing: full upload + Publishing UI improvements
+
+### Publishing
+- **Batch upload completed**: 13/13 clips authorized for this encargo uploaded to YouTube as PUBLIC.
+- **All 26 YT videos verified PUBLIC** via YouTube Data API v3 batch query.
+- **Duplicate publication archived**: `5a1b5cf8` (MrBeast clip double-pub) archived; canonical `fd8642cb` re-uploaded as `E5wxZZ2HEbc`.
+- **Private videos made public**: `oqbwf8Rdq1I` (ibai) via `videos.update`; `cTnYJWjnUO8` replaced by fresh upload `E5wxZZ2HEbc`.
+- **Stuck `publishing` status corrected**: pub `2760c252` synced to `published` with `external_post_id=t7jPO1NbvpY`.
+
+### Bug fixes
+- **Batch endpoint UNIQUE constraint bug fixed** (`api/main.py`): when a session exists in `error` state, the endpoint now resets it (clears session_url, remote_video_id, bytes_sent, resets status to pending) instead of falling through to `create_yt_upload_session` which would hit the UNIQUE constraint on `pub_id`.
+- **`update_yt_upload_session` now accepts `privacy_status`** — added to `_YT_SESSION_ALLOWED_COLS` so batch resets can update the privacy setting atomically.
+
+### Publishing UI
+- **Default view changed to "Listos para subir" (Ready)** — entering Publishing tab now lands on the ready queue instead of "All".
+- **Per-clip "Subir" button** added to ready-state cards (both grid and list views). Opens batch upload modal pre-loaded with that single publication.
+- **Published cards** now show "YouTube Studio" button instead of "Mark Published" (which was misleading).
+- **Sidebar labels**: "Ready" → "Listos para subir", "Published" → "Subidos".
+- **View titles**: "Ready to Publish" → "Listos para subir", "Published History" → "Subidos a YouTube".
+
+### Docs
+- `docs/encargo_publishing_2026-09-23/INFORME_FINAL.md` — complete results with all 26 video IDs.
+- `docs/encargo_publishing_2026-09-23/MANIFIESTO_PUBLICACION.json` — updated with final state.
+- `docs/encargo_publishing_2026-09-23/ESTADO.md` — all phases marked COMPLETADO.
+- `docs/encargo_publishing_2026-09-23/MATRIZ_QA.csv` — 14-scenario QA matrix.
+
 ## 2026-09-21 — Duplicate diagnosis + data integrity + UI cleanup
 
 ### Bug fixes

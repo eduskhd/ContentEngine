@@ -38,6 +38,14 @@ def ingest(job_id: str, source_path: str) -> str:
     if duration < 5:
         raise ValueError(f"Video too short: {duration:.1f}s")
 
+    # Reuse existing video record if the same file was already ingested for this job (retry case)
+    with db.db() as _conn:
+        existing = _conn.execute(
+            "SELECT id FROM videos WHERE job_id=? AND path=?", (job_id, source_path)
+        ).fetchone()
+    if existing:
+        return existing["id"]
+
     video_id = db.create_video(job_id, source_path, duration, fps, width, height, size)
     db.update_job(job_id, status="INGESTING")
     return video_id

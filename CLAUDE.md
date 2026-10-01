@@ -30,6 +30,33 @@ If a bug is not in that path, document it in `docs/KNOWN_ISSUES.md` and move on.
 - Rights check — `rights_verified` is always set to 1 on create. Do not re-add any rights gate.
 - OAuth flows — present in API, never used.
 
+## Schema migrations (Alembic)
+
+Future schema changes go through Alembic — do NOT use `_add_column_if_missing` for new columns.
+
+```powershell
+# Create a new migration (after changing nothing — describe what you want to add)
+python -m alembic revision -m "add foo column to bars"
+# Edit alembic/versions/<rev>_add_foo_column_to_bars.py: write upgrade()/downgrade() as raw SQL via op.execute()
+
+# Apply to local DB
+python -m alembic upgrade head
+
+# Check current state
+python -m alembic current
+python -m alembic history
+
+# Dry-run (print SQL without applying)
+python -m alembic upgrade head --sql
+```
+
+Rules:
+- One migration per logical change. No multi-table rewrites in one revision.
+- `upgrade()` and `downgrade()` must be inverses. Test both.
+- Never edit a revision that has already been applied to production DB.
+- `init_db()` stays in `engine/database.py` for table creation on new installs (`CREATE TABLE IF NOT EXISTS`). Alembic handles incremental changes on existing DBs.
+- New installs: `alembic upgrade head` instead of only `init_db()` — both are safe to run together.
+
 ## Key decisions (see docs/DECISIONS.md for full rationale)
 
 - SQLite WAL mode is the only DB. No Postgres, no Redis.

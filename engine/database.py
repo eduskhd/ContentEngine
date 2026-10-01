@@ -27,6 +27,7 @@ def get_db(path: str = None):
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
 
@@ -381,6 +382,9 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_pubs_clip_id         ON publications(clip_id);
             CREATE INDEX IF NOT EXISTS idx_pubs_status          ON publications(status);
             CREATE INDEX IF NOT EXISTS idx_pubs_creator_id      ON publications(creator_id);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_pubs_clip_platform
+                ON publications(clip_id, platform)
+                WHERE status != 'archived';
             CREATE INDEX IF NOT EXISTS idx_prepub_clip_id       ON prepublish_decisions(clip_id);
             CREATE INDEX IF NOT EXISTS idx_coll_items_coll     ON collection_items(collection_id);
             CREATE INDEX IF NOT EXISTS idx_coll_items_item     ON collection_items(item_id);
@@ -1772,6 +1776,7 @@ _YT_SESSION_ALLOWED_COLS = {
     "remote_privacy_status", "bytes_sent", "file_size", "file_path", "file_hash",
     "attempts", "last_attempt_at", "error_message", "error_code",
     "locked_at", "locked_by", "updated_at", "series_id", "series_part",
+    "privacy_status",
 }
 
 
@@ -1900,7 +1905,7 @@ def list_stale_yt_sessions() -> list[dict]:
     with db() as conn:
         rows = conn.execute("""
             SELECT * FROM yt_upload_sessions
-            WHERE status='uploading' AND locked_at < ?
+            WHERE status IN ('uploading', 'processing') AND locked_at < ?
         """, (threshold_iso,)).fetchall()
     return [dict(r) for r in rows]
 
@@ -2052,6 +2057,11 @@ def get_batch_by_idempotency(key: str) -> dict | None:
     return dict(row) if row else None
 
 
+_TERMINAL_STATUSES = frozenset({"public", "unlisted", "private", "needs_check", "cancelled", "error"})
+_DONE_STATUSES     = frozenset({"public", "unlisted", "private", "needs_check", "cancelled"})
+_ACTIVE_STATUSES   = frozenset({"pending", "uploading", "processing", "paused"})
+
+
 def get_upload_batch(batch_id: str) -> dict | None:
     with db() as conn:
         row = conn.execute("SELECT * FROM upload_batches WHERE id=?", (batch_id,)).fetchone()
@@ -2059,24 +2069,28 @@ def get_upload_batch(batch_id: str) -> dict | None:
             return None
         items = conn.execute("""
             SELECT i.pub_id, i.session_id, i.added_at,
-                   s.status, s.bytes_sent, s.file_size, s.error_message,
-                   s.remote_video_id, p.title, p.platform
+                   s.status, s.bytes_sent, s.file_size, s.error_message, s.error_code,
+                   s.remote_video_id, s.series_part, p.title, p.platform
             FROM upload_batch_items i
             LEFT JOIN yt_upload_sessions s ON s.id = i.session_id
             LEFT JOIN publications p ON p.id = i.pub_id
             WHERE i.batch_id=?
-            ORDER BY i.added_at ASC
+            ORDER BY COALESCE(s.series_part, 0) ASC, i.added_at ASC
         """, (batch_id,)).fetchall()
     r = dict(row)
     r["items"] = [dict(i) for i in items]
     statuses = {i["status"] for i in r["items"] if i["status"]}
+    done_count = sum(1 for i in r["items"] if i.get("status") in _DONE_STATUSES)
+    r["done_items"] = done_count
+    r["total_items"] = len(r["items"])
+    r["error_items"] = sum(1 for i in r["items"] if i.get("status") == "error")
     if r.get("paused"):
         r["derived_status"] = "paused"
     elif not statuses:
         r["derived_status"] = "pending"
-    elif statuses <= {"private", "needs_check", "cancelled"}:
-        r["derived_status"] = "done"
-    elif statuses & {"pending", "uploading", "processing", "paused"}:
+    elif statuses <= _TERMINAL_STATUSES and not (statuses & _ACTIVE_STATUSES):
+        r["derived_status"] = "done" if not ("error" in statuses) else "error"
+    elif statuses & _ACTIVE_STATUSES:
         r["derived_status"] = "active"
     elif "error" in statuses:
         r["derived_status"] = "error"
@@ -2090,9 +2104,9 @@ def list_upload_batches(limit: int = 50) -> list[dict]:
         rows = conn.execute("""
             SELECT b.*,
                    COUNT(i.id) as item_count,
-                   SUM(CASE WHEN s.status IN ('private','needs_check') THEN 1 ELSE 0 END) as done_items,
+                   SUM(CASE WHEN s.status IN ('public','unlisted','private','needs_check','cancelled') THEN 1 ELSE 0 END) as done_items,
                    SUM(CASE WHEN s.status = 'error' THEN 1 ELSE 0 END) as error_items,
-                   SUM(CASE WHEN s.status IN ('pending','uploading','processing') THEN 1 ELSE 0 END) as active_items
+                   SUM(CASE WHEN s.status IN ('pending','uploading','processing','paused') THEN 1 ELSE 0 END) as active_items
             FROM upload_batches b
             LEFT JOIN upload_batch_items i ON i.batch_id = b.id
             LEFT JOIN yt_upload_sessions s ON s.id = i.session_id
