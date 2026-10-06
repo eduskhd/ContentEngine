@@ -667,7 +667,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     </div>
     <!-- Filter chip bar (shown in video views) -->
     <div id="lib-filters-row" style="display:none;flex-direction:column;position:relative">
-      <div style="display:flex;align-items:center;gap:8px;padding:0 20px 8px;flex-wrap:wrap">
+      <div id="lib-clip-sort-wrap" style="display:none;align-items:center;gap:8px;padding:0 20px 8px;flex-wrap:wrap">
         <span style="font-size:11px;color:#555;white-space:nowrap">Ordenar por:</span>
         <select id="lib-clip-sort-sel" class="lib-filter-sel" onchange="setLibClipSort(this.value)">
           <option value="newest">Últimos clips creados</option>
@@ -2748,6 +2748,7 @@ function libNav(view, el, _opts) {
     const sortSel = document.getElementById('lib-clip-sort-sel');
     if (sortSel) sortSel.value = _libClipSort;
     renderFilterChips();
+    _syncClipSortVisibility();
   }
   reloadCurrentView();
   // Push URL when navigating within Library
@@ -3141,10 +3142,19 @@ async function showCreatorDetail(creatorId) {
   }
 }
 
+function _syncClipSortVisibility() {
+  const isCreatorClips = _libCurrentView.startsWith('creator:') && _libCreatorTab === 'clips';
+  const wrap = document.getElementById('lib-clip-sort-wrap');
+  if (wrap) wrap.style.display = isCreatorClips ? 'flex' : 'none';
+  const chips = document.getElementById('fc-chips');
+  if (chips) chips.style.display = isCreatorClips ? 'none' : 'block';
+}
+
 function switchCreatorTab(tab, btn) {
   _libCreatorTab = tab;
   document.querySelectorAll('.creator-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  _syncClipSortVisibility();
   const el = document.getElementById('creator-tab-content');
   if (!el) return;
   if (tab === 'videos') showCreatorDetail(_libCurrentCreatorId);
