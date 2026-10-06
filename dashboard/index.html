@@ -667,6 +667,15 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     </div>
     <!-- Filter chip bar (shown in video views) -->
     <div id="lib-filters-row" style="display:none;flex-direction:column;position:relative">
+      <div style="display:flex;align-items:center;gap:8px;padding:0 20px 8px;flex-wrap:wrap">
+        <span style="font-size:11px;color:#555;white-space:nowrap">Ordenar por:</span>
+        <select id="lib-clip-sort-sel" class="lib-filter-sel" onchange="setLibClipSort(this.value)">
+          <option value="newest">Últimos clips creados</option>
+          <option value="oldest">Más antiguos primero</option>
+          <option value="name_asc">Nombre: A–Z</option>
+          <option value="name_desc">Nombre: Z–A</option>
+        </select>
+      </div>
       <div class="fc-bar" id="fc-chips">
         <!-- chips rendered by renderFilterChips() -->
       </div>
@@ -2586,6 +2595,66 @@ let _creatorModalFromNewJob = false;
 let _editingCollId = null;
 let _fcPanelOpen = false;
 let _libFilters = { status: '', platform: '', sort: 'newest', virality_min: null, virality_max: null, date_range: '', date_from: '', date_to: '' };
+let _libClipSort = localStorage.getItem('lib_clip_sort') || 'newest';
+
+function setLibClipSort(val) {
+  _libClipSort = val;
+  localStorage.setItem('lib_clip_sort', val);
+  const sel = document.getElementById('lib-clip-sort-sel');
+  if (sel && sel.value !== val) sel.value = val;
+  reloadCurrentView();
+}
+
+function _clipDateMs(c) {
+  if (!c.created_at) return null;
+  try {
+    const s = c.created_at;
+    const d = new Date(s.endsWith('Z') || s.includes('+') ? s : s + 'Z');
+    return isNaN(d.getTime()) ? null : d.getTime();
+  } catch { return null; }
+}
+
+function _sortClips(clips) {
+  const coll = new Intl.Collator('es', { numeric: true, sensitivity: 'base' });
+  const key = c => c.source_title || c.video_slug || '';
+  return [...clips].sort((a, b) => {
+    if (_libClipSort === 'name_asc') return coll.compare(key(a), key(b));
+    if (_libClipSort === 'name_desc') return coll.compare(key(b), key(a));
+    const da = _clipDateMs(a), db = _clipDateMs(b);
+    const nullLast = da === null ? 1 : db === null ? -1 : 0;
+    if (nullLast !== 0) return nullLast;
+    return _libClipSort === 'oldest' ? da - db : db - da;
+  });
+}
+
+function _sortGroups(groupsArr) {
+  const coll = new Intl.Collator('es', { numeric: true, sensitivity: 'base' });
+  return [...groupsArr].sort((a, b) => {
+    if (_libClipSort === 'name_asc') return coll.compare(a.title || '', b.title || '');
+    if (_libClipSort === 'name_desc') return coll.compare(b.title || '', a.title || '');
+    const getMs = (g, fn) => {
+      const vals = g.clips.map(_clipDateMs).filter(v => v !== null);
+      return vals.length ? fn(...vals) : null;
+    };
+    const da = getMs(a, _libClipSort === 'oldest' ? Math.min : Math.max);
+    const db = getMs(b, _libClipSort === 'oldest' ? Math.min : Math.max);
+    if (da === null && db === null) return 0;
+    if (da === null) return 1;
+    if (db === null) return -1;
+    return _libClipSort === 'oldest' ? da - db : db - da;
+  });
+}
+
+function _fmtClipDate(created_at) {
+  if (!created_at) return 'Fecha desconocida';
+  try {
+    const s = created_at;
+    const d = new Date(s.endsWith('Z') || s.includes('+') ? s : s + 'Z');
+    if (isNaN(d.getTime())) return 'Fecha desconocida';
+    return d.toLocaleDateString('es', {day:'2-digit', month:'short', year:'numeric'}) + ' ' +
+           d.toLocaleTimeString('es', {hour:'2-digit', minute:'2-digit'});
+  } catch { return 'Fecha desconocida'; }
+}
 
 async function loadLibrary() {
   // During background polls, refresh sidebar at most every 30s (it makes 5 API calls).
@@ -2675,7 +2744,11 @@ function libNav(view, el, _opts) {
   const showFilters = view === 'all-videos' || view.startsWith('creator:') || view.startsWith('collection:');
   const fr = document.getElementById('lib-filters-row');
   if (fr) fr.style.display = showFilters ? 'flex' : 'none';
-  if (showFilters) renderFilterChips();
+  if (showFilters) {
+    const sortSel = document.getElementById('lib-clip-sort-sel');
+    if (sortSel) sortSel.value = _libClipSort;
+    renderFilterChips();
+  }
   reloadCurrentView();
   // Push URL when navigating within Library
   if ((!_opts || _opts.push !== false) && _currentTab === 'library') {
@@ -3093,6 +3166,7 @@ function _renderCreatorClipCard(c, partLabel) {
         <span style="font-size:11px;font-weight:700;color:${vsColor}">▲ ${vs}</span>
       </div>
       <div style="font-size:12px;color:#444;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(videoTitle)}">${_esc(videoTitle)}</div>
+      <div style="font-size:11px;color:#333;margin-bottom:2px">${_fmtClipDate(c.created_at)}</div>
       <div style="font-size:12px;color:#888;margin-bottom:8px">${c.duration_s ? c.duration_s.toFixed(0)+'s' : '—'}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-outline btn-sm" onclick="openPlayer('${c.id}',false)">Play</button>
@@ -3131,12 +3205,18 @@ async function showCreatorClips(creatorId) {
     }
   }
   for (const [, g] of groups) {
+    // Always preserve series_part order within a package — user sort only affects group ordering
     g.clips.sort((a, b) => (a.series_part || 0) - (b.series_part || 0));
   }
 
+  // Sort groups themselves and ungrouped clips according to user preference
+  const sortedGroups = _sortGroups([...groups.values()]);
+  const sortedUngrouped = _sortClips(ungrouped);
+
   let html = '';
 
-  for (const [sid, g] of groups) {
+  for (const g of sortedGroups) {
+    const sid = g.id;
     const safeTitle = g.title.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     html += `<div style="margin-bottom:24px">
       <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#111;border-radius:8px;border:1px solid #2a2a2a;margin-bottom:10px">
@@ -3153,9 +3233,9 @@ async function showCreatorClips(creatorId) {
     </div>`;
   }
 
-  if (ungrouped.length) {
+  if (sortedUngrouped.length) {
     if (groups.size > 0) html += `<div style="font-size:11px;color:#444;text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid #1a1a1a">Clips sin grupo</div>`;
-    html += ungrouped.map((c, i) => _renderCreatorClipCard(c, 'Clip '+String(i+1).padStart(2,'0'))).join('');
+    html += sortedUngrouped.map((c, i) => _renderCreatorClipCard(c, 'Clip '+String(i+1).padStart(2,'0'))).join('');
   }
 
   el.innerHTML = html;
@@ -3904,6 +3984,9 @@ function _applyFilterParams(params) {
 function renderFilterChips() {
   const bar = document.getElementById('fc-chips');
   if (!bar) return;
+  // Sync sort selector with persisted preference
+  const sortSel = document.getElementById('lib-clip-sort-sel');
+  if (sortSel && sortSel.value !== _libClipSort) sortSel.value = _libClipSort;
   let html = '';
   const f = _libFilters;
   const labelMap = {
