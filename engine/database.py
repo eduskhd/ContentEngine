@@ -1116,6 +1116,7 @@ def get_all_videos(creator_id: str = None, status: str = None, search: str = Non
         "virality": "best_virality DESC NULLS LAST",
         "retention": "MAX(ca.retention_score) DESC NULLS LAST",
         "clips": "clip_count DESC",
+        "last_clipped": "MAX(cl.created_at) DESC NULLS LAST",
         "duration": "v.duration_s DESC NULLS LAST",
         "creator": "cr.name ASC NULLS LAST",
     }.get(sort, "j.created_at DESC")

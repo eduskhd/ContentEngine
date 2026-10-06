@@ -676,6 +676,17 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           <option value="name_desc">Nombre: Z–A</option>
         </select>
       </div>
+      <div id="lib-video-sort-wrap" style="display:none;align-items:center;gap:8px;padding:0 20px 4px;flex-wrap:wrap">
+        <span style="font-size:11px;color:#555;white-space:nowrap">Ordenar por:</span>
+        <select id="lib-video-sort-sel" class="lib-filter-sel" onchange="setLibVideoSort(this.value)">
+          <option value="last_clipped">Últimos clips creados</option>
+          <option value="newest">Últimos vídeos añadidos</option>
+          <option value="oldest">Más antiguos primero</option>
+          <option value="clips">Más clips generados</option>
+          <option value="virality">Mayor viralidad</option>
+          <option value="creator">Por creador</option>
+        </select>
+      </div>
       <div class="fc-bar" id="fc-chips">
         <!-- chips rendered by renderFilterChips() -->
       </div>
@@ -2594,7 +2605,7 @@ let _editingCreatorId = null;
 let _creatorModalFromNewJob = false;
 let _editingCollId = null;
 let _fcPanelOpen = false;
-let _libFilters = { status: '', platform: '', sort: 'newest', virality_min: null, virality_max: null, date_range: '', date_from: '', date_to: '' };
+let _libFilters = { status: '', platform: '', sort: 'last_clipped', virality_min: null, virality_max: null, date_range: '', date_from: '', date_to: '' };
 let _libClipSort = localStorage.getItem('lib_clip_sort') || 'newest';
 
 function setLibClipSort(val) {
@@ -3144,10 +3155,22 @@ async function showCreatorDetail(creatorId) {
 
 function _syncClipSortVisibility() {
   const isCreatorClips = _libCurrentView.startsWith('creator:') && _libCreatorTab === 'clips';
-  const wrap = document.getElementById('lib-clip-sort-wrap');
-  if (wrap) wrap.style.display = isCreatorClips ? 'flex' : 'none';
+  const clipWrap = document.getElementById('lib-clip-sort-wrap');
+  if (clipWrap) clipWrap.style.display = isCreatorClips ? 'flex' : 'none';
+  const videoWrap = document.getElementById('lib-video-sort-wrap');
+  if (videoWrap) {
+    videoWrap.style.display = !isCreatorClips ? 'flex' : 'none';
+    const sel = document.getElementById('lib-video-sort-sel');
+    if (sel) sel.value = _libFilters.sort || 'last_clipped';
+  }
   const chips = document.getElementById('fc-chips');
   if (chips) chips.style.display = isCreatorClips ? 'none' : 'block';
+}
+
+function setLibVideoSort(val) {
+  setFilter('sort', val);
+  const sel = document.getElementById('lib-video-sort-sel');
+  if (sel && sel.value !== val) sel.value = val;
 }
 
 function switchCreatorTab(tab, btn) {
@@ -3994,9 +4017,11 @@ function _applyFilterParams(params) {
 function renderFilterChips() {
   const bar = document.getElementById('fc-chips');
   if (!bar) return;
-  // Sync sort selector with persisted preference
-  const sortSel = document.getElementById('lib-clip-sort-sel');
-  if (sortSel && sortSel.value !== _libClipSort) sortSel.value = _libClipSort;
+  // Sync sort selectors
+  const clipSortSel = document.getElementById('lib-clip-sort-sel');
+  if (clipSortSel && clipSortSel.value !== _libClipSort) clipSortSel.value = _libClipSort;
+  const videoSortSel = document.getElementById('lib-video-sort-sel');
+  if (videoSortSel && videoSortSel.value !== (_libFilters.sort||'last_clipped')) videoSortSel.value = _libFilters.sort||'last_clipped';
   let html = '';
   const f = _libFilters;
   const labelMap = {
@@ -4004,13 +4029,9 @@ function renderFilterChips() {
     youtube:'YouTube', local:'Upload',
     newest:'Newest first', oldest:'Oldest first', virality:'Highest virality',
     clips:'Most clips', duration:'Longest first', creator:'By creator', retention:'Highest retention',
+    last_clipped:'Últimos clips creados',
     today:'Today', '7d':'Last 7 days', '30d':'Last 30 days', '90d':'Last 90 days', custom:'Custom range',
   };
-  // Sort chip (always visible)
-  html += `<span class="fc-chip fc-sort" title="Sort order">
-    ↕ ${labelMap[f.sort]||f.sort}
-    <span class="fc-x" onclick="openFcPanel(event,'sort')">▾</span>
-  </span>`;
   if (f.status) html += `<span class="fc-chip">Status: ${labelMap[f.status]||f.status}
     <span class="fc-x" onclick="clearFilter('status')">×</span></span>`;
   if (f.platform) html += `<span class="fc-chip">Source: ${labelMap[f.platform]||f.platform}
@@ -4133,7 +4154,7 @@ function clearFilter(key) {
 }
 
 function clearAllFilters() {
-  _libFilters = { status:'', platform:'', sort: _libFilters.sort||'newest',
+  _libFilters = { status:'', platform:'', sort: _libFilters.sort||'last_clipped',
                   virality_min:null, virality_max:null, date_range:'', date_from:'', date_to:'' };
   renderFilterChips();
   reloadCurrentView();
