@@ -27,6 +27,7 @@ from engine.hw_accel import detect_encoder
 from engine.captions.extractor import extract_clip_words
 from engine.captions.presets import default_settings
 from engine.captions.renderer import build_ass
+from engine.reframe.planner import plan_clip
 
 TARGET_W, TARGET_H = CONFIG.target_resolution  # (1080, 1920)
 
@@ -44,9 +45,13 @@ def render_clips_onepass(
     src_w: int,
     src_h: int,
     output_subdir: str = "clips",
+    proxy_path: str | None = None,
 ) -> list[str]:
     """
     Render all finalist clips in a single FFmpeg pass per clip (trim+crop+caption).
+
+    When proxy_path is provided, each clip gets a face-detected framing plan
+    that replaces the static center crop with a face-centered x_offset.
 
     Clips are rendered in parallel up to max_parallel_renders.
     Returns list of clip_ids (DB) for successfully rendered clips,
@@ -70,7 +75,6 @@ def render_clips_onepass(
         pass  # disk_usage failure is non-fatal — proceed and let FFmpeg report errors
 
     encoder, enc_opts, max_par = detect_encoder()
-    crop_filter = _compute_crop_filter(src_w, src_h)
     caption_settings = dict(default_settings())
 
     # Build render tasks; sort by virality so highest-score clips render first
@@ -86,7 +90,7 @@ def render_clips_onepass(
             pool.submit(
                 _render_one,
                 source, cand, out_path, words, caption_settings,
-                crop_filter, encoder, enc_opts, job_id,
+                encoder, enc_opts, job_id, src_w, src_h, proxy_path,
             ): (idx, cand)
             for idx, cand, out_path in tasks
         }
@@ -114,15 +118,44 @@ def _render_one(
     out_path: str,
     words: list[dict],
     caption_settings: dict,
-    crop_filter: str,
     encoder: str,
     enc_opts: list[str],
     job_id: str,
+    src_w: int,
+    src_h: int,
+    proxy_path: str | None = None,
 ) -> str | None:
     """Render a single clip. Returns clip_id on success, None on failure."""
     start_s = float(cand["start_s"])
     end_s = float(cand["end_s"])
     duration = end_s - start_s
+
+    # ── Framing plan: reuse stored plan or generate a new one ────────────────
+    fp_json = cand.get("framing_plan")
+    if fp_json:
+        try:
+            framing_plan = json.loads(fp_json)
+        except Exception:
+            framing_plan = None
+    else:
+        framing_plan = None
+
+    if framing_plan is None and proxy_path:
+        try:
+            framing_plan = plan_clip(proxy_path, start_s, end_s, src_w, src_h)
+            # Persist so re-renders can reuse without re-analyzing
+            with db.db() as _conn:
+                _conn.execute(
+                    "UPDATE candidates SET framing_plan=? WHERE id=?",
+                    (json.dumps(framing_plan), cand["id"]),
+                )
+        except Exception as _fp_err:
+            print(f"  [reframe] plan_clip failed, using center crop: {_fp_err}")
+            framing_plan = None
+
+    # Build crop filter (face-centered if plan available, else static center)
+    x_offset = framing_plan["x_offset"] if framing_plan and not framing_plan.get("fallback") else None
+    crop_filter = _compute_crop_filter(src_w, src_h, x_offset=x_offset)
 
     # Extract + normalize words for this clip window
     clip_words = extract_clip_words(words, start_s, end_s)
@@ -273,8 +306,12 @@ def _check_technical_qa(meta: dict, out_path: str, expected_duration: float) -> 
     return "PASS", notes
 
 
-def _compute_crop_filter(src_w: int, src_h: int) -> str:
-    """Compute FFmpeg crop+scale filter to convert source to 1080x1920."""
+def _compute_crop_filter(src_w: int, src_h: int, x_offset: int | None = None) -> str:
+    """Compute FFmpeg crop+scale filter to convert source to 1080x1920.
+
+    When x_offset is given (from a FramingPlan), it replaces the default center
+    offset — this is how face-centered framing is applied.
+    """
     src_w = src_w or TARGET_W
     src_h = src_h or TARGET_H
     src_ratio = src_w / src_h
@@ -285,10 +322,13 @@ def _compute_crop_filter(src_w: int, src_h: int) -> str:
     elif src_ratio > target_ratio:
         # Wider than 9:16 → crop sides
         new_w = int(src_h * target_ratio)
-        x_offset = (src_w - new_w) // 2
+        if x_offset is None:
+            x_offset = (src_w - new_w) // 2  # center fallback
+        # Clamp to valid range
+        x_offset = max(0, min(int(x_offset), src_w - new_w))
         return f"crop={new_w}:{src_h}:{x_offset}:0,scale={TARGET_W}:{TARGET_H}"
     else:
-        # Taller than 9:16 → crop top/bottom
+        # Taller than 9:16 → crop top/bottom (x_offset not applicable here)
         new_h = int(src_w / target_ratio)
         y_offset = (src_h - new_h) // 2
         return f"crop={src_w}:{new_h}:0:{y_offset},scale={TARGET_W}:{TARGET_H}"

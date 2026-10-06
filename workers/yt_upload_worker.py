@@ -11,7 +11,7 @@ import os
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from engine import database as db
@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 _WORKER_ID = f"yt-{uuid.uuid4().hex[:8]}"
 
-# Error codes that should not be retried
-_FATAL_ERRORS = {"QUOTA_EXCEEDED", "PERMISSION_ERROR", "AUTH_REVOKED", "INVALID_FILE"}
+# Error codes that should not be retried (QUOTA_EXCEEDED is daily-renewable — not fatal)
+_FATAL_ERRORS = {"PERMISSION_ERROR", "AUTH_REVOKED", "INVALID_FILE"}
 
 
 class YTUploadWorker(threading.Thread):
@@ -38,13 +38,25 @@ class YTUploadWorker(threading.Thread):
     def stop(self):
         self._stop_event.set()
 
+    SYNC_INTERVAL_MINUTES = 30  # configurable via env YOUTUBE_SYNC_INTERVAL_MINUTES
+
     def run(self):
         logger.info("[YTUploadWorker] started (worker_id=%s)", _WORKER_ID)
-        # On startup, unlock stale sessions so they get re-attempted
         self._unlock_stale_sessions()
+        self._reset_quota_sessions()
+        self._startup_recovery()
+
+        # Skip immediate sync — startup already ran _startup_recovery; next sync after interval.
+        last_sync_ts = time.time()
+        sync_interval = int(os.environ.get("YOUTUBE_SYNC_INTERVAL_MINUTES", self.SYNC_INTERVAL_MINUTES)) * 60
 
         while not self._stop_event.is_set():
             try:
+                # Periodic channel sync
+                if time.time() - last_sync_ts >= sync_interval:
+                    self._run_periodic_sync()
+                    last_sync_ts = time.time()
+
                 session = self._claim_next()
                 if session:
                     self._process_session(session)
@@ -53,6 +65,38 @@ class YTUploadWorker(threading.Thread):
             except Exception:
                 logger.exception("[YTUploadWorker] unexpected error in main loop")
                 self._stop_event.wait(self.POLL_INTERVAL)
+
+    def _startup_recovery(self):
+        """On startup, verify any sessions stuck in 'processing' state."""
+        try:
+            from publishers import yt_auth
+            from publishers.yt_sync import verify_pending_sessions
+            token = yt_auth.get_valid_token()
+            if token:
+                result = verify_pending_sessions(token)
+                if result["checked"] > 0:
+                    logger.info(
+                        "[YTUploadWorker] startup recovery: checked=%d updated=%d",
+                        result["checked"], result["updated"],
+                    )
+        except Exception:
+            logger.warning("[YTUploadWorker] startup recovery skipped (not connected or error)")
+
+    def _run_periodic_sync(self):
+        """Periodic channel sync — reconcile local state with YouTube."""
+        try:
+            from publishers import yt_auth
+            from publishers.yt_sync import run_channel_sync
+            token = yt_auth.get_valid_token()
+            if not token:
+                return
+            result = run_channel_sync(token)
+            logger.info(
+                "[YTUploadWorker] periodic sync: found=%d matched=%d updated=%d",
+                result["videos_found"], result["videos_matched"], result["videos_updated"],
+            )
+        except Exception:
+            logger.warning("[YTUploadWorker] periodic sync failed (will retry next cycle)")
 
     # ── Claim ─────────────────────────────────────────────────────────────────
 
@@ -66,13 +110,40 @@ class YTUploadWorker(threading.Thread):
         """On startup, release sessions locked >10 min ago so they can be retried."""
         stale = db.list_stale_yt_sessions()
         for s in stale:
-            logger.info("[YTUploadWorker] unlocking stale session %s", s["id"])
+            logger.info("[YTUploadWorker] unlocking stale session %s (status=%s)", s["id"], s.get("status"))
             db.update_yt_upload_session(
                 s["id"],
                 status="pending",
                 locked_at=None,
                 locked_by=None,
             )
+
+    def _reset_quota_sessions(self):
+        """Legacy fallback: reset QUOTA_EXCEEDED sessions that have no next_attempt_at set.
+
+        New failures set next_attempt_at via _fail() and stay as 'pending' — they are
+        picked up automatically when their time arrives. This method handles any sessions
+        created before the next_attempt_at column existed (revision f1bec0686e1f).
+        """
+        cutoff = (datetime.now(tz=timezone.utc) - timedelta(hours=23)).isoformat()
+        try:
+            with db.db() as conn:
+                rows = conn.execute(
+                    "SELECT id FROM yt_upload_sessions "
+                    "WHERE error_code='QUOTA_EXCEEDED' AND status='error' "
+                    "AND next_attempt_at IS NULL AND last_attempt_at<?",
+                    (cutoff,),
+                ).fetchall()
+                for row in rows:
+                    conn.execute(
+                        "UPDATE yt_upload_sessions SET status='pending', error_message=NULL, "
+                        "error_code=NULL, locked_at=NULL, locked_by=NULL, attempts=0 WHERE id=?",
+                        (row[0],),
+                    )
+            if rows:
+                logger.info("[YTUploadWorker] legacy-reset %d QUOTA_EXCEEDED session(s) after 23h", len(rows))
+        except Exception:
+            logger.exception("[YTUploadWorker] error in _reset_quota_sessions")
 
     # ── Process ───────────────────────────────────────────────────────────────
 
@@ -142,10 +213,22 @@ class YTUploadWorker(threading.Thread):
                 except Exception:
                     pass
                 approved_privacy = session.get("privacy_status") or "private"
+                _title = (session.get("title") or "").strip()
+                _desc  = (session.get("description") or "").strip()
+                if not _title:
+                    self._fail(sid, pub_id,
+                               "METADATA_MISSING: title is empty — edit in Publishing before uploading",
+                               "INVALID_METADATA")
+                    return
+                if not _desc:
+                    self._fail(sid, pub_id,
+                               "METADATA_MISSING: description is empty — edit in Publishing before uploading",
+                               "INVALID_METADATA")
+                    return
                 session_url = uploader.create_resumable_session(
                     access_token=access_token,
-                    title=session.get("title") or "Short",
-                    description=session.get("description") or "",
+                    title=_title[:100],
+                    description=_desc[:5000],
                     tags=tags,
                     file_size=file_size,
                     is_for_kids=bool(session.get("is_for_kids")),
@@ -161,41 +244,51 @@ class YTUploadWorker(threading.Thread):
             db.update_yt_upload_session(sid, status="uploading", updated_at=_now())
             _update_pub_status(pub_id, "publishing")
 
-            # 4. Upload in chunks
-            video_id = None
-            while bytes_offset < file_size:
-                if self._stop_event.is_set():
-                    # Unlock cleanly for next startup
+            # 4. Upload in chunks (skip if already uploaded in a prior run)
+            video_id = session.get("remote_video_id") or None
+            if video_id:
+                # Resuming after a server restart during polling — go straight to step 5
+                logger.info("[YTUploadWorker] skipping upload for %s, already have video_id=%s", sid, video_id)
+            else:
+                while bytes_offset < file_size:
+                    if self._stop_event.is_set():
+                        # Unlock cleanly for next startup
+                        db.update_yt_upload_session(
+                            sid,
+                            locked_at=None,
+                            locked_by=None,
+                            bytes_sent=bytes_offset,
+                            updated_at=_now(),
+                        )
+                        return
+
+                    result = uploader.upload_chunk(session_url, file_path, bytes_offset)
+                    bytes_offset = result["bytes_sent"]
                     db.update_yt_upload_session(
-                        sid,
-                        locked_at=None,
-                        locked_by=None,
-                        bytes_sent=bytes_offset,
-                        updated_at=_now(),
+                        sid, bytes_sent=bytes_offset, updated_at=_now()
                     )
+
+                    if result["done"]:
+                        video_id = result["video_id"]
+                        break
+
+                if not video_id:
+                    self._fail(sid, pub_id, "Upload completed but no video_id returned", "UNKNOWN")
                     return
 
-                result = uploader.upload_chunk(session_url, file_path, bytes_offset)
-                bytes_offset = result["bytes_sent"]
-                db.update_yt_upload_session(
-                    sid, bytes_sent=bytes_offset, updated_at=_now()
-                )
-
-                if result["done"]:
-                    video_id = result["video_id"]
-                    break
-
-            if not video_id:
-                self._fail(sid, pub_id, "Upload completed but no video_id returned", "UNKNOWN")
-                return
-
-            # 5. Poll for processing
+            # 5. Poll for processing — persist video_id to publication immediately
+            # so a crash during polling doesn't lose the upload link.
             db.update_yt_upload_session(
                 sid,
                 status="processing",
                 remote_video_id=video_id,
                 bytes_sent=file_size,
                 updated_at=_now(),
+            )
+            _update_pub_status(
+                pub_id, "publishing",
+                external_post_id=video_id,
+                external_url=f"https://studio.youtube.com/video/{video_id}/edit",
             )
 
             final_status = "private"
@@ -279,17 +372,74 @@ class YTUploadWorker(threading.Thread):
 
         except Exception as exc:
             error_code = uploader.classify_error(exc)
+            retry_after_secs = _extract_retry_after(exc)
             fatal = error_code in _FATAL_ERRORS
-            self._fail(sid, pub_id, str(exc), error_code, fatal=fatal)
+            self._fail(sid, pub_id, str(exc), error_code, fatal=fatal, retry_after_seconds=retry_after_secs)
 
     # ── Failure handling ──────────────────────────────────────────────────────
 
-    def _fail(self, sid: str, pub_id: str, message: str, error_code: str, fatal: bool = False):
+    # Retry intervals (minutes) — configurable per error class
+    QUOTA_RETRY_MINUTES = 30       # uploadLimitExceeded: per-channel daily limit
+    TRANSIENT_RETRY_MINUTES = 5    # network/server errors
+
+    def _fail(self, sid: str, pub_id: str, message: str, error_code: str,
+              fatal: bool = False, retry_after_seconds: int | None = None):
         logger.error("[YTUploadWorker] session %s failed: %s (%s)", sid, message, error_code)
 
         session = db.get_yt_upload_session(sid)
         attempts = (session or {}).get("attempts") or 0
 
+        # Quota errors are time-limited, not attempt-limited — schedule retry, stay pending
+        if error_code == "QUOTA_EXCEEDED":
+            if retry_after_seconds and retry_after_seconds > 0:
+                delay_minutes = retry_after_seconds / 60
+            else:
+                delay_minutes = self.QUOTA_RETRY_MINUTES
+            next_attempt = (
+                datetime.now(tz=timezone.utc) + timedelta(minutes=delay_minutes)
+            ).isoformat()
+            logger.info(
+                "[YTUploadWorker] session %s QUOTA_EXCEEDED — scheduled retry at %s (delay=%.1fmin)",
+                sid, next_attempt, delay_minutes,
+            )
+            db.update_yt_upload_session(
+                sid,
+                status="pending",
+                error_message=message,
+                error_code=error_code,
+                next_attempt_at=next_attempt,
+                locked_at=None,
+                locked_by=None,
+                attempts=0,   # reset so MAX_ATTEMPTS doesn't kill quota-retried sessions
+                updated_at=_now(),
+            )
+            return
+
+        if error_code == "TRANSIENT" and not fatal:
+            if retry_after_seconds and retry_after_seconds > 0:
+                delay_minutes = retry_after_seconds / 60
+            else:
+                delay_minutes = self.TRANSIENT_RETRY_MINUTES
+            next_attempt = (
+                datetime.now(tz=timezone.utc) + timedelta(minutes=delay_minutes)
+            ).isoformat()
+            logger.info(
+                "[YTUploadWorker] session %s TRANSIENT — retry in %.1fmin at %s",
+                sid, delay_minutes, next_attempt,
+            )
+            db.update_yt_upload_session(
+                sid,
+                status="pending",
+                error_message=message,
+                error_code=error_code,
+                next_attempt_at=next_attempt,
+                locked_at=None,
+                locked_by=None,
+                updated_at=_now(),
+            )
+            return
+
+        # All other errors: respect MAX_ATTEMPTS, then mark error
         if fatal or attempts >= self.MAX_ATTEMPTS:
             status = "error"
         else:
@@ -316,6 +466,30 @@ class YTUploadWorker(threading.Thread):
                         "[YTUploadWorker] paused %d subsequent series parts for series=%s after part %d failed",
                         paused, series_id, series_part,
                     )
+
+
+def _extract_retry_after(exc: Exception) -> int | None:
+    """Extract Retry-After seconds from an HTTPError or a RuntimeError wrapping one."""
+    import urllib.error as _ue
+    header = None
+    http_exc = exc if isinstance(exc, _ue.HTTPError) else (
+        exc.__cause__ if isinstance(getattr(exc, "__cause__", None), _ue.HTTPError) else None
+    )
+    if http_exc is not None and http_exc.headers:
+        header = http_exc.headers.get("Retry-After")
+    if header is None:
+        msg = str(exc)
+        if msg.startswith("Retry-After:"):
+            try:
+                header = msg.split("\n")[0].split(":", 1)[1].strip()
+            except Exception:
+                pass
+    if header is None:
+        return None
+    try:
+        return int(header)
+    except (ValueError, TypeError):
+        return None
 
 
 def _now() -> str:

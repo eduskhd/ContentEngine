@@ -257,6 +257,7 @@ def process_video(
             src_w=src_w,
             src_h=src_h,
             output_subdir=output_subdir,
+            proxy_path=proxy_path,
         )
         timer.end(clips=len(clip_ids))
         console.print(f"  [green]OK[/] {len(clip_ids)} clips rendered")
@@ -289,6 +290,13 @@ def process_video(
             _print_summary(job_id, clip_ids, qa_results, gate_results, cfg.mode)
         except Exception:
             pass
+
+        # Auto-create youtube_shorts publications for all non-rejected clips
+        if video_id:
+            try:
+                db.ensure_video_package_publications(video_id)
+            except Exception:
+                pass
 
         db.update_job(job_id, status="COMPLETED")
 

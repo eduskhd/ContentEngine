@@ -484,6 +484,12 @@ def init_db():
         # Series sequential upload (2026-09-19)
         _add_column_if_missing(conn, "yt_upload_sessions", "series_id", "TEXT")
         _add_column_if_missing(conn, "yt_upload_sessions", "series_part", "INTEGER DEFAULT 0")
+        # Reframing plan (2026-10-02)
+        _add_column_if_missing(conn, "candidates", "framing_plan", "TEXT")
+        # Publication metadata tracking (2026-10-02)
+        _add_column_if_missing(conn, "publications", "meta_version", "TEXT")
+        _add_column_if_missing(conn, "publications", "title_prev", "TEXT")
+        _add_column_if_missing(conn, "publications", "caption_prev", "TEXT")
         # Packages & batch upload tables (2026-09-18)
         conn.executescript("""
         CREATE TABLE IF NOT EXISTS clip_packages (
@@ -523,6 +529,19 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_pkg_items_pkg ON clip_package_items(package_id);
         CREATE INDEX IF NOT EXISTS idx_batch_items_batch ON upload_batch_items(batch_id);
         """)
+        # YouTube channel sync state (2026-10-05)
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS yt_sync_state (
+            channel_id TEXT PRIMARY KEY,
+            last_sync_at TEXT,
+            last_sync_found INTEGER DEFAULT 0,
+            last_sync_matched INTEGER DEFAULT 0,
+            last_sync_updated INTEGER DEFAULT 0,
+            last_error TEXT
+        );
+        """)
+        # next_attempt_at on yt_upload_sessions (may be missing on older installs)
+        _add_column_if_missing(conn, "yt_upload_sessions", "next_attempt_at", "TEXT")
         # Run migration: link existing videos to creator records
         _migrate_creators(conn)
 
@@ -1475,6 +1494,7 @@ _PUBLICATION_COLS = frozenset({
     "status", "title", "caption", "hashtags", "platform_overrides",
     "scheduled_at", "published_at", "external_post_id", "external_url",
     "error_message", "retry_count", "next_retry_at", "publication_order", "notes",
+    "meta_version", "title_prev", "caption_prev",
 })
 
 
@@ -1541,104 +1561,212 @@ def add_publication_metrics(pub_id: str, **kwargs) -> str:
 
 
 def generate_clip_metadata(clip_id: str) -> dict:
+    """Generate title, caption, hashtags for a clip using the metadata generator."""
+    from engine.metadata_generator import generate_clip_metadata as _gen
+    return _gen(clip_id)
+
+
+def validate_pub_metadata(title: str, caption: str) -> tuple[bool, str]:
+    """Validate title and caption before upload. Returns (is_valid, error_reason)."""
+    from engine.metadata_generator import validate_metadata
+    return validate_metadata(title, caption)
+
+
+# ── Video package helpers ─────────────────────────────────────────────────────
+
+def get_video_package(video_id: str) -> dict | None:
+    """Return all clips for a source video ordered by start_s with publication info."""
+    import os as _os
     with db() as conn:
-        row = conn.execute("""
-            SELECT ca.virality_reasons, ca.virality_score,
-                   cr.name as creator_name, cr.handle,
-                   v.source_title, v.source_platform,
-                   cs.title as series_title
-            FROM candidates ca
-            JOIN clips cl ON cl.candidate_id = ca.id
-            LEFT JOIN videos v ON ca.video_id = v.id
-            LEFT JOIN creators cr ON v.creator_id = cr.id
-            LEFT JOIN clip_series cs ON ca.series_id = cs.id
-            WHERE cl.id=?
-        """, (clip_id,)).fetchone()
-    if not row:
-        return {"title": "", "caption": "", "hashtags": []}
-    d = dict(row)
-    creator = d.get("creator_name") or "Creator"
-    score = d.get("virality_score") or 0
-    try:
-        reasons = json.loads(d.get("virality_reasons") or "[]")
-    except Exception:
-        reasons = []
-    return {
-        "title": _suggest_title(creator, reasons, score, d.get("series_title"), d.get("source_title") or ""),
-        "caption": _suggest_caption(creator, reasons, score),
-        "hashtags": _suggest_hashtags(creator, reasons, d.get("source_platform")),
-    }
+        video = conn.execute(
+            "SELECT id, source_title, creator_id, thumbnail_path, created_at FROM videos WHERE id=?",
+            (video_id,)
+        ).fetchone()
+        if not video:
+            return None
+
+        rows = conn.execute("""
+            SELECT
+                c.id AS clip_id,
+                c.output_path, c.captioned_path, c.prepublish_decision,
+                c.prepublish_score, c.duration_s,
+                cand.start_s, cand.end_s, cand.series_id, cand.series_part,
+                cand.virality_score,
+                ROW_NUMBER() OVER (ORDER BY cand.start_s, c.id) AS position
+            FROM clips c
+            JOIN candidates cand ON cand.id = c.candidate_id
+            WHERE cand.video_id = ?
+            ORDER BY cand.start_s, c.id
+        """, (video_id,)).fetchall()
+
+        clip_ids = [r["clip_id"] for r in rows]
+        pubs_by_clip: dict = {}
+        if clip_ids:
+            placeholders = ",".join("?" * len(clip_ids))
+            pub_rows = conn.execute(
+                f"SELECT id, clip_id, platform, status, external_post_id, external_url, "
+                f"       publication_order, title, error_message "
+                f"FROM publications WHERE clip_id IN ({placeholders}) AND status != 'archived'",
+                clip_ids
+            ).fetchall()
+            for p in pub_rows:
+                pubs_by_clip.setdefault(p["clip_id"], []).append(dict(p))
+
+        members = []
+        for r in rows:
+            cid = r["clip_id"]
+            file_path = r["captioned_path"] or r["output_path"] or ""
+            file_ok = bool(file_path and _os.path.exists(file_path))
+            members.append({
+                "clip_id": cid,
+                "position": r["position"],
+                "start_s": r["start_s"],
+                "end_s": r["end_s"],
+                "duration_s": r["duration_s"],
+                "prepublish_decision": r["prepublish_decision"],
+                "prepublish_score": r["prepublish_score"],
+                "virality_score": r["virality_score"],
+                "series_id": r["series_id"],
+                "series_part": r["series_part"],
+                "file_ok": file_ok,
+                "file_path": file_path,
+                "publications": pubs_by_clip.get(cid, []),
+            })
+
+        yt_pubs = [p for m in members for p in m["publications"] if p["platform"] == "youtube_shorts"]
+        published = sum(1 for p in yt_pubs if p["status"] in ("published", "public", "unlisted", "private"))
+        ready     = sum(1 for p in yt_pubs if p["status"] == "ready")
+        failed    = sum(1 for p in yt_pubs if p["status"] in ("failed", "cancelled"))
+        has_pub   = {p["clip_id"] for p in yt_pubs}
+        missing   = sum(1 for m in members if m["clip_id"] not in has_pub
+                        and m["prepublish_decision"] not in ("REJECT", None))
+
+        creator = conn.execute("SELECT name, avatar_color FROM creators WHERE id=?",
+                               (video["creator_id"],)).fetchone() if video["creator_id"] else None
+
+        return {
+            "video_id": video_id,
+            "source_title": video["source_title"],
+            "creator_id": video["creator_id"],
+            "creator_name": creator["name"] if creator else None,
+            "avatar_color": creator["avatar_color"] if creator else None,
+            "thumbnail_path": video["thumbnail_path"],
+            "created_at": video["created_at"],
+            "total_clips": len(members),
+            "published_count": published,
+            "ready_count": ready,
+            "failed_count": failed,
+            "missing_publications": missing,
+            "members": members,
+        }
 
 
-def _suggest_title(creator, reasons, score, series_title=None, source_title=""):
-    import random
-    reason_lower = " ".join(reasons).lower()
-    HOOK = ["This moment had everyone talking", "Nobody saw this coming",
-            "Wait for the reaction", "This caught everyone off guard",
-            "The moment everything changed"]
-    EMOTIONAL = ["This moment hit different", "The reaction was priceless",
-                 "This had the whole room going"]
-    HIGH = ["Best moment of the stream", "This is why we watch",
-            "Clip of the year material", "This clip is going viral"]
-    if series_title:
-        return f"{creator}: {series_title[:60]}"
-    if "hook" in reason_lower or "opener" in reason_lower:
-        pool = HOOK
-    elif "emotion" in reason_lower or "reaction" in reason_lower:
-        pool = EMOTIONAL
-    elif score >= 85:
-        pool = HIGH
-    else:
-        pool = HOOK
-    base = random.choice(pool)
-    if len(creator) < 20 and creator not in ("Creator", "unknown"):
-        return f"{creator}: {base}"
-    return base
+def ensure_video_package_publications(video_id: str, platform: str = "youtube_shorts") -> dict:
+    """Create missing publications for all non-rejected clips in a video (idempotent)."""
+    import os as _os
+    from engine.metadata_generator import generate_clip_metadata as _gen_meta
+    created = skipped = 0
+
+    with db() as conn:
+        rows = conn.execute("""
+            SELECT c.id AS clip_id, c.captioned_path, c.output_path,
+                   c.prepublish_decision,
+                   cand.start_s, cand.series_id, cand.series_part,
+                   v.creator_id,
+                   ROW_NUMBER() OVER (ORDER BY cand.start_s, c.id) AS position
+            FROM clips c
+            JOIN candidates cand ON cand.id = c.candidate_id
+            JOIN videos v ON v.id = cand.video_id
+            WHERE cand.video_id = ?
+            ORDER BY cand.start_s, c.id
+        """, (video_id,)).fetchall()
+
+        for r in rows:
+            if r["prepublish_decision"] == "REJECT":
+                skipped += 1
+                continue
+
+            dup = conn.execute(
+                "SELECT id FROM publications WHERE clip_id=? AND platform=? AND status != 'archived'",
+                (r["clip_id"], platform)
+            ).fetchone()
+            if dup:
+                conn.execute(
+                    "UPDATE publications SET publication_order=?, video_id=?, updated_at=? "
+                    "WHERE id=? AND (publication_order != ? OR video_id IS NULL OR video_id != ?)",
+                    (r["position"], video_id, now(), dup["id"], r["position"], video_id)
+                )
+                skipped += 1
+                continue
+
+            file_path = r["captioned_path"] or r["output_path"] or ""
+            file_ok = bool(file_path and _os.path.exists(file_path))
+            status = "ready" if file_ok else "draft"
+
+            pid = new_id()
+            ts = now()
+            conn.execute(
+                """INSERT INTO publications
+                   (id, clip_id, creator_id, video_id, series_id, series_part, platform,
+                    status, hashtags, platform_overrides, retry_count, publication_order,
+                    created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?,?)""",
+                (pid, r["clip_id"], r["creator_id"], video_id,
+                 r["series_id"], r["series_part"], platform,
+                 status, "[]", "{}", r["position"], ts, ts)
+            )
+            try:
+                meta = _gen_meta(r["clip_id"])
+                conn.execute(
+                    "UPDATE publications SET title=?, caption=?, updated_at=? WHERE id=?",
+                    (meta.get("title", ""), meta.get("caption", ""), now(), pid)
+                )
+            except Exception:
+                pass
+            created += 1
+
+    return {"created": created, "skipped": skipped}
 
 
-def _suggest_caption(creator, reasons, score):
-    import random
-    reason_lower = " ".join(reasons).lower()
-    if score >= 90:
-        intros = ["This clip is insane 🔥", "Absolutely wild 🔥", "No way this happened 😱"]
-    elif score >= 75:
-        intros = ["You need to see this", "This moment right here", "Peak content 🔥"]
-    else:
-        intros = ["Clip of the day", "This one got me", "Don't miss this"]
-    intro = random.choice(intros)
-    if "funny" in reason_lower or "humor" in reason_lower:
-        return f"{intro} 😂 The reactions say it all."
-    elif "conflict" in reason_lower or "argument" in reason_lower:
-        return f"{intro} Things escalated fast."
-    elif "revelation" in reason_lower or "reveal" in reason_lower:
-        return f"{intro} The reveal at the end is everything."
-    return f"{intro} Follow for more."
-
-
-def _suggest_hashtags(creator, reasons, platform=None):
-    tags = []
-    if creator and creator not in ("Creator", "unknown", ""):
-        slug = creator.lower().replace(" ", "").replace("-", "")
-        tags.append(f"#{slug}")
-    reason_lower = " ".join(reasons).lower()
-    if "funny" in reason_lower or "humor" in reason_lower:
-        tags += ["#funny", "#lol"]
-    if "reaction" in reason_lower:
-        tags += ["#reaction"]
-    if "conflict" in reason_lower or "argument" in reason_lower:
-        tags += ["#drama"]
-    tags += ["#viral", "#fyp", "#foryou"]
-    if platform in ("youtube", "youtube_shorts"):
-        tags.append("#shorts")
-    elif platform == "tiktok":
-        tags.append("#tiktok")
-    elif platform in ("instagram", "instagram_reels"):
-        tags.append("#reels")
-    seen, result = set(), []
-    for t in tags:
-        if t not in seen:
-            seen.add(t); result.append(t)
-    return result[:12]
+def get_video_package_batches(video_id: str) -> list[dict]:
+    """Return upload batches that include clips from this video, most recent first."""
+    with db() as conn:
+        rows = conn.execute("""
+            SELECT DISTINCT ub.id, ub.name, ub.created_at, ub.paused, ub.total_items,
+                            ub.approved_privacy
+            FROM upload_batches ub
+            JOIN upload_batch_items ubi ON ubi.batch_id = ub.id
+            JOIN publications p ON p.id = ubi.pub_id
+            WHERE p.video_id = ?
+            ORDER BY ub.created_at DESC
+        """, (video_id,)).fetchall()
+        result = []
+        for ub in rows:
+            items = conn.execute("""
+                SELECT ubi.pub_id, ubi.session_id, ubi.privacy_status,
+                       s.status, s.remote_video_id, s.error_code, s.next_attempt_at
+                FROM upload_batch_items ubi
+                LEFT JOIN yt_upload_sessions s ON s.id = ubi.session_id
+                WHERE ubi.batch_id = ?
+            """, (ub["id"],)).fetchall()
+            item_statuses = [i["status"] or "pending" for i in items]
+            done    = sum(1 for s in item_statuses if s in ("public","unlisted","private","processed"))
+            failed  = sum(1 for s in item_statuses if s in ("failed","cancelled","error"))
+            pending = sum(1 for s in item_statuses if s in ("pending","uploading","processing","paused"))
+            waiting = sum(1 for i in items if i["next_attempt_at"])
+            result.append({
+                "batch_id": ub["id"],
+                "name": ub["name"],
+                "created_at": ub["created_at"],
+                "paused": bool(ub["paused"]),
+                "total": ub["total_items"],
+                "done": done,
+                "failed": failed,
+                "pending": pending,
+                "quota_waiting": waiting,
+                "approved_privacy": ub["approved_privacy"],
+            })
+        return result
 
 
 # ── Quality evaluation helpers ────────────────────────────────────────────────
@@ -1774,7 +1902,7 @@ def delete_missed_moment(moment_id: str):
 _YT_SESSION_ALLOWED_COLS = {
     "status", "session_url", "remote_video_id", "remote_process_status",
     "remote_privacy_status", "bytes_sent", "file_size", "file_path", "file_hash",
-    "attempts", "last_attempt_at", "error_message", "error_code",
+    "attempts", "last_attempt_at", "next_attempt_at", "error_message", "error_code",
     "locked_at", "locked_by", "updated_at", "series_id", "series_part",
     "privacy_status",
 }
@@ -1838,39 +1966,78 @@ def update_yt_upload_session(session_id: str, **kwargs):
 def claim_yt_upload_session(worker_id: str) -> dict | None:
     """Atomically claim the next pending session.
 
-    Series ordering: skips part N if any earlier part of the same series is
-    not yet in a terminal state (private/public/unlisted/needs_check/error/cancelled).
+    Ordering rules (applied in this priority):
+    1. Batch order: sessions from older batches (earlier created_at) are processed first.
+       A session from batch B is skipped if batch A (created earlier, same channel or
+       any channel) still has non-terminal sessions — enforcing Package 1 before Package 2.
+    2. Series order: within a series, part N is skipped while any earlier part is pending.
+    3. next_attempt_at: sessions are skipped until their scheduled retry time has passed.
     """
-    _TERMINAL = {"private", "public", "unlisted", "needs_check", "error", "cancelled"}
-    threshold = datetime.utcnow() - timedelta(minutes=5)
-    threshold_iso = threshold.isoformat()
+    stale_threshold = (datetime.utcnow() - timedelta(minutes=5)).isoformat()
+    now_iso = datetime.utcnow().isoformat()
+
     with db() as conn:
+        # Fetch candidates ordered by batch creation time, then series part, then session creation
         candidates = conn.execute("""
-            SELECT * FROM yt_upload_sessions
-            WHERE status='pending'
-              AND (locked_at IS NULL OR locked_at < ?)
-              AND attempts < 3
-            ORDER BY series_id NULLS LAST, series_part ASC, created_at ASC
+            SELECT s.*,
+                   COALESCE(b.created_at, s.created_at) AS batch_created_at,
+                   b.id AS batch_id_ref
+            FROM yt_upload_sessions s
+            LEFT JOIN upload_batch_items ubi ON ubi.pub_id = s.pub_id
+            LEFT JOIN upload_batches b ON b.id = ubi.batch_id
+            WHERE s.status='pending'
+              AND (s.locked_at IS NULL OR s.locked_at < ?)
+              AND (s.next_attempt_at IS NULL OR s.next_attempt_at <= ?)
+            ORDER BY COALESCE(b.created_at, s.created_at) ASC,
+                     s.series_part ASC,
+                     s.created_at ASC
             LIMIT 20
-        """, (threshold_iso,)).fetchall()
+        """, (stale_threshold, now_iso)).fetchall()
+
         if not candidates:
             return None
 
         chosen = None
         for row in candidates:
             row = dict(row)
+            batch_id_ref = row.get("batch_id_ref")
             sid_val = row.get("series_id")
             spart = row.get("series_part") or 0
+
+            # Rule 1: batch ordering — skip if an earlier batch still has pending/active sessions.
+            # Exception: QUOTA_EXCEEDED sessions waiting on a time-window retry are not
+            # considered active blockers — they will be retried independently.
+            if batch_id_ref:
+                batch_created_at = row.get("batch_created_at")
+                if batch_created_at:
+                    blocking_batch = conn.execute("""
+                        SELECT 1
+                        FROM yt_upload_sessions s2
+                        JOIN upload_batch_items ubi2 ON ubi2.pub_id = s2.pub_id
+                        JOIN upload_batches b2 ON b2.id = ubi2.batch_id
+                        WHERE b2.created_at < ?
+                          AND s2.status NOT IN ('private','public','unlisted',
+                                               'needs_check','error','cancelled')
+                          AND NOT (s2.error_code='QUOTA_EXCEEDED'
+                                   AND s2.next_attempt_at IS NOT NULL
+                                   AND s2.next_attempt_at > datetime('now'))
+                        LIMIT 1
+                    """, (batch_created_at,)).fetchone()
+                    if blocking_batch:
+                        continue
+
+            # Rule 2: series ordering — skip if a previous part is still in-progress
             if sid_val and spart > 0:
-                # Check if a previous part is still in-progress
-                blocking = conn.execute("""
+                blocking_series = conn.execute("""
                     SELECT 1 FROM yt_upload_sessions
-                    WHERE series_id=? AND series_part < ? AND status NOT IN
-                          ('private','public','unlisted','needs_check','error','cancelled')
+                    WHERE series_id=? AND series_part < ?
+                      AND status NOT IN ('private','public','unlisted',
+                                        'needs_check','error','cancelled')
                     LIMIT 1
                 """, (sid_val, spart)).fetchone()
-                if blocking:
+                if blocking_series:
                     continue
+
             chosen = row
             break
 
@@ -2070,7 +2237,7 @@ def get_upload_batch(batch_id: str) -> dict | None:
         items = conn.execute("""
             SELECT i.pub_id, i.session_id, i.added_at,
                    s.status, s.bytes_sent, s.file_size, s.error_message, s.error_code,
-                   s.remote_video_id, s.series_part, p.title, p.platform
+                   s.remote_video_id, s.series_part, s.next_attempt_at, p.title, p.platform
             FROM upload_batch_items i
             LEFT JOIN yt_upload_sessions s ON s.id = i.session_id
             LEFT JOIN publications p ON p.id = i.pub_id

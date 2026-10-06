@@ -1,7 +1,11 @@
 """
 YouTube Data API v3 resumable upload engine.
 
-privacyStatus is ALWAYS forced to 'private' regardless of caller value.
+privacyStatus is passed through to YouTube as requested by the caller.
+NOTE: YouTube may override privacyStatus to 'private' for API projects that
+have not passed the API Services Compliance Audit (created after 2020-07-28).
+The worker detects this mismatch and marks the session 'needs_check' with
+error_code='VISIBILITY_MISMATCH'. The video is NOT re-uploaded in that case.
 session_url is a sensitive value and must never be exposed to clients.
 """
 import hashlib
@@ -105,13 +109,24 @@ def create_resumable_session(
         headers={
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json; charset=UTF-8",
-            "X-Upload-Content-Type": "video/*",
+            "X-Upload-Content-Type": "video/mp4",
             "X-Upload-Content-Length": str(file_size),
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        session_url = resp.headers.get("Location")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            session_url = resp.headers.get("Location")
+    except urllib.error.HTTPError as exc:
+        retry_after = exc.headers.get("Retry-After") if exc.headers else None
+        try:
+            yt_error_body = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            yt_error_body = "(unreadable)"
+        msg = f"YouTube API {exc.code} creating upload session: {yt_error_body}"
+        if retry_after:
+            msg = f"Retry-After: {retry_after}\n{msg}"
+        raise RuntimeError(msg) from exc
     if not session_url:
         raise RuntimeError("No Location header in YouTube resumable session response")
     return session_url
@@ -256,17 +271,26 @@ def classify_error(exc_or_response) -> str:
             except Exception:
                 pass
             return "PERMISSION_ERROR"
+        if code == 429:
+            return "QUOTA_EXCEEDED"
         if code == 401:
             return "AUTH_REVOKED"
-        if code in (400, 422):
+        if code == 422:
             return "INVALID_FILE"
+        if code == 400:
+            try:
+                body = exc_or_response.read().decode(errors="replace")
+                if "uploadLimitExceeded" in body:
+                    return "QUOTA_EXCEEDED"
+            except Exception:
+                pass
         if code in (500, 502, 503, 504):
             return "TRANSIENT"
         return "UNKNOWN"
     if isinstance(exc_or_response, (ConnectionError, TimeoutError, OSError)):
         return "TRANSIENT"
     msg = str(exc_or_response).lower()
-    if "quota" in msg:
+    if "quota" in msg or "uploadlimitexceeded" in msg:
         return "QUOTA_EXCEEDED"
     if "unauthorized" in msg or "401" in msg or "revoked" in msg:
         return "AUTH_REVOKED"

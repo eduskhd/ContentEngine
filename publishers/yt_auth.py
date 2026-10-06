@@ -34,6 +34,7 @@ _YT_CHANNELS_URL = "https://www.googleapis.com/youtube/v3/channels"
 _SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/youtube.force-ssl",
 ]
 
 REDIRECT_URI = "http://localhost:8000/oauth/youtube/callback"

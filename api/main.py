@@ -1,5 +1,5 @@
 """ContentEngine REST API."""
-import uuid, shutil, asyncio, datetime, json, zipfile, tempfile, subprocess
+import uuid, shutil, asyncio, datetime, json, zipfile, tempfile, subprocess, threading
 from pathlib import Path
 from typing import AsyncGenerator
 
@@ -1128,6 +1128,48 @@ async def youtube_disconnect():
     return {"disconnected": True}
 
 
+@app.post("/youtube/sync")
+async def youtube_sync(background_tasks: BackgroundTasks):
+    """
+    Trigger a full channel sync in the background.
+    Reconciles all local publications with the actual state of @contentenginelv.
+    Safe to call multiple times — idempotent.
+    """
+    from publishers import yt_auth
+    try:
+        token = yt_auth.get_valid_token()
+        if not token:
+            raise HTTPException(400, "YouTube not connected")
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
+
+    def _do_sync():
+        from publishers.yt_sync import run_channel_sync
+        try:
+            result = run_channel_sync(token)
+            import logging
+            logging.getLogger(__name__).info("[/youtube/sync] %s", result)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("[/youtube/sync] background sync failed")
+
+    background_tasks.add_task(_do_sync)
+    return {"queued": True, "message": "Sync iniciado en segundo plano"}
+
+
+@app.get("/youtube/sync/status")
+async def youtube_sync_status():
+    """Return the last sync state for the connected channel."""
+    from publishers.yt_sync import CHANNEL_ID
+    with dbmod.db() as conn:
+        row = conn.execute(
+            "SELECT * FROM yt_sync_state WHERE channel_id=?", (CHANNEL_ID,)
+        ).fetchone()
+    if not row:
+        return {"channel_id": CHANNEL_ID, "last_sync_at": None, "never_synced": True}
+    return dict(row)
+
+
 # ── YOUTUBE UPLOADS ───────────────────────────────────────────────────────────
 
 @app.post("/publications/{pub_id}/youtube-upload")
@@ -1202,8 +1244,11 @@ async def start_youtube_upload(pub_id: str, body: dict = Body({})):
     file_size = Path(file_path).stat().st_size
     file_hash = compute_file_hash(file_path)
 
-    title = (body.get("title") or pub.get("title") or "Short")[:100]
-    description = (body.get("description") or pub.get("caption") or "")[:5000]
+    title = (body.get("title") or pub.get("title") or "").strip()[:100]
+    description = (body.get("description") or pub.get("caption") or "").strip()[:5000]
+    _valid, _reason = dbmod.validate_pub_metadata(title, description)
+    if not _valid:
+        raise HTTPException(400, f"METADATA_INVALID: {_reason} — edit title/description in Publishing before uploading")
     tags_raw = body.get("tags")
     if tags_raw is None:
         raw_hashtags = pub.get("hashtags") or "[]"
@@ -1877,6 +1922,194 @@ async def retry_job(job_id: str):
     return {"status": "requeued", "job_id": job_id}
 
 
+# ── VIDEO PACKAGES ────────────────────────────────────────────────────────────
+
+@app.get("/videos/{video_id}/package")
+async def get_video_package(video_id: str):
+    """Return the complete ordered clip list for a source video (the video package)."""
+    pkg = dbmod.get_video_package(video_id)
+    if not pkg:
+        raise HTTPException(404, "Video not found")
+    return pkg
+
+
+@app.post("/videos/{video_id}/package/ensure-publications")
+async def ensure_package_publications(video_id: str):
+    """Create missing youtube_shorts publications for all non-rejected clips (idempotent)."""
+    pkg = dbmod.get_video_package(video_id)
+    if not pkg:
+        raise HTTPException(404, "Video not found")
+    result = dbmod.ensure_video_package_publications(video_id)
+    return result
+
+
+@app.post("/videos/{video_id}/package/publish")
+async def publish_video_package(video_id: str, body: dict = Body(...)):
+    """
+    Ensure publications exist then create an upload batch with all ready
+    youtube_shorts clips from this video, ordered by position.
+    Body: { idempotency_key, privacy_status?, name? }
+    """
+    from publishers import yt_auth, yt_upload as _uploader
+    import os as _os2
+
+    if not dbmod.get_video_package(video_id):
+        raise HTTPException(404, "Video not found")
+
+    idempotency_key = (body.get("idempotency_key") or "").strip()
+    if not idempotency_key:
+        raise HTTPException(400, "idempotency_key required")
+
+    existing_batch = dbmod.get_batch_by_idempotency(idempotency_key)
+    if existing_batch:
+        return {"batch_id": existing_batch["id"], "duplicate": True, "queued": 0, "skipped": []}
+
+    if not yt_auth.is_connected():
+        raise HTTPException(400, "YouTube not connected")
+
+    privacy_status = (body.get("privacy_status") or "public").strip()
+    if privacy_status not in {"private", "unlisted", "public"}:
+        raise HTTPException(422, "privacy_status must be private, unlisted or public")
+
+    # Ensure all clips have publications
+    dbmod.ensure_video_package_publications(video_id)
+
+    pkg = dbmod.get_video_package(video_id)
+    tokens = yt_auth.load_tokens()
+    channel_id = (tokens or {}).get("channel_id", "")
+    name = (body.get("name") or f"Package: {(pkg['source_title'] or video_id[:8])[:50]}").strip()
+
+    # Collect ready youtube_shorts publications ordered by position
+    members_by_pos = sorted(pkg["members"], key=lambda m: m["position"])
+    queued_pairs = []
+    skipped = []
+
+    for m in members_by_pos:
+        yt_pubs = [p for p in m["publications"] if p["platform"] == "youtube_shorts"
+                   and p["status"] not in ("archived", "published", "public", "unlisted", "private")]
+        if not yt_pubs:
+            # Already published or no publication
+            already = [p for p in m["publications"] if p["platform"] == "youtube_shorts"
+                       and p["status"] in ("published", "public", "unlisted", "private")]
+            if already:
+                skipped.append({"clip_id": m["clip_id"], "position": m["position"],
+                                 "reason": "already_published", "pub_id": already[0]["id"]})
+            elif m["prepublish_decision"] == "REJECT":
+                skipped.append({"clip_id": m["clip_id"], "position": m["position"],
+                                 "reason": "rejected"})
+            continue
+
+        pub_row = yt_pubs[0]
+        pub_id = pub_row["id"]
+
+        if not m["file_ok"]:
+            skipped.append({"clip_id": m["clip_id"], "position": m["position"],
+                             "pub_id": pub_id, "reason": "file_missing"})
+            continue
+
+        full_pub = dbmod.get_publication(pub_id)
+        _title = (full_pub.get("title") or "").strip() if full_pub else ""
+        _desc  = (full_pub.get("caption") or "").strip() if full_pub else ""
+        _valid, _reason = dbmod.validate_pub_metadata(_title, _desc)
+        if not _valid:
+            skipped.append({"clip_id": m["clip_id"], "position": m["position"],
+                             "pub_id": pub_id, "reason": f"metadata_invalid: {_reason}"})
+            continue
+
+        existing_session = dbmod.get_yt_upload_session_by_pub(pub_id)
+        if existing_session:
+            s_status = existing_session.get("status")
+            if s_status in ("pending", "uploading", "processing", "paused",
+                            "public", "unlisted", "private", "needs_check"):
+                queued_pairs.append((pub_id, existing_session["id"]))
+                continue
+            # Error state — reset for retry
+            try:
+                fhash = _uploader.compute_file_hash(m["file_path"])
+            except Exception:
+                skipped.append({"clip_id": m["clip_id"], "position": m["position"],
+                                 "pub_id": pub_id, "reason": "hash_failed"})
+                continue
+            dbmod.update_yt_upload_session(
+                existing_session["id"],
+                status="pending", session_url=None, remote_video_id=None,
+                bytes_sent=0, file_path=m["file_path"], file_hash=fhash,
+                file_size=_os2.path.getsize(m["file_path"]),
+                privacy_status=privacy_status,
+                error_message=None, error_code=None,
+                locked_at=None, locked_by=None, attempts=0,
+                updated_at=datetime.datetime.utcnow().isoformat(),
+            )
+            queued_pairs.append((pub_id, existing_session["id"]))
+            continue
+
+        try:
+            fhash = _uploader.compute_file_hash(m["file_path"])
+        except Exception:
+            skipped.append({"clip_id": m["clip_id"], "position": m["position"],
+                             "pub_id": pub_id, "reason": "hash_failed"})
+            continue
+
+        tags = []
+        try:
+            raw = (full_pub or {}).get("hashtags") or "[]"
+            tags = json.loads(raw) if raw.startswith("[") else [t.lstrip("#") for t in raw.split() if t]
+        except Exception:
+            pass
+
+        session_id = dbmod.create_yt_upload_session(
+            pub_id=pub_id,
+            clip_id=m["clip_id"],
+            channel_id=channel_id,
+            title=_title[:100],
+            description=_desc[:5000],
+            tags=tags,
+            is_for_kids=False,
+            file_path=m["file_path"],
+            file_hash=fhash,
+            file_size=_os2.path.getsize(m["file_path"]),
+            privacy_status=privacy_status,
+            series_id=(full_pub or {}).get("series_id") or None,
+            series_part=(full_pub or {}).get("series_part") or 0,
+        )
+        queued_pairs.append((pub_id, session_id))
+
+    if not queued_pairs:
+        return {"batch_id": None, "queued": 0, "skipped": skipped,
+                "error": "No publishable clips found in package"}
+
+    batch_id = dbmod.create_upload_batch(name, channel_id, idempotency_key, queued_pairs,
+                                         approved_privacy=privacy_status)
+    return {"batch_id": batch_id, "duplicate": False, "queued": len(queued_pairs),
+            "skipped": skipped, "total_in_package": pkg["total_clips"]}
+
+
+@app.get("/videos/{video_id}/package/batches")
+async def get_package_batches(video_id: str):
+    """Return upload batches associated with this video package."""
+    if not dbmod.get_video_package(video_id):
+        raise HTTPException(404, "Video not found")
+    return dbmod.get_video_package_batches(video_id)
+
+
+@app.post("/videos/backfill-packages")
+async def backfill_all_packages():
+    """Create missing youtube_shorts publications for all existing videos (idempotent admin op)."""
+    conn = dbmod.get_db()
+    video_ids = [r["id"] for r in conn.execute("SELECT id FROM videos").fetchall()]
+    conn.close()
+    total_created = total_skipped = 0
+    results = []
+    for vid in video_ids:
+        r = dbmod.ensure_video_package_publications(vid)
+        total_created += r["created"]
+        total_skipped += r["skipped"]
+        if r["created"]:
+            results.append({"video_id": vid, **r})
+    return {"total_created": total_created, "total_skipped": total_skipped,
+            "videos_with_new_pubs": len(results), "details": results}
+
+
 # ── PUBLISHING ─────────────────────────────────────────────────────────────────
 
 _VALID_PLATFORMS = {"tiktok", "youtube_shorts", "instagram_reels"}
@@ -1980,6 +2213,9 @@ async def update_publication(pub_id: str, body: dict = Body(...)):
                "scheduled_at", "external_url", "external_post_id"}
     updates = {k: v for k, v in body.items() if k in allowed}
     if updates:
+        # If the user is editing title or caption, mark as manually edited
+        if "title" in updates or "caption" in updates:
+            updates["meta_version"] = "manual"
         dbmod.update_publication(pub_id, **updates)
         dbmod.log_publication_audit(pub_id, "metadata_updated", f"fields={list(updates.keys())}")
     return {"status": "updated"}
@@ -2146,6 +2382,120 @@ async def bulk_publication_action(body: dict = Body(...)):
         except Exception:
             failed.append(pub_id)
     return {"success": success, "failed": failed}
+
+
+# ── Metadata remediation ──────────────────────────────────────────────────────
+
+_GENERIC_TITLE_VALUES = {"short", "untitled", "clip", "video", "short 1", "clip 1"}
+
+
+def _title_is_generic(title: str | None) -> bool:
+    if not title:
+        return True
+    return (title.strip().lower() in _GENERIC_TITLE_VALUES or
+            not title.strip())
+
+
+@app.post("/publications/remediate-metadata")
+async def remediate_publication_metadata(body: dict = Body({})):
+    """
+    Fill in publications with missing or generic title/caption.
+    Preserves manually-set (meta_version='manual') and custom non-generic content.
+
+    dry_run=true: returns what would be changed without modifying DB.
+    force=true: regenerates even publications that already have content.
+    """
+    dry_run = body.get("dry_run", False)
+    force = body.get("force", False)
+
+    conn = dbmod.get_db()
+    rows = conn.execute("""
+        SELECT p.id, p.clip_id, p.title, p.caption, p.meta_version
+        FROM publications p
+        WHERE p.status NOT IN ('archived', 'cancelled')
+        ORDER BY p.created_at ASC
+    """).fetchall()
+    conn.close()
+
+    results = {"examined": 0, "updated": 0, "skipped": 0, "errors": 0, "details": []}
+
+    for row in rows:
+        results["examined"] += 1
+        pub_id = row["id"]
+        clip_id = row["clip_id"]
+        current_title = row["title"] or ""
+        current_caption = row["caption"] or ""
+        meta_version = row["meta_version"] or ""
+
+        # Never overwrite manual edits unless force=True
+        if meta_version == "manual" and not force:
+            results["skipped"] += 1
+            results["details"].append({"pub_id": pub_id, "action": "skipped", "reason": "manual"})
+            continue
+
+        # Check if content needs updating:
+        # - empty/generic title or caption
+        # - OR old-generator output (no meta_version) that fails current validation
+        _meta_valid, _ = dbmod.validate_pub_metadata(current_title, current_caption)
+        needs_update = (
+            force or
+            _title_is_generic(current_title) or
+            not current_caption.strip() or
+            (not meta_version and not _meta_valid)
+        )
+        if not needs_update:
+            results["skipped"] += 1
+            continue
+
+        # Generate new metadata
+        try:
+            meta = dbmod.generate_clip_metadata(clip_id)
+        except Exception as exc:
+            results["errors"] += 1
+            results["details"].append({"pub_id": pub_id, "action": "error", "reason": str(exc)})
+            continue
+
+        new_title = meta.get("title") or ""
+        new_caption = meta.get("caption") or ""
+        new_meta_version = meta.get("meta_version") or "deterministic_v1"
+
+        # Skip if generation produced no useful content (e.g. orphaned clip)
+        if not new_title and not new_caption:
+            results["skipped"] += 1
+            results["details"].append({
+                "pub_id": pub_id, "action": "skipped",
+                "reason": f"no data available (meta_version={new_meta_version})",
+            })
+            continue
+
+        results["details"].append({
+            "pub_id": pub_id,
+            "action": "updated" if not dry_run else "would_update",
+            "title_before": current_title[:60],
+            "title_after": new_title[:60],
+            "meta_version": new_meta_version,
+        })
+
+        if not dry_run:
+            try:
+                dbmod.update_publication(
+                    pub_id,
+                    title=new_title,
+                    caption=new_caption,
+                    hashtags=meta.get("hashtags", []),
+                    meta_version=new_meta_version,
+                    title_prev=current_title or None,
+                    caption_prev=current_caption or None,
+                )
+                dbmod.log_publication_audit(pub_id, "metadata_remediated",
+                                            f"version={new_meta_version}")
+                results["updated"] += 1
+            except Exception as exc:
+                results["errors"] += 1
+                results["details"][-1]["action"] = "error"
+                results["details"][-1]["reason"] = str(exc)
+
+    return results
 
 
 @app.get("/publications/download-zip")
@@ -2671,12 +3021,18 @@ async def create_upload_batch(body: dict = Body(...)):
         except Exception:
             pass
 
+        _title = (pub.get("title") or "").strip()
+        _desc  = (pub.get("caption") or "").strip()
+        _valid_b, _reason_b = dbmod.validate_pub_metadata(_title, _desc)
+        if not _valid_b:
+            skipped.append({"pub_id": pub_id, "reason": f"METADATA_INVALID: {_reason_b}"})
+            continue
         session_id = dbmod.create_yt_upload_session(
             pub_id=pub_id,
             clip_id=pub["clip_id"],
             channel_id=channel_id,
-            title=pub.get("title") or "Short",
-            description=pub.get("caption") or "",
+            title=_title[:100],
+            description=_desc[:5000],
             tags=tags,
             is_for_kids=False,
             file_path=file_path,
@@ -2806,6 +3162,162 @@ async def update_session_privacy(session_id: str, body: dict = Body({})):
         "requested": privacy_status,
         "returned": returned_privacy,
         "mismatch": mismatch,
+    }
+
+
+# ── YT QUEUE STATUS ───────────────────────────────────────────────────────────
+
+@app.get("/yt/queue-status")
+async def yt_queue_status():
+    """
+    Lightweight status snapshot of the YouTube upload queue.
+    Used by the dashboard service status block.
+    """
+    from datetime import datetime, timezone as _tz
+    now_iso = datetime.now(tz=_tz.utc).isoformat()
+    conn = dbmod.get_db()
+    try:
+        uploading = conn.execute(
+            "SELECT COUNT(*) FROM yt_upload_sessions WHERE status IN ('uploading','processing')"
+        ).fetchone()[0]
+        pending_total = conn.execute(
+            "SELECT COUNT(*) FROM yt_upload_sessions WHERE status='pending'"
+        ).fetchone()[0]
+        pending_eligible = conn.execute(
+            "SELECT COUNT(*) FROM yt_upload_sessions WHERE status='pending' "
+            "AND (next_attempt_at IS NULL OR next_attempt_at <= ?)",
+            (now_iso,),
+        ).fetchone()[0]
+        pending_waiting = conn.execute(
+            "SELECT COUNT(*) FROM yt_upload_sessions WHERE status='pending' "
+            "AND next_attempt_at > ?",
+            (now_iso,),
+        ).fetchone()[0]
+        next_row = conn.execute(
+            "SELECT MIN(next_attempt_at) FROM yt_upload_sessions "
+            "WHERE status='pending' AND next_attempt_at > ?",
+            (now_iso,),
+        ).fetchone()
+        next_attempt_at = next_row[0] if next_row else None
+        pending_quota = conn.execute(
+            "SELECT COUNT(*) FROM yt_upload_sessions WHERE status='pending'"
+            " AND error_code='QUOTA_EXCEEDED' AND next_attempt_at > ?",
+            (now_iso,),
+        ).fetchone()[0]
+    finally:
+        conn.close()
+
+    if uploading > 0:
+        worker_state = "active"
+    elif pending_eligible > 0:
+        worker_state = "working"
+    elif pending_waiting > 0:
+        worker_state = "waiting"
+    elif pending_total == 0:
+        worker_state = "idle"
+    else:
+        worker_state = "idle"
+
+    return {
+        "worker_state": worker_state,
+        "uploading": uploading,
+        "pending_eligible": pending_eligible,
+        "pending_waiting": pending_waiting,
+        "pending_total": pending_total,
+        "pending_quota": pending_quota,
+        "next_attempt_at": next_attempt_at,
+    }
+
+
+_retry_pending_lock = threading.Lock()
+
+
+@app.post("/yt/retry-pending")
+async def yt_retry_pending():
+    """
+    Clear internal retry waits on eligible pending sessions so the worker picks
+    them up on its next poll (≤15s). Explicit user action — clears ALL non-fatal
+    waits including QUOTA_EXCEEDED, TRANSIENT, and sessions with no error_code.
+
+    Skips: currently locked (uploading), fatal errors (PERMISSION_ERROR /
+    AUTH_REVOKED / INVALID_FILE), cancelled, and sessions already eligible.
+    Returns count cleared and fresh queue state.
+    """
+    from datetime import datetime, timezone as _tz
+
+    _FATAL = ("PERMISSION_ERROR", "AUTH_REVOKED", "INVALID_FILE")
+    now_iso = datetime.now(tz=_tz.utc).isoformat()
+
+    if not _retry_pending_lock.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="Reintento ya en curso")
+
+    try:
+        conn = dbmod.get_db()
+        try:
+            placeholders = ",".join("?" * len(_FATAL))
+            result = conn.execute(
+                f"""UPDATE yt_upload_sessions
+                    SET next_attempt_at = NULL, updated_at = ?
+                    WHERE status = 'pending'
+                      AND next_attempt_at IS NOT NULL
+                      AND next_attempt_at > ?
+                      AND (locked_by IS NULL OR locked_by = '')
+                      AND (error_code IS NULL OR error_code NOT IN ({placeholders}))""",
+                [now_iso, now_iso, *_FATAL],
+            )
+            cleared = result.rowcount
+            conn.commit()
+
+            uploading = conn.execute(
+                "SELECT COUNT(*) FROM yt_upload_sessions WHERE status IN ('uploading','processing')"
+            ).fetchone()[0]
+            pending_total = conn.execute(
+                "SELECT COUNT(*) FROM yt_upload_sessions WHERE status='pending'"
+            ).fetchone()[0]
+            pending_eligible = conn.execute(
+                "SELECT COUNT(*) FROM yt_upload_sessions WHERE status='pending' "
+                "AND (next_attempt_at IS NULL OR next_attempt_at <= ?)",
+                (now_iso,),
+            ).fetchone()[0]
+            pending_waiting = conn.execute(
+                "SELECT COUNT(*) FROM yt_upload_sessions WHERE status='pending' "
+                "AND next_attempt_at > ?",
+                (now_iso,),
+            ).fetchone()[0]
+            pending_quota = conn.execute(
+                "SELECT COUNT(*) FROM yt_upload_sessions WHERE status='pending' "
+                "AND error_code='QUOTA_EXCEEDED' AND next_attempt_at > ?",
+                (now_iso,),
+            ).fetchone()[0]
+            next_row = conn.execute(
+                "SELECT MIN(next_attempt_at) FROM yt_upload_sessions "
+                "WHERE status='pending' AND next_attempt_at > ?",
+                (now_iso,),
+            ).fetchone()
+            next_attempt_at = next_row[0] if next_row else None
+        finally:
+            conn.close()
+    finally:
+        _retry_pending_lock.release()
+
+    if uploading > 0:
+        worker_state = "active"
+    elif pending_eligible > 0:
+        worker_state = "working"
+    elif pending_waiting > 0:
+        worker_state = "waiting"
+    else:
+        worker_state = "idle"
+
+    return {
+        "cleared": cleared,
+        "worker_state": worker_state,
+        "uploading": uploading,
+        "pending_eligible": pending_eligible,
+        "pending_waiting": pending_waiting,
+        "pending_total": pending_total,
+        "pending_quota": pending_quota,
+        "next_attempt_at": next_attempt_at,
     }
 
 

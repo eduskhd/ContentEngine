@@ -25,7 +25,9 @@ nav > button.active{color:#fff;border-bottom-color:#3b82f6}
 .nav-sec.active{color:#999!important;border-bottom-color:#444!important}
 main{padding:24px;max-width:1280px;margin:0 auto}
 section{display:none}
-section.active{display:block}
+section.active{display:block;animation:_ce-fadein .13s ease}
+@keyframes _ce-fadein{from{opacity:0;translate:0 4px}to{opacity:1;translate:0 0}}
+@media(prefers-reduced-motion:reduce){section.active{animation:none}}
 
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:24px}
 .card{background:#161616;border:1px solid #222;border-radius:10px;padding:18px}
@@ -313,6 +315,18 @@ input[type=file]{font-size:13px;color:#888}
 .vc-meta{font-size:11px;color:#888;display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 .vc-actions{display:flex;gap:5px;align-items:center}
 .vc-score{font-size:11px;font-weight:700;border-radius:5px;padding:2px 6px;margin-left:auto}
+/* Video Package panel */
+.pkg-panel{background:#111;border:1px solid #2a2a2a;border-radius:10px;padding:16px;margin-top:4px}
+.pkg-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.pkg-counts{display:flex;gap:12px;font-size:12px;color:#888}
+.pkg-counts .pub{color:#4ade80}.pkg-counts .rdy{color:#60a5fa}.pkg-counts .fail{color:#f87171}
+.pkg-member{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #1a1a1a;font-size:12px}
+.pkg-member:last-child{border-bottom:none}
+.pkg-pos{color:#555;min-width:36px;font-variant-numeric:tabular-nums}
+.pkg-time{color:#666;min-width:60px;font-variant-numeric:tabular-nums}
+.pkg-dec{min-width:52px}
+.pkg-ytstatus{min-width:70px}
+.pkg-file-err{color:#f87171;font-size:11px}
 .vc-checkbox{position:absolute;top:8px;left:8px;width:20px;height:20px;border-radius:4px;border:2px solid #555;background:rgba(17,17,17,.85);cursor:pointer;display:none;align-items:center;justify-content:center;z-index:3;font-size:12px;font-weight:700;transition:background .12s,border-color .12s}
 .vc-checkbox.show{display:flex}
 .vc-checkbox.checked{background:#f97316;border-color:#f97316;color:#fff}
@@ -376,7 +390,7 @@ input[type=file]{font-size:13px;color:#888}
 
 /* â"€â"€ Publishing Center â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 .pub-layout{display:flex;gap:0;min-height:calc(100vh - 120px)}
-.pub-sidebar{width:190px;flex-shrink:0;border-right:1px solid #1e1e1e;padding:14px 10px;display:flex;flex-direction:column;gap:3px}
+.pub-sidebar{width:190px;flex-shrink:0;border-right:1px solid #1e1e1e;padding:14px 10px;display:flex;flex-direction:column;gap:3px;overflow-y:auto;max-height:calc(100vh - 120px)}
 .pub-sidebar-title{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.8px;padding:8px 10px 4px}
 .pub-nav-item{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:13px;color:#888;transition:background .15s}
 .pub-nav-item:hover{background:#1a1a1a;color:#ccc}
@@ -552,7 +566,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 <nav>
   <button onclick="showTab('overview',this)">Overview</button>
   <button onclick="showTab('library',this)">Library</button>
-  <button class="active" onclick="showTab('review',this)">Review <span id="review-count" style="background:#78350f;color:#fbbf24;border-radius:99px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px"></span></button>
+  <button onclick="showTab('review',this)">Review <span id="review-count" style="background:#78350f;color:#fbbf24;border-radius:99px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px"></span></button>
   <button onclick="showTab('jobs',this)">Jobs</button>
   <button id="nav-new-job" onclick="showTab('upload',this)">+ New Job</button>
   <div class="nav-sep"></div>
@@ -747,7 +761,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 </div>
 
 <!-- REVIEW QUEUE -->
-<section id="tab-review" class="active">
+<section id="tab-review">
   <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap">
     <p style="color:#888;font-size:13px;margin:0">Clips awaiting editorial decision. Approved and rejected clips remain in Library.</p>
     <div style="display:flex;gap:8px;margin-left:auto;flex-wrap:wrap">
@@ -1064,6 +1078,19 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     <div class="pub-nav-item" id="pn-packages" onclick="pubNav('packages')">
       Packages <span class="pub-nav-badge" id="pnb-packages"></span>
     </div>
+
+    <!-- YouTube queue service status -->
+    <div class="pub-sidebar-title" style="margin-top:16px">Cola YouTube</div>
+    <div id="yt-queue-status-block" style="padding:8px 10px;font-size:11px;color:#888;line-height:1.7">
+      <span style="color:#444">Cargando…</span>
+    </div>
+
+    <!-- Channel sync -->
+    <div class="pub-sidebar-title" style="margin-top:16px">Canal</div>
+    <div style="padding:6px 10px">
+      <button class="btn btn-outline btn-sm" style="width:100%;font-size:11px" onclick="triggerYtSync()" id="yt-sync-btn">⟳ Sincronizar</button>
+      <div id="yt-sync-status" style="font-size:10px;color:#555;margin-top:5px;line-height:1.5">—</div>
+    </div>
   </div>
 
   <!-- Main area -->
@@ -1115,6 +1142,11 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
   <div class="pub-modal">
     <button class="pub-modal-close" onclick="closePubModal()">✕</button>
     <h2 id="pem-heading">Publication Details</h2>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:11px">
+      <span style="color:#666">Metadata:</span>
+      <span id="pem-meta-badge" style="font-weight:600"></span>
+    </div>
+    <div id="pem-meta-warn" style="display:none;background:#7f1d1d;color:#fca5a5;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:10px"></div>
     <div class="pub-field">
       <label>Title</label>
       <input id="pem-title" placeholder="Title for this platform">
@@ -1125,7 +1157,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     </div>
     <div class="pub-field">
       <label>Hashtags (space or comma separated)</label>
-      <textarea id="pem-hashtags" rows="2" placeholder="#viral #fyp ..."></textarea>
+      <textarea id="pem-hashtags" rows="2" placeholder="#humor #drama ..."></textarea>
     </div>
     <div class="pub-field">
       <label>Notes (internal)</label>
@@ -1272,6 +1304,50 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     <div style="display:flex;gap:8px">
       <button class="btn btn-outline btn-sm" onclick="closeBatchUploadModal()">Cancel</button>
       <button class="btn btn-success" id="bum-confirm-btn" onclick="confirmBatchUpload()">Upload <span id="bum-count">0</span> clips</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════════ PUBLISH PACKAGE MODAL ═════════════ -->
+<div class="pub-modal-overlay" id="pkg-publish-modal" onclick="if(event.target===this)closePkgPublishModal()">
+  <div class="pub-modal" style="max-width:480px">
+    <button class="pub-modal-close" onclick="closePkgPublishModal()">✕</button>
+    <h2 style="font-size:14px;font-weight:600;color:#fff;margin-bottom:4px">📦 Publicar paquete en YouTube</h2>
+    <p id="ppm-video-title" style="font-size:12px;color:#888;margin-bottom:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></p>
+    <div style="background:#111;border-radius:8px;padding:12px;margin-bottom:14px;display:flex;gap:24px">
+      <div style="text-align:center">
+        <div id="ppm-count" style="font-size:22px;font-weight:700;color:#60a5fa">0</div>
+        <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px">A publicar</div>
+      </div>
+      <div style="text-align:center">
+        <div id="ppm-total" style="font-size:22px;font-weight:700;color:#aaa">0</div>
+        <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px">Total clips</div>
+      </div>
+      <div style="text-align:center">
+        <div id="ppm-published" style="font-size:22px;font-weight:700;color:#4ade80">0</div>
+        <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px">Ya publicados</div>
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Visibilidad</div>
+      <div style="display:flex;gap:18px;font-size:13px;color:#ccc">
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="radio" name="ppm-privacy" value="public" checked> Público
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="radio" name="ppm-privacy" value="unlisted"> No listado
+        </label>
+        <label style="display:flex;align-items:center;gap=5px;cursor:pointer">
+          <input type="radio" name="ppm-privacy" value="private"> Privado
+        </label>
+      </div>
+      <div style="font-size:11px;color:#fbbf24;margin-top:6px">⚠ Los proyectos sin revisión de contenido pueden quedar restringidos a Privado. YouTube devolverá la visibilidad real.</div>
+    </div>
+    <p style="font-size:12px;color:#666;margin-bottom:14px">Los clips se suben uno a uno en orden cronológico. Las subidas ya enviadas no se pueden deshacer.</p>
+    <div id="ppm-error" style="display:none;background:#1a0a0a;border:1px solid #7f1d1d;border-radius:6px;padding:8px 12px;font-size:12px;color:#fca5a5;margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-outline btn-sm" onclick="closePkgPublishModal()">Cancelar</button>
+      <button class="btn btn-primary" id="ppm-confirm-btn" onclick="confirmPkgPublish()">Publicar <span id="ppm-btn-count">0</span> vídeos</button>
     </div>
   </div>
 </div>
@@ -1669,6 +1745,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 const API = 'http://localhost:8000';
 const _watchedJobs = {};   // job_id → EventSource
 let _refreshTimer = null;
+let _currentTab = '';      // active tab name
 
 // Smooth-poll helpers: smartRender only writes DOM when HTML changed and restores scroll.
 const _renderCache = {};
@@ -1686,11 +1763,18 @@ let _pollIsBackground = false;
 let _sidebarRefreshedAt = 0;
 
 // â"€â"€ Tabs â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-function showTab(name, btn) {
+function showTab(name, btn, _opts) {
   document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('nav > button').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  btn.classList.add('active');
+  const sec = document.getElementById('tab-' + name);
+  if (!sec) return;
+  sec.classList.add('active');
+  if (btn) btn.classList.add('active');
+  else {
+    const b = document.querySelector(`nav > button[onclick*="'${name}'"]`);
+    if (b) b.classList.add('active');
+  }
+  _currentTab = name;
   clearInterval(_refreshTimer);
   loadTab(name);
   if (['overview','jobs','library','review'].includes(name)) {
@@ -1699,12 +1783,36 @@ function showTab(name, btn) {
       try { await loadTab(name); } finally { _pollIsBackground = false; }
     }, 8000);
   }
+  if (!_opts || _opts.push !== false) {
+    const route = '#' + _routeFor(name);
+    if (location.hash !== route) history.pushState({tab: name}, '', route);
+  }
 }
 function loadTab(t) {
+  if (t !== 'publishing' && _ytQueuePollTimer) {
+    clearInterval(_ytQueuePollTimer);
+    _ytQueuePollTimer = null;
+  }
   ({overview:loadOverview, library:loadLibrary, review:loadReview,
     jobs:loadJobs, analytics:loadAnalytics, publishing:loadPublishing})[t]?.();
   if (t === 'analysis') populateAnalysisJobSelect();
   if (t === 'oauth') { checkYoutubeStatus(); loadStorageSummary(); }
+}
+function _routeFor(tab) {
+  if (tab === 'library') {
+    const v = typeof _libCurrentView !== 'undefined' ? _libCurrentView : '';
+    if (v.startsWith('creator:'))    return 'library/cr/' + v.slice(8);
+    if (v.startsWith('collection:')) return 'library/co/' + v.slice(11);
+    if (v === 'all-videos')  return 'library/all';
+    if (v === 'processing')  return 'library/proc';
+    if (v === 'failed')      return 'library/fail';
+    return 'library';
+  }
+  if (tab === 'publishing') {
+    const pv = typeof _pubView !== 'undefined' ? _pubView : 'ready';
+    return 'publishing/' + (pv || 'ready');
+  }
+  return tab;
 }
 
 // â"€â"€ Video player + Caption editor â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -2464,6 +2572,8 @@ let _libSelectMode = false;
 let _libSelected = new Set();   // video_ids selected
 let _libCurrentView = 'creators';
 let _libCurrentCreatorId = null;
+let _libPackageVideoId = null;   // non-null while user is viewing a package panel
+let _pkgPublish = {};            // pending publish state for the modal
 let _libCreatorTab = 'videos';  // 'videos' | 'clips' | 'series'
 let _libCreators = [];
 let _libCollections = [];
@@ -2537,26 +2647,41 @@ async function refreshSidebarCounts() {
 async function reloadCurrentView() {
   const v = _libCurrentView;
   if (v === 'creators') return showCreatorsGrid();
-  if (v.startsWith('creator:')) return showCreatorDetail(v.slice(8));
+  if (v.startsWith('creator:')) {
+    if (_libPackageVideoId) return;  // keep package panel visible while user browses package
+    return showCreatorDetail(v.slice(8));
+  }
   if (v === 'all-videos') return showAllVideos();
   if (v === 'processing') return showProcessing();
   if (v === 'failed') return showFailed();
   if (v.startsWith('collection:')) return showCollectionView(v.slice(11));
 }
 
-function libNav(view, el) {
+function libNav(view, el, _opts) {
   _libCurrentView = view;
   _libSelected.clear();
   updateBulkBar();
   // Highlight sidebar
   document.querySelectorAll('.lib-nav-item').forEach(x => x.classList.remove('active'));
   if (el) el.classList.add('active');
+  else if (view.startsWith('creator:')) {
+    const x = document.getElementById('lnav-cr-' + view.slice(8));
+    if (x) x.classList.add('active');
+  } else if (view.startsWith('collection:')) {
+    const x = document.getElementById('lnav-coll-' + view.slice(11));
+    if (x) x.classList.add('active');
+  }
   // Filters: show only in video views
   const showFilters = view === 'all-videos' || view.startsWith('creator:') || view.startsWith('collection:');
   const fr = document.getElementById('lib-filters-row');
   if (fr) fr.style.display = showFilters ? 'flex' : 'none';
   if (showFilters) renderFilterChips();
   reloadCurrentView();
+  // Push URL when navigating within Library
+  if ((!_opts || _opts.push !== false) && _currentTab === 'library') {
+    const route = '#' + _routeFor('library');
+    if (location.hash !== route) history.pushState({tab: 'library', sub: view}, '', route);
+  }
 }
 
 function libSearchChanged(q) {
@@ -2883,6 +3008,7 @@ async function showCreatorsGrid() {
 
 // â"€â"€ Creator detail â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function showCreatorDetail(creatorId) {
+  _libPackageVideoId = null;  // leaving package view
   _libCurrentCreatorId = creatorId;
   const el = document.getElementById('lib-content');
   if (!_pollIsBackground) el.innerHTML = '<div class="empty">Loading…</div>';
@@ -3188,6 +3314,7 @@ function renderVideoCards(videos, container, creatorId) {
         </div>
         <div class="vc-actions">
           ${clips ? `<button class="btn btn-outline btn-sm" onclick="showVideoClips('${v.job_id||v.id}','${_esc(title)}')">Clips (${clips})</button>` : ''}
+          ${clips ? `<button class="btn btn-sm" style="background:#1e3a5f;color:#60a5fa;border:1px solid #1e4a8a;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:12px" onclick="showVideoPackage('${v.id}','${_esc(title)}')">&#128230; Package</button>` : ''}
           ${status==='COMPLETED' && !clips ? `<button class="btn btn-primary btn-sm" onclick="openVideoJobs('${v.job_id||v.id}')">Generate</button>` : ''}
           ${status!=='COMPLETED' ? `<button class="btn btn-outline btn-sm" onclick="openVideoJobs('${v.job_id||v.id}')">Open</button>` : ''}
           ${vs ? `<span class="vc-score" style="color:${vsColor};background:#1a1a1a">▲${vs}</span>` : ''}
@@ -3218,6 +3345,186 @@ function openVideoJobs(jobId) {
     (document.getElementById('analysis-job-select').value = jobId);
   showTab('analysis', document.querySelectorAll('nav button')[4]);
   loadAnalysis(jobId);
+}
+
+// â"€â"€ Video Package panel â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+async function showVideoPackage(videoId, videoTitle) {
+  _libPackageVideoId = videoId;
+  let el = document.getElementById('creator-tab-content') || document.getElementById('lib-content');
+  if (!el) return;
+  el.innerHTML = '<div class="empty">Loading package…</div>';
+
+  let pkg;
+  try {
+    pkg = await api(`/videos/${videoId}/package`);
+  } catch(e) {
+    el = document.getElementById('creator-tab-content') || document.getElementById('lib-content');
+    if (el && _libPackageVideoId === videoId) el.innerHTML = `<div class="empty">Error: ${_esc(e.message)}</div>`;
+    return;
+  }
+  // Re-fetch el after await — creator-tab-content may have been re-created if creator re-rendered
+  el = document.getElementById('creator-tab-content') || document.getElementById('lib-content');
+  if (!el || _libPackageVideoId !== videoId) return;  // navigated away
+
+  const ytPub     = pkg.published_count;
+  const ytReady   = pkg.ready_count;
+  const ytFailed  = pkg.failed_count;
+  const ytPending = pkg.total_clips - ytPub - ytReady - ytFailed;
+
+  const publishable = pkg.members.filter(m => {
+    const ytp = (m.publications || []).find(p => p.platform === 'youtube_shorts');
+    return ytp && ytp.status === 'ready' && m.file_ok;
+  }).length;
+
+  const memberRows = pkg.members.map(m => {
+    const n = pkg.total_clips;
+    const ytp = (m.publications || []).find(p => p.platform === 'youtube_shorts');
+    const ytStatus = ytp ? ytp.status : '—';
+    const ytColor = (ytStatus === 'published' || ytStatus === 'public') ? '#4ade80'
+                  : ytStatus === 'ready'   ? '#60a5fa'
+                  : ytStatus === 'failed'  ? '#f87171'
+                  : '#555';
+    const decChip = m.prepublish_decision === 'PUBLISH' ? '<span style="color:#4ade80">PUBLISH</span>'
+                  : m.prepublish_decision === 'REVIEW'  ? '<span style="color:#fbbf24">REVIEW</span>'
+                  : m.prepublish_decision === 'REJECT'  ? '<span style="color:#f87171">REJECT</span>'
+                  : '<span style="color:#555">—</span>';
+    const extLink = ytp && ytp.external_post_id
+      ? ` <a href="https://youtube.com/shorts/${ytp.external_post_id}" target="_blank" style="color:#4ade80;font-size:10px">↗</a>`
+      : '';
+    const fileErr = !m.file_ok ? '<span class="pkg-file-err">✗ file missing</span>' : '';
+    const _ts = Math.round(m.start_s);
+    const mins = Math.floor(_ts / 60);
+    const secs = String(_ts % 60).padStart(2, '0');
+    return `<div class="pkg-member">
+      <span class="pkg-pos">${m.position}/${n}</span>
+      <span class="pkg-time">${mins}:${secs}</span>
+      <span class="pkg-dec">${decChip}</span>
+      <span class="pkg-ytstatus" style="color:${ytColor}">${ytStatus}${extLink}</span>
+      ${fileErr}
+    </div>`;
+  }).join('');
+
+  const publishBtn = publishable > 0
+    ? `<button class="btn btn-primary btn-sm" onclick="publishVideoPackage('${videoId}','${_esc(videoTitle)}')">Publicar ${publishable} v\xeddeo${publishable!==1?'s':''} &rarr;</button>`
+    : ytPub === pkg.total_clips
+      ? `<span style="color:#4ade80;font-size:12px">✓ Todos publicados (${ytPub})</span>`
+      : `<span style="color:#888;font-size:12px">Sin clips publicables</span>`;
+
+  el.innerHTML = `
+    <div style="margin-bottom:12px">
+      <button class="btn btn-outline btn-sm" onclick="showCreatorDetail('${_libCurrentCreatorId}')"><- Volver</button>
+    </div>
+    <div class="pkg-panel">
+      <div class="pkg-header">
+        <strong style="color:#e0e0e0;font-size:14px">📦 ${_esc(pkg.source_title || videoTitle)}</strong>
+        <div class="pkg-counts">
+          <span>${pkg.total_clips} clips</span>
+          ${ytPub    ? `<span class="pub">✓ ${ytPub} publicados</span>` : ''}
+          ${ytReady  ? `<span class="rdy">● ${ytReady} listos</span>`  : ''}
+          ${ytFailed ? `<span class="fail">✗ ${ytFailed} fallidos</span>` : ''}
+          ${ytPending > 0 ? `<span style="color:#555">○ ${ytPending} sin pub</span>` : ''}
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <button class="btn btn-outline btn-sm" style="font-size:11px" title="Sincronizar estados con YouTube" onclick="syncAndReloadPackage('${videoId}','${_esc(videoTitle)}')">⟳</button>
+          ${publishBtn}
+        </div>
+      </div>
+      <div id="pkg-members-${videoId}">${memberRows}</div>
+    </div>`;
+}
+
+async function syncAndReloadPackage(videoId, videoTitle) {
+  toast('Sincronizando con YouTube…');
+  try {
+    await api('/youtube/sync', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+    await new Promise(r => setTimeout(r, 3500));
+    await showVideoPackage(videoId, videoTitle);
+    toast('Package actualizado');
+  } catch(e) {
+    toast('Error al sincronizar: ' + e.message, 'error');
+  }
+}
+
+async function publishVideoPackage(videoId, videoTitle) {
+  let ytStatus;
+  try { ytStatus = await api('/youtube/status'); } catch(e) { ytStatus = {}; }
+  if (!ytStatus.connected) {
+    toast('YouTube no est\xe1 conectado. Ve a OAuth.', 'error'); return;
+  }
+
+  let pkg;
+  try { pkg = await api(`/videos/${videoId}/package`); } catch(e) {
+    toast('Error cargando paquete: ' + e.message, 'error'); return;
+  }
+
+  const publishable = pkg.members.filter(m => {
+    const ytp = (m.publications || []).find(p => p.platform === 'youtube_shorts');
+    return ytp && ytp.status === 'ready' && m.file_ok;
+  });
+
+  if (!publishable.length) { toast('No hay clips publicables.', 'warn'); return; }
+
+  const title = pkg.source_title || videoTitle;
+  _pkgPublish = { videoId, title };
+
+  document.getElementById('ppm-video-title').textContent = title;
+  document.getElementById('ppm-count').textContent = publishable.length;
+  document.getElementById('ppm-btn-count').textContent = publishable.length;
+  document.getElementById('ppm-total').textContent = pkg.total_clips;
+  document.getElementById('ppm-published').textContent = pkg.published_count;
+  document.getElementById('ppm-error').style.display = 'none';
+  document.getElementById('ppm-confirm-btn').disabled = false;
+  document.querySelector('input[name="ppm-privacy"][value="public"]').checked = true;
+  document.getElementById('pkg-publish-modal').classList.add('open');
+}
+
+function closePkgPublishModal() {
+  document.getElementById('pkg-publish-modal').classList.remove('open');
+  _pkgPublish = {};
+}
+
+async function confirmPkgPublish() {
+  const { videoId, title } = _pkgPublish;
+  if (!videoId) return;
+  const privacy = document.querySelector('input[name="ppm-privacy"]:checked')?.value || 'public';
+  const btn = document.getElementById('ppm-confirm-btn');
+  btn.disabled = true;
+  btn.textContent = 'Encolando…';
+  const errEl = document.getElementById('ppm-error');
+  errEl.style.display = 'none';
+
+  const ikey = Date.now() + '-pkg-' + videoId.slice(0, 8);
+  let result;
+  try {
+    result = await api(`/videos/${videoId}/package/publish`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        idempotency_key: ikey,
+        privacy_status: privacy,
+        name: `Paquete: ${title.slice(0, 50)}`
+      })
+    });
+  } catch(e) {
+    errEl.textContent = 'Error al encolar: ' + e.message;
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.innerHTML = 'Publicar <span id="ppm-btn-count">' + document.getElementById('ppm-count').textContent + '</span> v\xeddeos';
+    return;
+  }
+
+  if (result.error && !result.batch_id) {
+    errEl.textContent = result.error;
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.innerHTML = 'Publicar <span id="ppm-btn-count">' + document.getElementById('ppm-count').textContent + '</span> v\xeddeos';
+    return;
+  }
+
+  closePkgPublishModal();
+  toast(`✓ ${result.queued} clips encolados (batch ${(result.batch_id||'').slice(0,8)})`, 'success');
+  showTab('publishing', document.getElementById('nav-publishing'));
+  setTimeout(() => pubNav('batches'), 150);
 }
 
 // â"€â"€ Clips-in-Library view for a specific video â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -4896,11 +5203,10 @@ async function generateSingleCandidate(candidateId) {
 }
 
 // â"€â"€ Init â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-loadReview();
-_refreshTimer = setInterval(loadReview, 10000);
-// Pre-populate analysis job selector
+// Router initialises at end of script — loads the correct tab and sets timer.
+// Pre-populate analysis job selector (works across all tabs)
 populateAnalysisJobSelect();
-// Check YouTube connection status on load
+// Cache YouTube status needed by publishing modal before OAuth tab loads
 checkYoutubeStatus();
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -4914,10 +5220,92 @@ let _pubViewMode = 'grid';
 let _pubCurrentPub = null;
 let _pubMarkTarget = null;
 
+let _ytQueuePollTimer = null;
+
 async function loadPublishing() {
   await refreshPubStats();
   await populatePubCreatorFilter();
   await reloadPub();
+  _refreshYtQueueStatus();
+  _refreshYtSyncStatus();
+  if (_ytQueuePollTimer) clearInterval(_ytQueuePollTimer);
+  _ytQueuePollTimer = setInterval(_refreshYtQueueStatus, 10000);
+}
+
+async function triggerYtSync() {
+  const btn = document.getElementById('yt-sync-btn');
+  const statusEl = document.getElementById('yt-sync-status');
+  if (btn) { btn.disabled = true; btn.textContent = '⟳ Sincronizando…'; }
+  try {
+    await api('/youtube/sync', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+    if (statusEl) statusEl.textContent = 'Sync iniciado…';
+    setTimeout(async () => {
+      await _refreshYtSyncStatus();
+      await refreshPubStats();
+      await reloadPub();
+    }, 4000);
+  } catch(e) {
+    if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⟳ Sincronizar'; }
+  }
+}
+
+async function _refreshYtSyncStatus() {
+  const el = document.getElementById('yt-sync-status');
+  if (!el) return;
+  try {
+    const s = await api('/youtube/sync/status');
+    if (s.never_synced) { el.textContent = 'Sin sincronizar'; return; }
+    const lastAt = s.last_sync_at;
+    const d = lastAt ? new Date(lastAt.endsWith('Z') ? lastAt : lastAt.replace('+00:00','Z')) : null;
+    const timeStr = d ? d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '?';
+    const dateStr = d ? d.toLocaleDateString([],{month:'short',day:'numeric'}) : '?';
+    el.innerHTML = `<div style="color:#4ade80">✓ ${dateStr} ${timeStr}</div>` +
+      `<div>${s.last_sync_found||0} vídeos · ${s.last_sync_matched||0} vinculados</div>` +
+      (s.last_error ? `<div style="color:#f87171;margin-top:2px">${_esc(s.last_error.slice(0,50))}</div>` : '');
+  } catch(e) {
+    el.textContent = '—';
+  }
+}
+
+async function _refreshYtQueueStatus() {
+  const el = document.getElementById('yt-queue-status-block');
+  if (!el) return;
+  try {
+    const s = await api('/yt/queue-status');
+    const stateLabels = {active:'Subiendo', working:'Procesando', waiting:'En espera', idle:'Inactivo'};
+    const stateColors = {active:'#3b82f6', working:'#3b82f6', waiting:'#f59e0b', idle:'#555'};
+    const state = s.worker_state || 'idle';
+    const col = stateColors[state] || '#555';
+    const label = stateLabels[state] || state;
+    let html = `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+      <span style="width:7px;height:7px;border-radius:50%;background:${col};display:inline-block;flex-shrink:0"></span>
+      <span style="color:${col};font-weight:600">${label}</span>
+    </div>`;
+    if (s.uploading > 0)
+      html += `<div>Subiendo: <b style="color:#3b82f6">${s.uploading}</b></div>`;
+    if (s.pending_eligible > 0)
+      html += `<div>Listos: <b style="color:#4ade80">${s.pending_eligible}</b></div>`;
+    if (s.pending_waiting > 0)
+      html += `<div>En espera: <b style="color:#f59e0b">${s.pending_waiting}</b></div>`;
+    if (s.next_attempt_at) {
+      const normed = s.next_attempt_at.replace(/\+00:00$/, 'Z');
+      const d = new Date(normed.endsWith('Z') ? normed : normed + 'Z');
+      const diff = d - Date.now();
+      const m = Math.ceil(diff / 60000);
+      const timeStr = d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      if (m > 0)
+        html += `<div style="color:#f59e0b;margin-top:2px">Prox. ${timeStr} (${m}min)</div>`;
+      else
+        html += `<div style="color:#4ade80;margin-top:2px">Reintento inmediato</div>`;
+    }
+    if (s.pending_total === 0 && s.uploading === 0)
+      html = `<div style="color:#555">Cola vacía</div>`;
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = `<span style="color:#555">No disponible</span>`;
+  }
 }
 
 async function refreshPubStats() {
@@ -4944,13 +5332,18 @@ async function populatePubCreatorFilter() {
   } catch(e) {}
 }
 
-function pubNav(view) {
+function pubNav(view, _opts) {
   _pubView = view;
   document.querySelectorAll('.pub-nav-item').forEach(el => el.classList.remove('active'));
   const el = document.getElementById('pn-' + view);
   if (el) el.classList.add('active');
   clearPubSelection();
   reloadPub();
+  // Push URL when navigating within Publishing
+  if ((!_opts || _opts.push !== false) && _currentTab === 'publishing') {
+    const route = '#publishing/' + view;
+    if (location.hash !== route) history.pushState({tab: 'publishing', sub: view}, '', route);
+  }
 }
 
 async function reloadPub() {
@@ -5154,6 +5547,37 @@ async function openPubEdit(pubId) {
     document.getElementById('pem-hashtags').value = tags;
     document.getElementById('pem-notes').value   = p.notes   || '';
 
+    // Show metadata provenance badge
+    const metaBadgeEl = document.getElementById('pem-meta-badge');
+    if (metaBadgeEl) {
+      const mv = p.meta_version || '';
+      const badgeMap = {
+        'llm_v1': {label: 'AI generated', color: '#6366f1'},
+        'deterministic_v1': {label: 'Auto generated', color: '#f59e0b'},
+        'manual': {label: 'Edited manually', color: '#22c55e'},
+        '': {label: 'Not generated', color: '#ef4444'},
+      };
+      const b = badgeMap[mv] || badgeMap[''];
+      metaBadgeEl.textContent = b.label;
+      metaBadgeEl.style.color = b.color;
+    }
+
+    // Warn if title/caption need attention
+    const metaWarnEl = document.getElementById('pem-meta-warn');
+    if (metaWarnEl) {
+      const titleMissing = !(p.title || '').trim();
+      const captionMissing = !(p.caption || '').trim();
+      if (titleMissing || captionMissing) {
+        metaWarnEl.textContent = (titleMissing && captionMissing)
+          ? 'Title and description are empty. Add them or click "Regenerate metadata".'
+          : titleMissing ? 'Title is empty. Required before uploading.'
+          : 'Description is empty. Required before uploading.';
+        metaWarnEl.style.display = '';
+      } else {
+        metaWarnEl.style.display = 'none';
+      }
+    }
+
     const readyBtn = document.getElementById('pem-ready-btn');
     if (readyBtn) readyBtn.style.display = p.status === 'published' ? 'none' : '';
 
@@ -5210,12 +5634,27 @@ async function pubMarkReady() {
 
 async function regenPubMetadata() {
   if (!_pubCurrentPub) return;
+  const currentTitle = (document.getElementById('pem-title').value || '').trim();
+  const currentCaption = (document.getElementById('pem-caption').value || '').trim();
+  const hasContent = currentTitle || currentCaption;
+  const isManual = _pubCurrentPub.meta_version === 'manual';
+  if (hasContent && isManual) {
+    if (!confirm('This publication has manually-edited text.\nRegenerate will replace it. Continue?')) return;
+  }
   try {
     const meta = await api('/clips/' + _pubCurrentPub.clip_id + '/generate-metadata', {method:'POST'});
     document.getElementById('pem-title').value   = meta.title   || '';
     document.getElementById('pem-caption').value = meta.caption || '';
     const tags = Array.isArray(meta.hashtags) ? meta.hashtags.join(' ') : (meta.hashtags||'');
     document.getElementById('pem-hashtags').value = tags;
+    // Clear the warning now that content has been regenerated
+    const warnEl = document.getElementById('pem-meta-warn');
+    if (warnEl && (meta.title || meta.caption)) warnEl.style.display = 'none';
+    const badgeEl = document.getElementById('pem-meta-badge');
+    if (badgeEl) {
+      badgeEl.textContent = meta.meta_version === 'llm_v1' ? 'AI generated' : 'Auto generated';
+      badgeEl.style.color = meta.meta_version === 'llm_v1' ? '#6366f1' : '#f59e0b';
+    }
     toast('Metadata regenerated', 'success');
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
@@ -5524,16 +5963,28 @@ async function startYtUpload() {
   if (!_pubCurrentPub) return;
   const isForKids = document.querySelector('input[name="yt-for-kids"]:checked')?.value === 'true';
   const privacy_status = document.querySelector('input[name="pem-privacy"]:checked')?.value || 'public';
-  const title       = (document.getElementById('pem-title')?.value || '').trim() || 'Short';
+  const title       = (document.getElementById('pem-title')?.value || '').trim();
   const description = (document.getElementById('pem-caption')?.value || '').trim();
   const rawTags     = document.getElementById('pem-hashtags')?.value || '';
   const tags = rawTags.split(/[\s,\n]+/).filter(Boolean).map(t => t.startsWith('#') ? t.slice(1) : t);
+
+  if (!title) {
+    toast('Title is required before uploading. Add one in the Title field above.', 'error');
+    document.getElementById('pem-title')?.focus();
+    return;
+  }
+  if (!description) {
+    toast('Description is required before uploading. Add one in the Caption field above.', 'error');
+    document.getElementById('pem-caption')?.focus();
+    return;
+  }
 
   const channel = (_ytStatus && _ytStatus.channel_title) || 'Connected channel';
   const visLabel = {public: 'Public', unlisted: 'Unlisted', private: 'Private'}[privacy_status] || privacy_status;
   if (!confirm(
     `Upload this clip to YouTube as ${visLabel.toUpperCase()}?\n\n` +
     `Channel: ${channel}\n` +
+    `Title: ${title.slice(0,60)}${title.length > 60 ? '...' : ''}\n` +
     `Visibility: ${visLabel}\n` +
     `Audience: ${isForKids ? 'Made for kids' : 'Not for kids'}\n\n` +
     `This will upload the file to YouTube. Continue?`
@@ -5748,13 +6199,17 @@ async function loadBatchList() {
   if (titleEl) titleEl.textContent = 'Upload Batches';
   el.innerHTML = '<div class="pub-empty"><p>Loading…</p></div>';
   try {
-    const batches = await api('/upload-batches?limit=50');
+    const [batches, qs] = await Promise.all([
+      api('/upload-batches?limit=50'),
+      api('/yt/queue-status').catch(() => null),
+    ]);
+    const retryBanner = _buildBatchRetryBanner(qs);
     if (!batches.length) {
-      el.innerHTML = `<div class="pub-empty"><p>No batches yet.</p>
+      el.innerHTML = retryBanner + `<div class="pub-empty"><p>No batches yet.</p>
         <p style="font-size:12px;color:#888">Select clips in "All" and click <b>"Upload Selected"</b>.</p></div>`;
       return;
     }
-    el.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;padding:4px 0">
+    el.innerHTML = retryBanner + `<div style="display:flex;flex-direction:column;gap:10px;padding:4px 0">
       ${batches.map(renderBatchRow).join('')}
     </div>`;
   } catch(e) {
@@ -5801,10 +6256,26 @@ function _stopBatchDetailPoll() {
 function _renderBatchDetailItems(b) {
   const statusCols = {pending:'#666',uploading:'#3b82f6',processing:'#f59e0b',public:'#4ade80',unlisted:'#34d399',private:'#4ade80',error:'#ef4444',paused:'#f59e0b',cancelled:'#555',needs_check:'#fbbf24'};
   const statusLabels = {public:'Público ✓',unlisted:'Sin listar ✓',private:'Privado ✓',needs_check:'Visibilidad sin confirmar',error:'Error',uploading:'Subiendo',processing:'Procesando en YouTube',pending:'En cola',paused:'Pausado',cancelled:'Cancelado'};
+  function _fmtRetry(next_attempt_at) {
+    if (!next_attempt_at) return '';
+    const normed = next_attempt_at.replace(/\+00:00$/, 'Z');
+    const d = new Date(normed.endsWith('Z') ? normed : normed + 'Z');
+    const now = Date.now();
+    const diff = d - now;
+    if (diff <= 0) return 'Reintento inmediato';
+    const h = Math.floor(diff/3600000);
+    const m = Math.floor((diff%3600000)/60000);
+    const timeStr = d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    const dateStr = d.toLocaleDateString([], {day:'2-digit',month:'2-digit'});
+    if (h >= 1) return `Reintento ${dateStr} ${timeStr} (${h}h${m}m)`;
+    return `Reintento en ${m}min`;
+  }
   const items = (b.items || []).map((i, idx) => {
     const pct = i.file_size > 0 ? Math.round((i.bytes_sent/i.file_size)*100) : 0;
-    const col = statusCols[i.status] || '#666';
-    const statusLabel = statusLabels[i.status] || i.status;
+    const isScheduled = i.status === 'pending' && i.next_attempt_at;
+    const col = isScheduled ? '#f59e0b' : (statusCols[i.status] || '#666');
+    const statusLabel = isScheduled ? 'En espera (cuota)' : (statusLabels[i.status] || i.status);
+    const retryLine = isScheduled ? _fmtRetry(i.next_attempt_at) : '';
     const mismatch = i.error_code === 'VISIBILITY_MISMATCH';
     const ytLink = i.remote_video_id ? `<a href="https://studio.youtube.com/video/${i.remote_video_id}/edit" target="_blank" style="color:#4ade80;font-size:10px;margin-left:6px">YouTube Studio ↗</a>` : '';
     const makePublicBtn = (i.status === 'private' && i.remote_video_id && !mismatch)
@@ -5819,8 +6290,9 @@ function _renderBatchDetailItems(b) {
         ${makePublicBtn}
         ${ytLink}
       </div>
+      ${retryLine?`<div style="color:#f59e0b;font-size:11px;margin-top:2px;margin-left:24px">⏱ ${_esc(retryLine)}</div>`:''}
       ${mismatch?`<div style="color:#fbbf24;font-size:11px;margin-top:2px;margin-left:24px">⚠ YouTube devolvió visibilidad distinta — verifica en YouTube Studio</div>`:''}
-      ${(!mismatch&&i.error_message&&i.status==='error')?`<div style="color:#ef4444;font-size:11px;margin-top:2px;margin-left:24px">${_esc(i.error_message)}</div>`:''}
+      ${(!mismatch&&i.error_message&&['error','pending'].includes(i.status)&&!isScheduled)?`<div style="color:#ef4444;font-size:11px;margin-top:2px;margin-left:24px">${_esc(i.error_message)}</div>`:''}
     </div>`;
   }).join('');
   const done = b.done_items || 0;
@@ -5875,6 +6347,82 @@ async function resumeBatch(id) {
 async function retryBatchErrors(id) {
   try { await api('/upload-batches/'+id+'/retry-errors',{method:'POST'}); toast('Retrying errors','success'); loadBatchList(); }
   catch(e) { toast(e.message,'error'); }
+}
+
+// ── Retry-pending banner ────────────────────────────────────────────────────
+
+function _buildBatchRetryBanner(qs) {
+  const hasPending = qs && qs.pending_total > 0;
+  if (!hasPending) return '';
+  const canUnblock = qs.pending_waiting > 0;
+  let statusHtml = _brbStatusHtml(qs);
+  return `<div id="brb" style="margin-bottom:12px;padding:10px 14px;background:#111;border-radius:8px;border:1px solid #1e1e1e;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div style="flex:1;min-width:160px">
+      <div style="font-size:12px;font-weight:600;color:#ccc">Cola YouTube · @contentenginelv</div>
+      <div id="brb-status" style="font-size:11px;color:#888;margin-top:2px">${statusHtml}</div>
+    </div>
+    <button id="brb-btn" class="btn btn-primary btn-sm" onclick="_ytRetryPending()" ${canUnblock?'':'disabled'}>Reintentar pendientes</button>
+  </div>`;
+}
+
+function _brbStatusHtml(qs) {
+  if (!qs) return '—';
+  const parts = [];
+  if (qs.uploading > 0) parts.push(`<span style="color:#3b82f6">Subiendo ${qs.uploading}</span>`);
+  if (qs.pending_eligible > 0) parts.push(`<span style="color:#4ade80">${qs.pending_eligible} listos</span>`);
+  if (qs.pending_waiting > 0) {
+    const quota = qs.pending_quota || 0;
+    if (quota > 0 && quota === qs.pending_waiting)
+      parts.push(`<span style="color:#f59e0b">${quota} bloq. cuota API</span>`);
+    else if (quota > 0)
+      parts.push(`<span style="color:#f59e0b">${qs.pending_waiting} en espera (${quota} cuota)</span>`);
+    else
+      parts.push(`<span style="color:#f59e0b">${qs.pending_waiting} en espera</span>`);
+  }
+  if (qs.next_attempt_at && qs.pending_waiting > 0) {
+    const normed = qs.next_attempt_at.replace(/\+00:00$/, 'Z');
+    const d = new Date(normed.endsWith('Z') ? normed : normed + 'Z');
+    const m = Math.ceil((d - Date.now()) / 60000);
+    if (m > 0) parts.push(`<span style="color:#f59e0b">prox. ${m}min</span>`);
+  }
+  if (parts.length === 0 && qs.pending_total > 0)
+    parts.push(`<span>${qs.pending_total} pendiente(s)</span>`);
+  return parts.join(' · ') || '—';
+}
+
+let _ytRetryInFlight = false;
+
+async function _ytRetryPending() {
+  if (_ytRetryInFlight) return;
+  const btn = document.getElementById('brb-btn');
+  const statusEl = document.getElementById('brb-status');
+  if (!btn) return;
+  _ytRetryInFlight = true;
+  btn.disabled = true;
+  btn.textContent = 'Reintentando…';
+  try {
+    const r = await api('/yt/retry-pending', {method: 'POST'});
+    _ytRetryInFlight = false;
+    if (btn) {
+      btn.textContent = 'Reintentar pendientes';
+      btn.disabled = r.pending_waiting === 0;
+    }
+    if (statusEl) {
+      const cleared = r.cleared || 0;
+      const note = cleared > 0
+        ? `<span style="color:#4ade80">✓ ${cleared} desbloqueado(s) · </span>`
+        : '<span style="color:#888">Sin cambios · </span>';
+      statusEl.innerHTML = note + _brbStatusHtml(r);
+    }
+    _refreshYtQueueStatus();
+  } catch(e) {
+    _ytRetryInFlight = false;
+    let errMsg = e.message;
+    try { const p = JSON.parse(errMsg); errMsg = p.detail || errMsg; } catch(_) {}
+    const msg = errMsg.includes('ya en curso') ? 'Ya reintentando…' : _esc(errMsg);
+    if (statusEl) statusEl.innerHTML = `<span style="color:#ef4444">${msg}</span>`;
+    if (btn) { btn.disabled = false; btn.textContent = 'Reintentar pendientes'; }
+  }
 }
 
 async function changeSessionPrivacy(sessionId, privacy, btn) {
@@ -6024,6 +6572,57 @@ async function runStorageScan() {
     loadStorageSummary();
   } catch(e) { toast(e.message,'error'); }
 }
+
+// ── Router init ───────────────────────────────────────────────────────────────
+// Runs after all variables and functions are declared.
+(function _ceInitRouter() {
+  const VALID_TABS = new Set([
+    'overview','library','review','jobs','upload',
+    'analysis','analytics','publishing','oauth'
+  ]);
+
+  // Restore review filter from sessionStorage so F5 rebuilds the same query.
+  const _rfEl = document.getElementById('review-filter');
+  if (_rfEl) {
+    const saved = sessionStorage.getItem('ce_review_filter');
+    if (saved) _rfEl.value = saved;
+    _rfEl.addEventListener('change', () =>
+      sessionStorage.setItem('ce_review_filter', _rfEl.value));
+  }
+
+  function _activateFromRoute(hash, push) {
+    const parts = (hash || 'review').split('/');
+    const tab   = VALID_TABS.has(parts[0]) ? parts[0] : 'review';
+    const sub   = parts.slice(1).join('/');
+
+    showTab(tab, null, {push});
+
+    // Restore sub-navigation after the tab's initial data load has started
+    if (tab === 'library' && sub) {
+      setTimeout(() => {
+        if      (sub.startsWith('cr/'))  libNav('creator:'    + sub.slice(3),  null, {push: false});
+        else if (sub.startsWith('co/'))  libNav('collection:' + sub.slice(3),  null, {push: false});
+        else if (sub === 'all')          libNav('all-videos',                  null, {push: false});
+        else if (sub === 'proc')         libNav('processing',                  null, {push: false});
+        else if (sub === 'fail')         libNav('failed',                      null, {push: false});
+      }, 300);
+    } else if (tab === 'publishing' && sub) {
+      setTimeout(() => pubNav(sub, {push: false}), 200);
+    } else if (tab === 'analysis' && sub) {
+      setTimeout(() => {
+        const sel = document.getElementById('analysis-job-select');
+        if (sel && sub) { sel.value = sub; loadAnalysis(sub); }
+      }, 200);
+    }
+  }
+
+  // Back / Forward
+  window.addEventListener('popstate', () =>
+    _activateFromRoute(location.hash.slice(1), false));
+
+  // Initial routing: parse existing hash or default to review
+  _activateFromRoute(location.hash.slice(1), !location.hash);
+})();
 </script>
 </body>
 </html>

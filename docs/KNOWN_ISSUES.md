@@ -180,6 +180,17 @@ Permanent errors should not be retried.
 
 ---
 
+## KI-015 — 10 orphaned INVALID_FILE upload sessions (no batch, no title)
+
+**Status:** Non-blocking. Parked.
+**Symptom:** 10 `yt_upload_sessions` rows with `status='error'` and `error_code='INVALID_FILE'` have no associated `upload_batch_items` entry (orphaned from any batch) and a NULL or empty `title` in the linked `publications` row. They accumulate in the "Error/Paused" audit view but never auto-retry (INVALID_FILE is in `_FATAL_ERRORS`).
+**Session IDs (short):** a4c9a6af, c6394947, 0ffc7c10, 0a66ae2a, e89afeae, 45152991, d6dd6f6a, 92b773cd, 3143799b, 01857ec9
+**Root cause:** Pre-batch upload sessions created when the batch system didn't exist yet, or test sessions created without a valid file. Files never existed or were cleaned up before the worker could hash them.
+**Impact:** None — they cannot be retried by the autonomous worker and do not block the queue. They only appear in admin/orphan queries.
+**Fix path:** Manual cleanup: `UPDATE yt_upload_sessions SET status='cancelled' WHERE error_code='INVALID_FILE' AND id IN ('a4c9a6af%', ...)`. Or add a `/admin/purge-orphan-sessions` endpoint. Not urgent.
+
+---
+
 ## KI-014 — No file backup mechanism
 
 **Status:** Accepted risk for solo local tool.

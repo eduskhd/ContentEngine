@@ -1,5 +1,121 @@
 # Changelog
 
+## 2026-10-05 — Video Package System: per-source-video ordered publishing
+
+### engine/database.py
+- `get_video_package(video_id)`: returns all clips for a video ordered by `candidates.start_s`, with per-clip YouTube publication status and positional numbering (1/N…N/N).
+- `ensure_video_package_publications(video_id)`: creates missing `youtube_shorts` publications for all non-rejected clips in a video; idempotent — skips existing, fixes stale `publication_order`.
+- `get_video_package_batches(video_id)`: returns upload batches that include clips from a given video with per-batch done/failed/pending counts.
+
+### engine/pipeline.py
+- After step 12 QA gate: automatically calls `ensure_video_package_publications(video_id)` so every new job creates the package publications on completion.
+
+### api/main.py
+- `GET /videos/{id}/package` — full package with ordered members and per-clip publication state.
+- `POST /videos/{id}/package/ensure-publications` — idempotent publication backfill.
+- `POST /videos/{id}/package/publish` — validates YouTube connected, ensures publications, creates ordered upload batch; returns `{batch_id, duplicate, queued, skipped, total_in_package}`.
+- `GET /videos/{id}/package/batches` — upload batches related to this video.
+- `POST /videos/backfill-packages` — admin endpoint, runs ensure for all videos.
+
+### dashboard/index.html
+- Per-video "📦 Package" button in Library video cards (visible when `clip_count > 0`).
+- `showVideoPackage()`: loads `/videos/{id}/package`, renders ordered clip list (position, timestamp M:SS, decision chip, YouTube status color-coded, ↗ link if published). Panel persists through background polls (`_libPackageVideoId` guard in `reloadCurrentView`).
+- `publishVideoPackage()`: checks YouTube connection, shows confirm dialog with counts, calls `/videos/{id}/package/publish`, navigates to Publishing → Batches.
+- "← Volver" button returns to creator video list and clears package state.
+
+### Backfill applied (2026-10-05)
+- 86 `youtube_shorts` publications created across 17 existing videos.
+- 34 orphaned publications (referencing deleted clips) archived.
+
+## 2026-10-03 — Permanent publish queue: 30-min retry, HTTP 429, Retry-After, service status
+
+### workers/yt_upload_worker.py
+- `QUOTA_RETRY_MINUTES` reduced 60 → **30** minutes (spec change).
+- `_fail()` now accepts `retry_after_seconds` parameter — when provided, uses it as the retry delay instead of the class constant (supports both QUOTA_EXCEEDED and TRANSIENT).
+- New `_extract_retry_after(exc)` helper: extracts Retry-After seconds from `urllib.error.HTTPError.headers`, from `exc.__cause__` (wrapped HTTPError), or from a `"Retry-After: N\n..."` prefix in RuntimeError messages.
+- `_process_session()` now calls `_extract_retry_after()` before `_fail()` and passes the result as `retry_after_seconds`.
+
+### publishers/yt_upload.py
+- `classify_error()`: HTTP **429 Too Many Requests** now correctly classified as `QUOTA_EXCEEDED` (previously fell through to `UNKNOWN`).
+- `create_resumable_session()`: preserves `Retry-After` header value by prepending `"Retry-After: N\n"` to the RuntimeError message before wrapping.
+
+### api/main.py
+- New endpoint `GET /yt/queue-status`: returns `{worker_state, uploading, pending_eligible, pending_waiting, pending_total, next_attempt_at}` for the dashboard.
+
+### dashboard/index.html
+- Publishing sidebar: new "Cola YouTube" section with live service status (state dot, pending counts, next attempt time). Populated by `_refreshYtQueueStatus()` on tab load.
+
+### tests/test_publish_queue.py (new)
+- 37 unit and integration tests covering: HTTP 429/403/400 classification, Retry-After extraction (direct HTTPError, wrapped RuntimeError, message prefix), `_fail()` timing for QUOTA/TRANSIENT with and without Retry-After, concurrent claim exclusion, cross-restart persistence, stale lock recovery, timezone correctness.
+
+### DB fix applied (2026-10-03 16:16 UTC)
+- Recalculated `next_attempt_at` for 3 pending xbuyer sessions from 60-min to 30-min intervals.
+- `7fb793c6`: immediate attempt executed at 16:15 UTC (authorized), next retry 16:46 UTC.
+- `051bc312`, `b5452025`: next retry 16:25 UTC.
+
+### docs/KNOWN_ISSUES.md
+- Added KI-015: 10 orphaned `INVALID_FILE` sessions documented (no batch, no title, not blocking).
+
+---
+
+## 2026-10-02 — Autonomous publication job: scheduled retry + cross-batch ordering
+
+### alembic/versions/f1bec0686e1f_add_next_attempt_at_to_yt_upload_.py (new)
+- Adds `next_attempt_at TEXT` column to `yt_upload_sessions`.
+- Index `idx_yt_sessions_next_attempt` for efficient claim filtering.
+
+### engine/database.py — `claim_yt_upload_session()`
+- Now filters `next_attempt_at IS NULL OR next_attempt_at <= datetime('now')` — sessions scheduled for future retry are not claimed early.
+- Added cross-batch sequential ordering: sessions from older batches are processed first (enforced by joining `upload_batch_items → upload_batches.created_at`). Ensures Package 1 (Anita) completes before Package 2 (xbuyer).
+- `get_upload_batch()` now returns `next_attempt_at` in each item for dashboard display.
+
+### workers/yt_upload_worker.py — `_fail()`
+- `QUOTA_EXCEEDED`: sets `status='pending'`, `next_attempt_at = now + 60min`, `attempts = 0`. Does not exhaust the attempt counter — quota errors are time-limited, not content errors.
+- `TRANSIENT`: sets `status='pending'`, `next_attempt_at = now + 5min`.
+- Removed periodic `_reset_quota_sessions()` loop (superseded); kept as startup legacy fallback for sessions created before this revision.
+
+### dashboard/index.html
+- Batch detail: sessions with `next_attempt_at` show "En espera (cuota)" label (amber) and countdown "Reintento 03/10 09:05 (15h30m)".
+
+### output/publish_jobs/pub_job_001.json (new)
+- Job manifest: Job ID, both package IDs, creators, clip inventory (pub_id, session_id, clip_id, file, title, metadata), channel, retry policy.
+
+### setup_autostart.ps1 (new)
+- Windows Task Scheduler registration script. Run as Administrator to auto-start server.py at logon with 5× restart on failure.
+
+---
+
+## 2026-10-02 — Reframing v1: face-detecting dynamic crop
+
+### engine/reframe/ (new module)
+- `engine/reframe/__init__.py` — exports `plan_clip`
+- `engine/reframe/detector.py` — `detect_faces_batch()` using `cv2.FaceDetectorYN` (YuNet ONNX). Creates the detector once per batch for the shared frame dimensions to avoid per-frame init overhead.
+- `engine/reframe/smoother.py` — `smooth_ema()` (exponential moving average) + `clamp_offset()` (keeps crop within source bounds).
+- `engine/reframe/planner.py` — `plan_clip(proxy_path, clip_start, clip_end, src_w, src_h) -> FramingPlan`. Opens the proxy, reads frames in the clip window, runs batch face detection, smooths the trajectory, and returns a JSON-serializable dict with `strategy`, `x_offset`, `confidence`, `fallback`, and `keypoints`.
+
+### models/face_detection_yunet_2023mar.onnx (new)
+- Downloaded YuNet ONNX face detection model (227 KB) from opencv_zoo. Required by `cv2.FaceDetectorYN`. No network dependency at runtime.
+
+### engine/renderers/render_clip.py
+- `render_clips_onepass()` now accepts `proxy_path: str | None = None`.
+- `_render_one()` signature updated: removed pre-computed `crop_filter` arg, added `src_w`, `src_h`, `proxy_path`. Computes crop filter per-clip after resolving the framing plan.
+- Per-clip framing logic: if `cand["framing_plan"]` is already set (re-render case), parses and reuses it; otherwise calls `plan_clip()` and saves the result to `candidates.framing_plan`.
+- `_compute_crop_filter()` now accepts optional `x_offset` parameter. When provided and `fallback=False`, replaces the center crop `(src_w - new_w) // 2` with the face-centered offset. Includes bounds clamping.
+
+### engine/pipeline.py
+- `render_clips_onepass()` call now passes `proxy_path=proxy_path` (available from step 1.5).
+
+### engine/database.py
+- Added `_add_column_if_missing(conn, "candidates", "framing_plan", "TEXT")` for DBs that skip Alembic.
+
+### alembic/versions/0003_candidates_framing_plan.py (new)
+- `ALTER TABLE candidates ADD COLUMN framing_plan TEXT`. Applied to existing DB.
+
+### Behavior
+- For wide (16:9 → 9:16) sources: face-centered x_offset replaces center crop. On the proxy video tested (1920x1080 source), face confidence was 43% for a 30s window; x_offset ranged 519–1064px (vs fixed 656px center).
+- For no-face content (games, screen captures): `fallback=True` in the plan → center crop unchanged.
+- Re-renders reuse the stored plan; no re-analysis needed.
+
 ## 2026-10-01 — DB prerequisites: FK enforcement, UNIQUE constraint, Alembic
 
 ### engine/database.py

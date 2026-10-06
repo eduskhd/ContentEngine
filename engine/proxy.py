@@ -61,9 +61,16 @@ def generate_proxy(video_id: str, video_path: str) -> str | None:
         ]
         return base
 
-    result = subprocess.run(_build_cmd(hwaccel=True), capture_output=True, timeout=300)
-    if result.returncode != 0:
-        result = subprocess.run(_build_cmd(hwaccel=False), capture_output=True, timeout=300)
+    import os
+    file_mb = (os.path.getsize(video_path) // (1024 * 1024)) if Path(video_path).exists() else 0
+    timeout = max(600, file_mb)  # 1s per MB, minimum 10 min
+
+    try:
+        result = subprocess.run(_build_cmd(hwaccel=True), capture_output=True, timeout=timeout)
+        if result.returncode != 0:
+            result = subprocess.run(_build_cmd(hwaccel=False), capture_output=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        result = subprocess.run(_build_cmd(hwaccel=False), capture_output=True, timeout=timeout)
 
     if result.returncode == 0:
         db.save_proxy_path(video_id, proxy_path)
