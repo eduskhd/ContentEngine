@@ -27,7 +27,7 @@ from engine.hw_accel import detect_encoder
 from engine.captions.extractor import extract_clip_words
 from engine.captions.presets import default_settings
 from engine.captions.renderer import build_ass
-from engine.reframe.planner import plan_clip
+from engine.reframe.planner import plan_clip, plan_clip_v2
 
 TARGET_W, TARGET_H = CONFIG.target_resolution  # (1080, 1920)
 
@@ -142,7 +142,7 @@ def _render_one(
 
     if framing_plan is None and proxy_path:
         try:
-            framing_plan = plan_clip(proxy_path, start_s, end_s, src_w, src_h)
+            framing_plan = plan_clip_v2(proxy_path, start_s, end_s, src_w, src_h)
             # Persist so re-renders can reuse without re-analyzing
             with db.db() as _conn:
                 _conn.execute(
@@ -150,7 +150,7 @@ def _render_one(
                     (json.dumps(framing_plan), cand["id"]),
                 )
         except Exception as _fp_err:
-            print(f"  [reframe] plan_clip failed, using center crop: {_fp_err}")
+            print(f"  [reframe] plan_clip_v2 failed, using center crop: {_fp_err}")
             framing_plan = None
 
     # Build crop filter — use keypoints for dynamic scene-aware framing (v2 plan)
