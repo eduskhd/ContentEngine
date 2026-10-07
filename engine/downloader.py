@@ -19,6 +19,12 @@ from engine.config import CONFIG
 
 logger = logging.getLogger("downloader")
 
+# Node.js runtime for yt-dlp YouTube JS extraction (required since 2026-08).
+# Falls back gracefully if the path doesn't exist — yt-dlp will warn but still
+# attempt extraction with the deprecated no-JS path.
+_NODE_PATH = r"C:\Users\edupo\Desktop\TradingBot\GeneralConfiguration\node.exe"
+_JS_RUNTIMES = {"node": {"path": _NODE_PATH}}
+
 _VIDEO_EXTS = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v"}
 _AUDIO_EXTS = {".m4a", ".mp3", ".ogg", ".opus", ".wav", ".aac"}
 
@@ -74,6 +80,7 @@ def get_video_info(url: str) -> dict:
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
+        "js_runtimes": _JS_RUNTIMES,
     }
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -125,6 +132,7 @@ def download_url(url: str) -> dict:
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
+        "js_runtimes": _JS_RUNTIMES,
     }
     try:
         with yt_dlp.YoutubeDL(meta_opts) as ydl:
@@ -168,6 +176,7 @@ def download_url(url: str) -> dict:
         # %(ext)s is replaced by yt-dlp; with merge_output_format=mp4 → .mp4
         "outtmpl": str(out_dir / f"{creator_slug}_{video_slug}.%(ext)s"),
         "ffmpeg_location": ffmpeg_dir,
+        "js_runtimes": _JS_RUNTIMES,
     }
     try:
         with yt_dlp.YoutubeDL(dl_opts) as ydl:
