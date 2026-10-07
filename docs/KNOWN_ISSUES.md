@@ -191,6 +191,35 @@ Permanent errors should not be retried.
 
 ---
 
+## KI-016 — Smart reframe regression on extreme-left subject position (YOLOX + low confidence)
+
+**Status:** Known. Non-blocking (reframe is opt-in; original clip is never overwritten until Accept).
+**Symptom:** When YOLOX detects a subject at the very left edge of the source frame (source_cx < 300px in 1920px source) with confidence below 80%, the computed x_offset is clamped to near 0. This can produce a worse crop than the original pipeline's center/face crop. Confirmed on illowanito clip `be964ab9`: person coverage dropped from 82/157 frames to 62/157 in the reframed output.
+**Root cause:** The median offset computation collapses all near-edge detections to x_offset≈0 (clamped). The v1 YuNet pipeline used a face-based reference that produced a more stable crop for that specific framing. The per-frame YOLOX bbox was real but at low confidence (0.33–0.62) — marginal detections at an extreme position.
+**Impact:** Reframe quality worse than original for ~8% of clips (1 of 12 in test sample). The original clip is never replaced unless the user explicitly clicks "Accept reframe."
+**Detection:** Confidence < 80% + x_offset < 100 or x_offset > (src_w – crop_w – 100) → flag as "uncertain framing" in the plan.
+**Fix path:** Add a guard in `plan_clip_v2`: when `confidence < 0.80` and `x_offset < 100`, fall back to YuNet or center crop instead of emitting the low-confidence extreme offset.
+
+---
+
+## KI-017 — MediaPipe face/pose detection blocked by Windows Application Control
+
+**Status:** Known OS restriction. Non-blocking.
+**Symptom:** `mediapipe.tasks.python.vision.FaceDetector.create_from_options()` raises `OSError: WinError 4551` on this machine. The MediaPipe C native library is blocked by the Application Control policy. Both face and pose models are downloaded but cannot be loaded.
+**Impact:** All analysis falls through to YOLOX. MediaPipe pipeline is untested locally. The code is correct (Tasks API 1.0+) — it would work on a machine without Application Control restrictions.
+**Fix path:** Either run on a machine without Application Control, or sign the MediaPipe DLL via the enterprise policy. No code change needed.
+
+---
+
+## KI-018 — Cloudinary adapter not tested with real credentials
+
+**Status:** Pending configuration. Non-blocking.
+**Symptom:** `engine/reframe/cloudinary_adapter.py` is implemented and returns mock results when `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` env vars are absent. No real upload has been tested.
+**Impact:** Cloudinary comparison is always a mock. One action needed: set the three env vars in a `.env` file or Windows environment and restart the server.
+**Fix path:** Set env vars, then call `POST /clips/{id}/smart-reframe?content_hint=auto&with_cloudinary=true` once credentials exist.
+
+---
+
 ## KI-014 — No file backup mechanism
 
 **Status:** Accepted risk for solo local tool.

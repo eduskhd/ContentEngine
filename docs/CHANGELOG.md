@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-10-07 — Sprint 1: Smart Reframe (YOLOX + Scene-aware crop)
+
+### New modules
+- `engine/reframe/mediapipe_detector.py` — BlazeFace + PoseLandmarker via MediaPipe Tasks API 1.0+. Gracefully blocked by Windows Application Control (OSError handled).
+- `engine/reframe/scene_detector.py` — PySceneDetect 0.7.1 ContentDetector; falls back to single-scene on error.
+- `engine/reframe/yolox_detector.py` — YOLOX-nano ONNX (Apache-2.0, Megvii). Includes `_grid_decode()` to convert raw grid-relative ONNX output to absolute pixel coordinates — required for correct detection.
+- `engine/reframe/tracker.py` — ByteTrack-lite: IoU-based multi-object tracker using `scipy.optimize.linear_sum_assignment`. No Kalman filter (unnecessary at 2fps proxy).
+- `engine/reframe/cloudinary_adapter.py` — Async Cloudinary auto-crop adapter. Returns mock when credentials absent; never silently fails to paid tier.
+- `engine/reframe/planner.py` — Added `plan_clip_v2()`: scene-aware framing with MediaPipe→YOLOX→YuNet detector chain; emits one keypoint per scene; EMA smoothing; v2 plan JSON.
+- `scripts/download_models.py` — Downloads `blaze_face_full_range.tflite`, `pose_landmarker_lite.task`, `yolox_nano.onnx` with license info.
+
+### Modified files
+- `engine/renderers/render_clip.py` — `_compute_crop_filter()` now accepts `keypoints` list for scene-boundary-aligned dynamic FFmpeg crop expressions. `_build_keypoint_expr()` builds nested `if(lt(t,T),X,...)` chains.
+- `engine/database.py` — 5 new helpers: `create_reframe_variant`, `update_reframe_variant`, `get_reframe_variant`, `get_reframe_variants_for_clip`, `latest_reframe_variant`.
+- `api/main.py` — 4 new endpoints: `POST /clips/{id}/smart-reframe`, `GET /clips/{id}/smart-reframe`, `GET /clips/{id}/smart-reframe/{vid}/video`, `POST /clips/{id}/smart-reframe/{vid}/accept`. Accept endpoint checks for active upload sessions before swapping output_path.
+- `dashboard/index.html` — Reframe tab in clip modal: content-hint selector, Analyze & Reframe button, progress bar, plan info card, side-by-side comparison videos with sync-play, Accept/Reset controls.
+- `alembic/versions/0005_reframe_variants.py` — New `reframe_variants` table (applied via sqlite3 due to Windows Application Control blocking SQLAlchemy).
+
+### Test results (12-clip sample, 4 creators)
+- **12/12** clips rendered successfully; 0 fallbacks; 0 pipeline regressions
+- **87.4%** average detection confidence (YOLOX)
+- **8.1s** average analysis time; **21.4s** average render time; **29.4s** avg total per clip
+- **1.0** average keypoints/clip (single-scene content → stable static framing, no jitter)
+- **x_offset range:** 46–1135px (subject correctly centered across all creators)
+- **Coverage improvement** (YOLOX detection rate on output): +1% bycalitos, +40% xbuyer, +1% ibai
+- **Coverage regression (1/12):** illowanito `be964ab9` dropped from 82→62 frames detected (51%→39%). Root cause: YOLOX detected subject at far-left edge (source_cx≈180px) at low confidence (0.33–0.62); x_offset clamped to 46; original YuNet crop was better calibrated for this composition. See KI-016.
+
+### Known limitations
+- MediaPipe blocked by Windows Application Control (KI-017). YOLOX is the effective primary detector.
+- Cloudinary adapter untested with real credentials (KI-018).
+- Low-confidence extreme-position detections can regress coverage vs original (KI-016).
+- Content types tested: walking/outdoor (bycalitos), indoor streamer (xbuyer, illowanito), seated (ibai). Action scenes, webcam+gameplay, screen content not in test sample — not validated.
+
+---
+
 ## 2026-10-05 — Video Package System: per-source-video ordered publishing
 
 ### engine/database.py

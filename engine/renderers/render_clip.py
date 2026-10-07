@@ -153,9 +153,24 @@ def _render_one(
             print(f"  [reframe] plan_clip failed, using center crop: {_fp_err}")
             framing_plan = None
 
-    # Build crop filter (face-centered if plan available, else static center)
-    x_offset = framing_plan["x_offset"] if framing_plan and not framing_plan.get("fallback") else None
-    crop_filter = _compute_crop_filter(src_w, src_h, x_offset=x_offset)
+    # Build crop filter — use keypoints for dynamic scene-aware framing (v2 plan)
+    if framing_plan and not framing_plan.get("fallback"):
+        x_offset = framing_plan.get("x_offset")
+        kp = framing_plan.get("keypoints") or []
+        # Only use dynamic expression when there are meaningful distinct positions
+        use_dynamic = (
+            framing_plan.get("version", 1) >= 2
+            and len(kp) > 1
+            and len({x for _, x in kp}) > 1
+        )
+        crop_filter = _compute_crop_filter(
+            src_w, src_h,
+            x_offset=x_offset,
+            keypoints=kp if use_dynamic else None,
+            clip_start_s=start_s,
+        )
+    else:
+        crop_filter = _compute_crop_filter(src_w, src_h)
 
     # Extract + normalize words for this clip window
     clip_words = extract_clip_words(words, start_s, end_s)
@@ -306,11 +321,22 @@ def _check_technical_qa(meta: dict, out_path: str, expected_duration: float) -> 
     return "PASS", notes
 
 
-def _compute_crop_filter(src_w: int, src_h: int, x_offset: int | None = None) -> str:
+def _compute_crop_filter(
+    src_w: int,
+    src_h: int,
+    x_offset: int | None = None,
+    keypoints: list | None = None,
+    clip_start_s: float = 0.0,
+) -> str:
     """Compute FFmpeg crop+scale filter to convert source to 1080x1920.
 
-    When x_offset is given (from a FramingPlan), it replaces the default center
-    offset — this is how face-centered framing is applied.
+    When keypoints is provided (list of [rel_time_s, x_offset] from a v2
+    FramingPlan), the crop x position is expressed as an FFmpeg `if` chain
+    so it changes at scene boundaries — giving scene-aware framing without
+    an intermediate re-encode.
+
+    keypoints times are RELATIVE to the clip start (t=0 in the trimmed clip).
+    When only x_offset is given the filter is static.
     """
     src_w = src_w or TARGET_W
     src_h = src_h or TARGET_H
@@ -319,19 +345,60 @@ def _compute_crop_filter(src_w: int, src_h: int, x_offset: int | None = None) ->
 
     if abs(src_ratio - target_ratio) < 0.01:
         return f"scale={TARGET_W}:{TARGET_H}"
+
     elif src_ratio > target_ratio:
-        # Wider than 9:16 → crop sides
+        # Wider than 9:16 → crop width
         new_w = int(src_h * target_ratio)
-        if x_offset is None:
-            x_offset = (src_w - new_w) // 2  # center fallback
-        # Clamp to valid range
-        x_offset = max(0, min(int(x_offset), src_w - new_w))
-        return f"crop={new_w}:{src_h}:{x_offset}:0,scale={TARGET_W}:{TARGET_H}"
+        center = (src_w - new_w) // 2
+
+        if keypoints and len(keypoints) > 1:
+            # Build an `if(lt(t,T), X, ...)` chain from relative keypoints
+            x_expr = _build_keypoint_expr(keypoints, center, src_w - new_w)
+            return (
+                f"crop={new_w}:{src_h}:'({x_expr})':0,"
+                f"scale={TARGET_W}:{TARGET_H}"
+            )
+
+        # Static offset
+        x_off = center if x_offset is None else max(0, min(int(x_offset), src_w - new_w))
+        return f"crop={new_w}:{src_h}:{x_off}:0,scale={TARGET_W}:{TARGET_H}"
+
     else:
-        # Taller than 9:16 → crop top/bottom (x_offset not applicable here)
+        # Taller than 9:16 → crop height (x_offset not applicable)
         new_h = int(src_w / target_ratio)
         y_offset = (src_h - new_h) // 2
         return f"crop={src_w}:{new_h}:0:{y_offset},scale={TARGET_W}:{TARGET_H}"
+
+
+def _build_keypoint_expr(
+    keypoints: list,
+    center_fallback: int,
+    max_x: int,
+) -> str:
+    """Build a nested FFmpeg if-chain from keypoints.
+
+    Semantics: each keypoint [T, X] means "use offset X starting at time T
+    until the next keypoint's time."  The last offset holds to end of clip.
+
+    keypoints: [[rel_time_s, x_offset], ...]  (relative to clip start, t=0)
+    Returns e.g.: if(lt(t\\,8.500)\\,400\\,if(lt(t\\,18.000)\\,620\\,400))
+    """
+    if not keypoints:
+        return str(center_fallback)
+
+    kp = sorted(keypoints, key=lambda k: k[0])
+    clamped = [(t, max(0, min(int(x), max_x))) for t, x in kp]
+
+    # Build right-to-left using TRANSITION times (each keypoint's time is
+    # when we SWITCH TO that offset, so the boundary between segment i and i+1
+    # is clamped[i+1][0]).
+    # Result:  if(lt(t,T1),X0,if(lt(t,T2),X1,...,Xlast))
+    expr = str(clamped[-1][1])
+    for i in range(len(clamped) - 2, -1, -1):
+        boundary_t = clamped[i + 1][0]
+        this_x = clamped[i][1]
+        expr = f"if(lt(t\\,{boundary_t:.3f})\\,{this_x}\\,{expr})"
+    return expr
 
 
 def _probe(path: str) -> dict:

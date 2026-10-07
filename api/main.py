@@ -931,6 +931,271 @@ async def retranscribe_clip(clip_id: str):
     }
 
 
+# ── SMART REFRAME ─────────────────────────────────────────────────────────────
+
+# In-memory map of variant_id → thread for running smart reframe jobs
+_reframe_threads: dict = {}
+
+
+def _run_reframe_job(
+    variant_id: str,
+    clip_id: str,
+    source_path: str,
+    proxy_path: str | None,
+    clip_start: float,
+    clip_end: float,
+    src_w: int,
+    src_h: int,
+    words: list,
+    content_hint: str,
+) -> None:
+    """Background thread: run plan_clip_v2, render variant, optionally Cloudinary."""
+    import time
+    from pathlib import Path as _Path
+
+    try:
+        dbmod.update_reframe_variant(variant_id, status="analyzing")
+
+        # ── Analysis ──────────────────────────────────────────────────────────
+        t0 = time.time()
+        if proxy_path and _Path(proxy_path).exists():
+            from engine.reframe.planner import plan_clip_v2
+            plan = plan_clip_v2(
+                proxy_path, clip_start, clip_end, src_w, src_h,
+                content_hint=content_hint,
+            )
+        else:
+            from engine.reframe.planner import plan_clip
+            plan = plan_clip(
+                source_path, clip_start, clip_end, src_w, src_h,
+            )
+        analysis_time = round(time.time() - t0, 2)
+
+        dbmod.update_reframe_variant(
+            variant_id,
+            status="rendering",
+            strategy=plan.get("strategy"),
+            plan_json=json.dumps(plan),
+            analysis_time_s=analysis_time,
+        )
+
+        # ── Render variant clip ───────────────────────────────────────────────
+        import tempfile, subprocess
+        from engine.hw_accel import detect_encoder
+        from engine.captions.extractor import extract_clip_words
+        from engine.captions.presets import default_settings
+        from engine.captions.renderer import build_ass
+        from engine.renderers.render_clip import _compute_crop_filter, _run_ffmpeg
+
+        caption_settings = dict(default_settings())
+        clip_words = extract_clip_words(words, clip_start, clip_end)
+        ass_content = build_ass(clip_words, caption_settings, 1080, 1920) if clip_words and caption_settings.get("enabled", True) else None
+
+        ass_path = None
+        if ass_content:
+            tmp = tempfile.NamedTemporaryFile(suffix=".ass", mode="w", delete=False, encoding="utf-8")
+            tmp.write(ass_content)
+            tmp.close()
+            ass_path = tmp.name
+
+        x_offset = plan.get("x_offset")
+        kp = plan.get("keypoints") or []
+        use_dynamic = (
+            plan.get("version", 1) >= 2 and len(kp) > 1 and len({x for _, x in kp}) > 1
+        )
+        crop_filter = _compute_crop_filter(
+            src_w, src_h,
+            x_offset=x_offset,
+            keypoints=kp if use_dynamic else None,
+            clip_start_s=clip_start,
+        )
+
+        encoder, enc_opts, _ = detect_encoder()
+        out_dir = _Path(CONFIG.output_dir) / "reframe_variants"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        variant_path = str(out_dir / f"{variant_id}.mp4")
+
+        t1 = time.time()
+        duration = clip_end - clip_start
+        ok = _run_ffmpeg(source_path, clip_start, duration, crop_filter, ass_path, encoder, enc_opts, variant_path)
+        render_time = round(time.time() - t1, 2)
+
+        if ass_path:
+            try:
+                import os as _os
+                _os.unlink(ass_path)
+            except OSError:
+                pass
+
+        if not ok or not _Path(variant_path).exists():
+            dbmod.update_reframe_variant(variant_id, status="failed", error="FFmpeg render failed", render_time_s=render_time)
+            return
+
+        # ── Optional Cloudinary comparison ────────────────────────────────────
+        from engine.reframe.cloudinary_adapter import compare_with_cloudinary, _check_credentials
+        creds = _check_credentials()
+        if creds["ok"]:
+            cld = compare_with_cloudinary(source_path, clip_start, clip_end, clip_id)
+            dbmod.update_reframe_variant(
+                variant_id,
+                status="done",
+                variant_path=variant_path,
+                render_time_s=render_time,
+                cloudinary_url=cld.url,
+                cloudinary_public_id=cld.public_id,
+            )
+        else:
+            dbmod.update_reframe_variant(
+                variant_id,
+                status="done",
+                variant_path=variant_path,
+                render_time_s=render_time,
+            )
+
+    except Exception as exc:
+        dbmod.update_reframe_variant(variant_id, status="failed", error=str(exc)[:500])
+
+
+@app.post("/clips/{clip_id}/smart-reframe")
+async def start_smart_reframe(
+    clip_id: str,
+    background_tasks: BackgroundTasks,
+    content_hint: str = "auto",
+):
+    """Start a smart-reframe job for a clip.
+
+    content_hint: 'auto' | 'talking_head' | 'conversation' | 'action' | 'webcam'
+
+    Returns immediately with variant_id; poll GET /clips/{clip_id}/smart-reframe.
+    """
+    conn = dbmod.get_db()
+    clip = conn.execute("SELECT * FROM clips WHERE id=?", [clip_id]).fetchone()
+    if not clip:
+        conn.close()
+        raise HTTPException(404, "Clip not found")
+
+    cand = conn.execute("SELECT * FROM candidates WHERE id=?", [clip["candidate_id"]]).fetchone()
+    video = conn.execute(
+        "SELECT * FROM videos WHERE id=?", [cand["video_id"]]
+    ).fetchone() if cand else None
+    conn.close()
+
+    if not cand or not video:
+        raise HTTPException(404, "Candidate or video record missing")
+
+    source_path = video["path"]
+    if not source_path or not Path(source_path).exists():
+        raise HTTPException(400, "Source video file not found on disk")
+
+    proxy_path = video["proxy_path"] if "proxy_path" in video.keys() else None
+    clip_start = float(cand["start_s"])
+    clip_end = float(cand["end_s"])
+    src_w = int(video["width"] if video["width"] else 1920)
+    src_h = int(video["height"] if video["height"] else 1080)
+    words = dbmod.get_cached_words(video["id"]) or []
+
+    variant_id = dbmod.create_reframe_variant(clip_id, content_hint)
+
+    import threading
+    t = threading.Thread(
+        target=_run_reframe_job,
+        args=(variant_id, clip_id, source_path, proxy_path,
+              clip_start, clip_end, src_w, src_h, words, content_hint),
+        daemon=True,
+    )
+    _reframe_threads[variant_id] = t
+    t.start()
+
+    return {"variant_id": variant_id, "clip_id": clip_id, "status": "pending"}
+
+
+@app.get("/clips/{clip_id}/smart-reframe")
+async def get_smart_reframe_status(clip_id: str):
+    """Poll status of the latest smart-reframe job for a clip."""
+    conn = dbmod.get_db()
+    clip = conn.execute("SELECT id FROM clips WHERE id=?", [clip_id]).fetchone()
+    conn.close()
+    if not clip:
+        raise HTTPException(404, "Clip not found")
+
+    variant = dbmod.latest_reframe_variant(clip_id)
+    if not variant:
+        return {"clip_id": clip_id, "variant": None}
+
+    return {
+        "clip_id": clip_id,
+        "variant": {
+            "id": variant["id"],
+            "status": variant["status"],
+            "strategy": variant["strategy"],
+            "content_hint": variant.get("content_hint"),
+            "variant_path": variant.get("variant_path"),
+            "variant_url": (
+                f"/clips/{clip_id}/smart-reframe/{variant['id']}/video"
+                if variant.get("variant_path") and variant["status"] == "done"
+                else None
+            ),
+            "cloudinary_url": variant.get("cloudinary_url"),
+            "analysis_time_s": variant.get("analysis_time_s"),
+            "render_time_s": variant.get("render_time_s"),
+            "error": variant.get("error"),
+            "created_at": variant.get("created_at"),
+            "plan": json.loads(variant["plan_json"]) if variant.get("plan_json") else None,
+        },
+    }
+
+
+@app.get("/clips/{clip_id}/smart-reframe/{variant_id}/video")
+async def serve_reframe_variant(clip_id: str, variant_id: str):
+    """Serve the rendered variant mp4 for in-browser comparison."""
+    variant = dbmod.get_reframe_variant(variant_id)
+    if not variant or variant["clip_id"] != clip_id:
+        raise HTTPException(404, "Variant not found")
+    vpath = variant.get("variant_path")
+    if not vpath or not Path(vpath).exists():
+        raise HTTPException(404, "Variant video file not found")
+    return FileResponse(vpath, media_type="video/mp4")
+
+
+@app.post("/clips/{clip_id}/smart-reframe/{variant_id}/accept")
+async def accept_reframe_variant(clip_id: str, variant_id: str):
+    """Replace the clip's output_path with the accepted variant.
+
+    This keeps the DB record (same clip_id), preserves publication history,
+    and does NOT re-enqueue any pending uploads.
+    """
+    conn = dbmod.get_db()
+    clip = conn.execute("SELECT * FROM clips WHERE id=?", [clip_id]).fetchone()
+    conn.close()
+    if not clip:
+        raise HTTPException(404, "Clip not found")
+
+    variant = dbmod.get_reframe_variant(variant_id)
+    if not variant or variant["clip_id"] != clip_id:
+        raise HTTPException(404, "Variant not found")
+    if variant["status"] != "done":
+        raise HTTPException(400, f"Variant status is '{variant['status']}' — must be 'done' to accept")
+
+    vpath = variant["variant_path"]
+    if not vpath or not Path(vpath).exists():
+        raise HTTPException(400, "Variant file missing on disk")
+
+    # Safety: only swap if no upload session is currently active for this clip
+    conn = dbmod.get_db()
+    active_upload = conn.execute(
+        "SELECT id FROM yt_upload_sessions WHERE clip_id=? AND status IN ('uploading','processing')",
+        [clip_id],
+    ).fetchone()
+    conn.close()
+    if active_upload:
+        raise HTTPException(409, "Clip has an active upload in progress — cannot replace file now")
+
+    dbmod.update_clip(clip_id, output_path=vpath, captioned_path=vpath)
+    dbmod.update_reframe_variant(variant_id, status="accepted")
+
+    return {"clip_id": clip_id, "variant_id": variant_id, "new_path": vpath}
+
+
 # ── WORKERS ──────────────────────────────────────────────────────────────────
 
 @app.get("/workers/stats")

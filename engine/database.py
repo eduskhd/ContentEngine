@@ -2334,3 +2334,54 @@ def retry_batch_errors(batch_id: str):
               AND status='error'
         """, (ts, batch_id))
         conn.execute("UPDATE upload_batches SET updated_at=? WHERE id=?", (ts, batch_id))
+
+
+# ── Smart Reframe Variants ────────────────────────────────────────────────────
+
+def create_reframe_variant(clip_id: str, content_hint: str = "auto") -> str:
+    """Insert a pending reframe_variants record; return its id."""
+    variant_id = str(uuid.uuid4())
+    ts = now()
+    with db() as conn:
+        conn.execute(
+            """INSERT INTO reframe_variants
+               (id, clip_id, status, content_hint, created_at, updated_at)
+               VALUES (?, ?, 'pending', ?, ?, ?)""",
+            (variant_id, clip_id, content_hint, ts, ts),
+        )
+    return variant_id
+
+
+def update_reframe_variant(variant_id: str, **fields) -> None:
+    if not fields:
+        return
+    ts = now()
+    fields["updated_at"] = ts
+    cols = ", ".join(f"{k}=?" for k in fields)
+    with db() as conn:
+        conn.execute(
+            f"UPDATE reframe_variants SET {cols} WHERE id=?",
+            list(fields.values()) + [variant_id],
+        )
+
+
+def get_reframe_variant(variant_id: str) -> dict | None:
+    with db() as conn:
+        row = conn.execute(
+            "SELECT * FROM reframe_variants WHERE id=?", (variant_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_reframe_variants_for_clip(clip_id: str) -> list[dict]:
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM reframe_variants WHERE clip_id=? ORDER BY created_at DESC",
+            (clip_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def latest_reframe_variant(clip_id: str) -> dict | None:
+    rows = get_reframe_variants_for_clip(clip_id)
+    return rows[0] if rows else None

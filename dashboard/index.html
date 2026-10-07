@@ -1587,6 +1587,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         <button class="cap-tab active" onclick="capTab('style',this)">Style</button>
         <button class="cap-tab" onclick="capTab('words',this)">Words</button>
         <button class="cap-tab" onclick="capTab('position',this)">Position</button>
+        <button class="cap-tab" onclick="capTab('reframe',this)">Reframe</button>
         <button class="cap-tab" onclick="capTab('eval',this)">Eval</button>
       </div>
 
@@ -1691,6 +1692,87 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
       </div>
 
       <!-- EVAL panel -->
+      <!-- REFRAME panel -->
+      <div class="cap-panel" id="cap-reframe" style="overflow-y:auto;padding-bottom:8px">
+        <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Smart Reframe</div>
+
+        <!-- Content type hint -->
+        <div style="margin-bottom:12px">
+          <label style="font-size:11px;color:#aaa;display:block;margin-bottom:4px">Content type</label>
+          <select id="rf-hint" style="width:100%;background:#1a1a1a;color:#ddd;border:1px solid #333;border-radius:5px;padding:5px 8px;font-size:12px">
+            <option value="auto">Auto-detect</option>
+            <option value="talking_head">Talking head</option>
+            <option value="conversation">Conversation / multiple speakers</option>
+            <option value="action">Action / movement</option>
+            <option value="webcam">Webcam + gameplay/reaction</option>
+          </select>
+        </div>
+
+        <button class="btn btn-primary btn-sm" onclick="startSmartReframe()" id="rf-start-btn" style="width:100%;margin-bottom:10px">
+          Analyze &amp; Reframe
+        </button>
+
+        <!-- Status / progress -->
+        <div id="rf-status" style="display:none;font-size:12px;color:#aaa;margin-bottom:10px;padding:8px;background:#1a1a1a;border-radius:5px;border:1px solid #2a2a2a">
+          <span id="rf-status-text">Analyzing...</span>
+          <div id="rf-progress-bar" style="margin-top:6px;height:3px;background:#2a2a2a;border-radius:2px;overflow:hidden">
+            <div id="rf-progress-fill" style="height:100%;width:0%;background:#3b82f6;transition:width .3s"></div>
+          </div>
+        </div>
+
+        <!-- Plan info card -->
+        <div id="rf-plan-card" style="display:none;font-size:11px;color:#aaa;margin-bottom:10px;padding:8px;background:#1a1a1a;border-radius:5px;border:1px solid #2a2a2a">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span>Strategy</span><span id="rf-strategy" style="color:#ddd">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span>Model</span><span id="rf-model" style="color:#ddd">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span>Confidence</span><span id="rf-confidence" style="color:#ddd">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span>Scenes detected</span><span id="rf-scenes" style="color:#ddd">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between">
+            <span>Analysis / Render</span><span id="rf-timing" style="color:#ddd">—</span>
+          </div>
+        </div>
+
+        <!-- Side-by-side comparison -->
+        <div id="rf-compare" style="display:none;margin-bottom:10px">
+          <div style="font-size:11px;color:#888;margin-bottom:6px">Comparison</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <div>
+              <div style="font-size:10px;color:#666;text-align:center;margin-bottom:3px">Original</div>
+              <video id="rf-orig-video" src="" controls muted playsinline
+                     style="width:100%;border-radius:4px;background:#111;border:1px solid #2a2a2a"
+                     onplay="rfSyncPlay(this,'rf-variant-video')"></video>
+            </div>
+            <div>
+              <div style="font-size:10px;color:#666;text-align:center;margin-bottom:3px">Smart reframe</div>
+              <video id="rf-variant-video" src="" controls muted playsinline
+                     style="width:100%;border-radius:4px;background:#111;border:1px solid #333"
+                     onplay="rfSyncPlay(this,'rf-orig-video')"></video>
+            </div>
+          </div>
+          <div id="rf-cloudinary-row" style="display:none;margin-top:6px;font-size:11px;color:#888">
+            Cloudinary: <a id="rf-cloudinary-link" href="#" target="_blank" style="color:#3b82f6">view auto-crop</a>
+          </div>
+        </div>
+
+        <!-- Accept / Reset controls -->
+        <div id="rf-actions" style="display:none;display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-success btn-sm" onclick="acceptReframe()" style="flex:1">Accept reframe</button>
+          <button class="btn btn-outline btn-sm" onclick="resetReframe()" style="flex:1">Reset to original</button>
+        </div>
+
+        <div id="rf-accepted-badge" style="display:none;font-size:11px;color:#22c55e;padding:6px 8px;background:#052e16;border-radius:4px;text-align:center">
+          Reframe accepted as active render
+        </div>
+        <div id="rf-error" style="display:none;font-size:11px;color:#f87171;margin-top:6px"></div>
+      </div>
+
       <div class="cap-panel" id="cap-eval" style="overflow-y:auto;padding-bottom:8px">
 
         <!-- Decision -->
@@ -1909,6 +1991,10 @@ function closePlayer() {
   v.src = '';
   _clearCanvas();
   document.getElementById('video-modal').classList.remove('open');
+  // Stop any running reframe poll without clearing the variant state
+  // so it resumes if the user reopens the same clip
+  clearInterval(_rfPollTimer);
+  _rfPollTimer = null;
 }
 
 async function modalAction(action) {
@@ -1943,9 +2029,179 @@ function capTab(name, btn) {
   document.querySelectorAll('.cap-panel').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('cap-' + name).classList.add('active');
+  if (name === 'reframe') rfOnTabOpen();
 }
 
-// â"€â"€ Quality Evaluation â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// ── Smart Reframe ─────────────────────────────────────────────────────────────
+let _rfVariantId = null;
+let _rfPollTimer = null;
+let _rfClipId = null;
+
+function rfOnTabOpen() {
+  // If a completed variant already exists for this clip, show it without re-running
+  if (_rfClipId === _currentClipId && _rfVariantId) return;
+  if (_rfClipId !== _currentClipId) rfReset();
+  _rfClipId = _currentClipId;
+  // Check for existing variant
+  fetch(`${API}/clips/${_currentClipId}/smart-reframe`)
+    .then(r => r.json())
+    .then(data => {
+      const v = data.variant;
+      if (v && v.status === 'done') {
+        _rfVariantId = v.id;
+        document.getElementById('rf-status').style.display = 'block';
+        document.getElementById('rf-status-text').textContent = 'Previous reframe ready';
+        document.getElementById('rf-progress-fill').style.width = '100%';
+        rfShowResult(v);
+      }
+    })
+    .catch(() => {});
+}
+
+function rfReset() {
+  _rfVariantId = null;
+  _rfClipId = null;
+  clearInterval(_rfPollTimer);
+  _rfPollTimer = null;
+  const ids = ['rf-status','rf-plan-card','rf-compare','rf-actions','rf-accepted-badge','rf-error'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  const startBtn = document.getElementById('rf-start-btn');
+  if (startBtn) startBtn.disabled = false;
+  const v = document.getElementById('rf-variant-video');
+  if (v) v.src = '';
+  const o = document.getElementById('rf-orig-video');
+  if (o) o.src = '';
+}
+
+async function startSmartReframe() {
+  if (!_currentClipId) return;
+  _rfClipId = _currentClipId;
+  rfReset();
+  _rfClipId = _currentClipId;
+
+  const hint = document.getElementById('rf-hint').value;
+  document.getElementById('rf-start-btn').disabled = true;
+
+  const statusEl = document.getElementById('rf-status');
+  statusEl.style.display = 'block';
+  document.getElementById('rf-status-text').textContent = 'Requesting analysis...';
+  document.getElementById('rf-progress-fill').style.width = '10%';
+  document.getElementById('rf-error').style.display = 'none';
+
+  try {
+    const res = await fetch(`${API}/clips/${_rfClipId}/smart-reframe?content_hint=${hint}`, { method: 'POST' });
+    if (!res.ok) { rfShowError('Server error: ' + res.status); return; }
+    const data = await res.json();
+    _rfVariantId = data.variant_id;
+    document.getElementById('rf-status-text').textContent = 'Analyzing scene structure...';
+    document.getElementById('rf-progress-fill').style.width = '20%';
+    _rfPollTimer = setInterval(rfPoll, 1500);
+  } catch (e) {
+    rfShowError('Request failed: ' + e.message);
+  }
+}
+
+async function rfPoll() {
+  if (!_rfClipId) return;
+  try {
+    const res = await fetch(`${API}/clips/${_rfClipId}/smart-reframe`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const v = data.variant;
+    if (!v || v.id !== _rfVariantId) return;
+
+    const fill = document.getElementById('rf-progress-fill');
+    const statusText = document.getElementById('rf-status-text');
+    if (v.status === 'pending')   { fill.style.width = '15%'; statusText.textContent = 'Queued...'; }
+    if (v.status === 'analyzing') { fill.style.width = '45%'; statusText.textContent = 'Detecting faces and scenes...'; }
+    if (v.status === 'rendering') { fill.style.width = '75%'; statusText.textContent = 'Rendering reframed clip...'; }
+
+    if (v.status === 'done') {
+      clearInterval(_rfPollTimer);
+      fill.style.width = '100%';
+      statusText.textContent = 'Done';
+      rfShowResult(v);
+    } else if (v.status === 'failed') {
+      clearInterval(_rfPollTimer);
+      rfShowError(v.error || 'Reframe failed');
+    }
+  } catch (e) {}
+}
+
+function rfShowResult(v) {
+  const plan = v.plan || {};
+  document.getElementById('rf-strategy').textContent = v.strategy || plan.strategy || '—';
+  document.getElementById('rf-model').textContent = plan.model || '—';
+  const conf = plan.confidence != null ? Math.round(plan.confidence * 100) + '%' : '—';
+  document.getElementById('rf-confidence').textContent = conf;
+  document.getElementById('rf-scenes').textContent = (plan.scenes || []).length;
+  const timing = [
+    v.analysis_time_s != null ? v.analysis_time_s + 's analysis' : null,
+    v.render_time_s   != null ? v.render_time_s   + 's render'   : null,
+  ].filter(Boolean).join(' / ') || '—';
+  document.getElementById('rf-timing').textContent = timing;
+  document.getElementById('rf-plan-card').style.display = 'block';
+
+  if (v.variant_url) {
+    document.getElementById('rf-compare').style.display = 'block';
+    const origVideo = document.getElementById('rf-orig-video');
+    const modalSrc = document.getElementById('modal-video').src;
+    if (modalSrc) origVideo.src = modalSrc;
+    const varVideo = document.getElementById('rf-variant-video');
+    varVideo.src = `${API}${v.variant_url}`;
+    if (v.cloudinary_url) {
+      document.getElementById('rf-cloudinary-row').style.display = 'block';
+      document.getElementById('rf-cloudinary-link').href = v.cloudinary_url;
+    }
+  }
+  document.getElementById('rf-actions').style.display = 'flex';
+  document.getElementById('rf-start-btn').disabled = false;
+}
+
+function rfShowError(msg) {
+  document.getElementById('rf-status').style.display = 'none';
+  const errEl = document.getElementById('rf-error');
+  errEl.textContent = msg;
+  errEl.style.display = 'block';
+  document.getElementById('rf-start-btn').disabled = false;
+}
+
+async function acceptReframe() {
+  if (!_rfClipId || !_rfVariantId) return;
+  try {
+    const res = await fetch(
+      `${API}/clips/${_rfClipId}/smart-reframe/${_rfVariantId}/accept`,
+      { method: 'POST' }
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
+      rfShowError(err.detail || 'Accept failed'); return;
+    }
+    document.getElementById('rf-actions').style.display = 'none';
+    document.getElementById('rf-accepted-badge').style.display = 'block';
+    const varVideo = document.getElementById('rf-variant-video');
+    if (varVideo && varVideo.src) {
+      document.getElementById('modal-video').src = varVideo.src;
+    }
+  } catch (e) {
+    rfShowError('Accept failed: ' + e.message);
+  }
+}
+
+function resetReframe() {
+  rfReset();
+  document.getElementById('rf-hint').value = 'auto';
+}
+
+function rfSyncPlay(src, targetId) {
+  const other = document.getElementById(targetId);
+  if (other && !other.paused) other.pause();
+}
+
+// ── Quality Evaluation ──────────────────────────────────────────────────────
 let _evalDecision = '';
 let _evalReasons = new Set();
 let _evalTimer = { accumulated: 0, startedAt: null, interval: null };
