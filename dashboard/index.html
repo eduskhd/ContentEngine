@@ -1903,7 +1903,10 @@ function loadTab(t) {
 function _routeFor(tab) {
   if (tab === 'library') {
     const v = typeof _libCurrentView !== 'undefined' ? _libCurrentView : '';
-    if (v.startsWith('creator:'))    return 'library/cr/' + v.slice(8);
+    if (v.startsWith('creator:')) {
+      const tabSuffix = (_libCreatorTab && _libCreatorTab !== 'videos') ? '/' + _libCreatorTab : '';
+      return 'library/cr/' + v.slice(8) + tabSuffix;
+    }
     if (v.startsWith('collection:')) return 'library/co/' + v.slice(11);
     if (v === 'all-videos')  return 'library/all';
     if (v === 'processing')  return 'library/proc';
@@ -2924,11 +2927,15 @@ function _fmtClipDate(created_at) {
 }
 
 async function loadLibrary() {
+  // Snapshot view before async sidebar refresh — router may change it mid-flight.
+  const _viewSnapshot = _libCurrentView;
   // During background polls, refresh sidebar at most every 30s (it makes 5 API calls).
   if (!_pollIsBackground || Date.now() - _sidebarRefreshedAt > 30000) {
     await refreshSidebarCounts();
     _sidebarRefreshedAt = Date.now();
   }
+  // Skip reloadCurrentView if navigation already changed the view while sidebar was refreshing.
+  if (_libCurrentView !== _viewSnapshot) return;
   await reloadCurrentView();
 }
 
@@ -3349,7 +3356,28 @@ async function showCreatorsGrid() {
 
 // â"€â"€ Creator detail â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function showCreatorDetail(creatorId) {
-  _libPackageVideoId = null;  // leaving package view
+  _libPackageVideoId = null;
+
+  // Background-poll shortcut: same creator already shown → refresh tab content only, skip full DOM rebuild.
+  // This preserves scroll, open editors, focus, and any user interaction in the tab content area.
+  if (_pollIsBackground && _libCurrentCreatorId === creatorId) {
+    const tabEl = document.getElementById('creator-tab-content');
+    if (!tabEl) return; // Full rebuild in progress on this creator — skip poll, avoid race
+    if (tabEl) {
+      if (_libCreatorTab === 'clips')    { await showCreatorClips(creatorId);    return; }
+      if (_libCreatorTab === 'packages') { await showCreatorPackages(creatorId); return; }
+      // Videos tab: refresh cards in-place without rebuilding the header/tabs structure
+      const params = new URLSearchParams({ creator_id: creatorId, limit: '100' });
+      _applyFilterParams(params);
+      const videos = await api('/videos?' + params).catch(() => []);
+      renderVideoCards(videos, null, creatorId, 'creator-tab-content');
+      // Update video count label without touching the tab buttons structure
+      const vTabBtn = document.querySelector('.creator-tabs .creator-tab');
+      if (vTabBtn) vTabBtn.textContent = `Videos (${videos.length})`;
+      return;
+    }
+  }
+
   _libCurrentCreatorId = creatorId;
   const el = document.getElementById('lib-content');
   if (!_pollIsBackground) el.innerHTML = '<div class="empty">Loading…</div>';
@@ -3398,24 +3426,30 @@ async function showCreatorDetail(creatorId) {
   let tabsHtml = `<div class="creator-tabs">
     <button class="creator-tab ${_libCreatorTab==='videos'?'active':''}" onclick="switchCreatorTab('videos',this)">Videos (${videos.length})</button>
     <button class="creator-tab ${_libCreatorTab==='clips'?'active':''}" onclick="switchCreatorTab('clips',this)">Clips</button>
+    <button class="creator-tab ${_libCreatorTab==='packages'?'active':''}" onclick="switchCreatorTab('packages',this)">Paquetes</button>
   </div>`;
 
   el.innerHTML = headerHtml + tabsHtml + `<div id="creator-tab-content"></div>`;
+  delete _renderCache['creator-tab-content']; // new div — invalidate stale cache so smartRender always writes
 
   if (_libCreatorTab === 'videos') {
-    renderVideoCards(videos, document.getElementById('creator-tab-content'), creatorId);
+    renderVideoCards(videos, null, creatorId, 'creator-tab-content');
+  } else if (_libCreatorTab === 'packages') {
+    await showCreatorPackages(creatorId);
   } else {
-    showCreatorClips(creatorId);
+    await showCreatorClips(creatorId);
   }
 }
 
 function _syncClipSortVisibility() {
-  const isCreatorClips = _libCurrentView.startsWith('creator:') && _libCreatorTab === 'clips';
+  const isCreatorView = _libCurrentView.startsWith('creator:');
+  const isCreatorClips = isCreatorView && _libCreatorTab === 'clips';
+  const isCreatorPackages = isCreatorView && _libCreatorTab === 'packages';
   const clipWrap = document.getElementById('lib-clip-sort-wrap');
   if (clipWrap) clipWrap.style.display = isCreatorClips ? 'flex' : 'none';
   const videoWrap = document.getElementById('lib-video-sort-wrap');
   if (videoWrap) {
-    videoWrap.style.display = !isCreatorClips ? 'flex' : 'none';
+    videoWrap.style.display = (!isCreatorClips && !isCreatorPackages) ? 'flex' : 'none';
     const sel = document.getElementById('lib-video-sort-sel');
     if (sel) sel.value = _libFilters.sort || 'last_clipped';
   }
@@ -3431,13 +3465,20 @@ function setLibVideoSort(val) {
 
 function switchCreatorTab(tab, btn) {
   _libCreatorTab = tab;
+  try { sessionStorage.setItem('ce_creator_tab', tab); } catch(_) {}
   document.querySelectorAll('.creator-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   _syncClipSortVisibility();
+  // Update URL to reflect tab change so F5 restores it
+  if (_currentTab === 'library') {
+    const route = '#' + _routeFor('library');
+    if (location.hash !== route) history.pushState({tab: 'library'}, '', route);
+  }
   const el = document.getElementById('creator-tab-content');
   if (!el) return;
   if (tab === 'videos') showCreatorDetail(_libCurrentCreatorId);
   else if (tab === 'clips') showCreatorClips(_libCurrentCreatorId);
+  else if (tab === 'packages') showCreatorPackages(_libCurrentCreatorId);
 }
 
 function _renderCreatorClipCard(c, partLabel) {
@@ -3477,7 +3518,7 @@ async function showCreatorClips(creatorId) {
   if (!_pollIsBackground) el.innerHTML = '<div class="empty">Loading clips…</div>';
   const clips = await api(`/clips?creator_id=${encodeURIComponent(creatorId)}&limit=500`).catch(()=>[]);
   if (!clips.length) {
-    el.innerHTML = '<div class="empty">No clips yet for this creator</div>'; return;
+    smartRender('creator-tab-content', '<div class="empty">No clips yet for this creator</div>'); return;
   }
 
   // Group by series_id (order within group by series_part numerically)
@@ -3527,7 +3568,41 @@ async function showCreatorClips(creatorId) {
     html += sortedUngrouped.map((c, i) => _renderCreatorClipCard(c, 'Clip '+String(i+1).padStart(2,'0'))).join('');
   }
 
-  el.innerHTML = html;
+  smartRender('creator-tab-content', html);
+}
+
+async function showCreatorPackages(creatorId) {
+  const el = document.getElementById('creator-tab-content');
+  if (!el) return;
+  if (!_pollIsBackground) el.innerHTML = '<div class="empty">Cargando paquetes…</div>';
+  const pkgs = await api(`/creators/${encodeURIComponent(creatorId)}/packages`).catch(()=>[]);
+  if (!pkgs.length) {
+    smartRender('creator-tab-content', '<div class="empty">No hay paquetes para este creador</div>');
+    return;
+  }
+  smartRender('creator-tab-content', `<div style="display:grid;gap:10px;padding-top:4px">${pkgs.map(p => `
+    <div class="card" style="padding:12px 16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+        <div style="flex:1;font-size:13px;font-weight:600;color:#fff">${_esc(p.name)}</div>
+        <span style="font-size:11px;color:#888">${p.item_count||0} clips</span>
+      </div>
+      ${p.description ? `<div style="font-size:12px;color:#888;margin-bottom:6px">${_esc(p.description)}</div>` : ''}
+      <div style="font-size:11px;color:#444;margin-bottom:8px">${p.created_at ? p.created_at.slice(0,10) : ''}</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-primary btn-sm" onclick="uploadPackage('${p.id}')">Upload Package</button>
+        <button class="btn btn-danger btn-sm" onclick="deletePackageFromCreator('${p.id}','${_esc(p.name)}','${creatorId}')">Eliminar</button>
+      </div>
+    </div>`).join('')}
+  </div>`);
+}
+
+async function deletePackageFromCreator(id, name, creatorId) {
+  if (!confirm(`Delete package "${name}"? Clips will not be deleted.`)) return;
+  try {
+    await api('/packages/'+id, {method:'DELETE'});
+    toast('Package deleted','success');
+    showCreatorPackages(creatorId);
+  } catch(e) { toast(e.message,'error'); }
 }
 
 // Select ALL clips in a series and open the batch upload modal in group mode
@@ -3586,7 +3661,7 @@ async function showAllVideos() {
   _applyFilterParams(params);
   if (_libSearchQ) params.set('search', _libSearchQ);
   const videos = await api('/videos?' + params).catch(()=>[]);
-  renderVideoCards(videos, el, null);
+  renderVideoCards(videos, el, null, 'lib-content');
 }
 
 // â"€â"€ Processing view â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -3596,16 +3671,16 @@ async function showProcessing() {
   const jobs = await api('/jobs').catch(()=>[]);
   const proc = jobs.filter(j => !['COMPLETED','FAILED','completed','failed'].includes(j.status||''));
   if (!proc.length) {
-    el.innerHTML = '<div class="lib-empty"><div class="lib-empty-icon">⏳</div><p>No jobs processing right now</p></div>'; return;
+    smartRender('lib-content', '<div class="lib-empty"><div class="lib-empty-icon">⏳</div><p>No jobs processing right now</p></div>'); return;
   }
-  el.innerHTML = proc.map(j => `<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:14px">
+  smartRender('lib-content', proc.map(j => `<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:14px">
     <div style="flex:1">
       <div style="font-size:13px;font-weight:500;color:#ccc;margin-bottom:4px">${_esc(j.source_title||j.source_url||j.id.substring(0,8))}</div>
       <div style="font-size:12px;color:#888">${j.creator||'Unknown creator'}</div>
     </div>
     ${chip(j.status||'queued')}
     <span style="font-size:12px;color:#444">${fmt(j.created_at)}</span>
-  </div>`).join('');
+  </div>`).join(''));
 }
 
 // â"€â"€ Failed view â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -3615,9 +3690,9 @@ async function showFailed() {
   const jobs = await api('/jobs').catch(()=>[]);
   const failed = jobs.filter(j => ['FAILED','failed'].includes(j.status||''));
   if (!failed.length) {
-    el.innerHTML = '<div class="lib-empty"><p>No failed jobs.</p></div>'; return;
+    smartRender('lib-content', '<div class="lib-empty"><p>No failed jobs.</p></div>'); return;
   }
-  el.innerHTML = failed.map(j => `<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+  smartRender('lib-content', failed.map(j => `<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
     <div style="flex:1">
       <div style="font-size:13px;font-weight:500;color:#ccc;margin-bottom:4px">${_esc(j.source_title||j.source_url||j.id.substring(0,8))}</div>
       <div style="font-size:12px;color:#f87171;margin-bottom:2px">${_esc(j.error||'Unknown error')}</div>
@@ -3625,7 +3700,7 @@ async function showFailed() {
     </div>
     ${chip('failed')}
     <button class="btn btn-outline btn-sm" onclick="retryJob('${j.id}')">Retry</button>
-  </div>`).join('');
+  </div>`).join(''));
 }
 
 async function retryJob(jobId) {
@@ -3638,12 +3713,12 @@ async function retryJob(jobId) {
 }
 
 // â"€â"€ Video cards rendering â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-function renderVideoCards(videos, container, creatorId) {
+function renderVideoCards(videos, container, creatorId, _renderId) {
   if (!videos.length) {
     const emptyMsg = creatorId === '__unassigned__'
       ? '<div class="lib-empty"><div class="lib-empty-icon">📁</div><p>No unassigned videos — all videos have creators.</p></div>'
       : '<div class="lib-empty"><div class="lib-empty-icon">🎬</div><p>No videos yet.</p><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="openLibUploadModal(\''+(_libCurrentCreatorId||'')+'\')" >+ Add Video</button></div>';
-    container.innerHTML = emptyMsg; return;
+    if (_renderId) smartRender(_renderId, emptyMsg); else container.innerHTML = emptyMsg; return;
   }
 
   const isGrid = _libView === 'grid';
@@ -3696,7 +3771,7 @@ function renderVideoCards(videos, container, creatorId) {
     </div>`;
   }
   html += '</div>';
-  container.innerHTML = html;
+  if (_renderId) smartRender(_renderId, html); else container.innerHTML = html;
 }
 
 function openVideoDetail(videoId, jobId) {
@@ -6399,13 +6474,8 @@ async function prepareClipForPublishing(clipId, opts={}) {
     });
     const n = (r.created||[]).length;
     const sk = (r.skipped||[]).length;
-    const msg = `${n} publication${n!==1?'s':''} created${sk?' ('+sk+' already existed)':''}`;
+    const msg = `${n} publicación${n!==1?'es':''} creada${n!==1?'s':''}${sk?' ('+sk+' ya existían)':''}`;
     toast(msg, 'success');
-    // Navigate to Publishing tab unless explicitly suppressed
-    if (!opts.noNavigate) {
-      const pubBtn = document.querySelector('nav button[onclick*="publishing"]');
-      if (pubBtn) showTab('publishing', pubBtn);
-    }
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
@@ -6422,9 +6492,7 @@ async function prepareClipsForPublishing(clipIds) {
       skipped += (r.skipped||[]).length;
     } catch(_) {}
   }
-  toast(`${created} publication${created!==1?'s':''} created${skipped?' ('+skipped+' already existed)':''}`, 'success');
-  const pubBtn = document.querySelector('nav button[onclick*="publishing"]');
-  if (pubBtn) showTab('publishing', pubBtn);
+  toast(`${created} publicación${created!==1?'es':''} creada${created!==1?'s':''}${skipped?' ('+skipped+' ya existían)':''}`, 'success');
 }
 
 // â"€â"€ Batch Upload Modal â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -6960,6 +7028,14 @@ async function runStorageScan() {
       sessionStorage.setItem('ce_review_filter', _rfEl.value));
   }
 
+  // Restore creator tab preference (URL takes priority; sessionStorage is the fallback for fresh opens)
+  try {
+    const savedTab = sessionStorage.getItem('ce_creator_tab');
+    if (savedTab && ['videos','clips','packages'].includes(savedTab) && !location.hash.includes('/cr/')) {
+      _libCreatorTab = savedTab;
+    }
+  } catch(_) {}
+
   function _activateFromRoute(hash, push) {
     const parts = (hash || 'review').split('/');
     const tab   = VALID_TABS.has(parts[0]) ? parts[0] : 'review';
@@ -6970,8 +7046,14 @@ async function runStorageScan() {
     // Restore sub-navigation after the tab's initial data load has started
     if (tab === 'library' && sub) {
       setTimeout(() => {
-        if      (sub.startsWith('cr/'))  libNav('creator:'    + sub.slice(3),  null, {push: false});
-        else if (sub.startsWith('co/'))  libNav('collection:' + sub.slice(3),  null, {push: false});
+        if (sub.startsWith('cr/')) {
+          // Format: cr/<uuid>[/<tab>]  e.g. cr/abc123/clips
+          const crParts = sub.slice(3).split('/');
+          const crId  = crParts[0];
+          const crTab = crParts[1];
+          if (crTab && ['videos','clips','packages'].includes(crTab)) _libCreatorTab = crTab;
+          libNav('creator:' + crId, null, {push: false});
+        } else if (sub.startsWith('co/'))  libNav('collection:' + sub.slice(3),  null, {push: false});
         else if (sub === 'all')          libNav('all-videos',                  null, {push: false});
         else if (sub === 'proc')         libNav('processing',                  null, {push: false});
         else if (sub === 'fail')         libNav('failed',                      null, {push: false});

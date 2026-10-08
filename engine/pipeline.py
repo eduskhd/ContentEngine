@@ -218,9 +218,33 @@ def process_video(
                 timer.fail(str(_se))
                 console.print(f"  Series detection skipped: {_se}")
 
+        # ── STEP 7.75: MOMENT DEDUPLICATION ──────────────────────────────────
+        # Groups candidates that cover the same narrative moment, selects the
+        # best quality winner per group, and archives the rest as GROUPED_ALT.
+        # This runs AFTER full scoring so quality signals inform the selection.
+        # Result: only unique moments proceed to render — no redundant clips.
+        console.print("[7.75] Deduplicating overlapping moment candidates...")
+        timer.start("moment_dedup")
+        dedup_report = {"groups": 0, "archived": 0, "cross_job_archived": 0}
+        try:
+            from engine.analyzers.moment_dedup import deduplicate_moments
+            scored, dedup_report = deduplicate_moments(scored, words, job_id)
+            timer.end(**{k: v for k, v in dedup_report.items()})
+            if dedup_report["archived"] > 0:
+                console.print(
+                    f"  Archived {dedup_report['archived']} redundant alternatives "
+                    f"({dedup_report['groups']} groups) → {len(scored)} unique moments"
+                )
+            else:
+                console.print(f"  No duplicates found — {len(scored)} unique moments")
+        except Exception as _de:
+            timer.fail(str(_de))
+            console.print(f"  Moment dedup skipped: {_de}")
+
         # ── STEP 8: SKILLS ADVISORS ───────────────────────────────────────────
         console.print("[8/12] Running skill advisors...")
         timer.start("skills")
+        # Only run skills on unique-moment candidates (GROUPED_ALT excluded)
         top_finalists = scored[:cfg.target_clips * cfg.finalist_multiplier]
         finalist_rows = [r for r in candidate_rows
                          if r["id"] in {c["id"] for c in top_finalists}]
@@ -242,7 +266,13 @@ def process_video(
                 final_selection = finalist_rows[:3]
             console.print(f"  AUTO mode: {len(final_selection)} clips above threshold {AUTO_QUALITY_THRESHOLD}")
         else:
+            # Deliver the requested number of unique moments; never pad with duplicates
             final_selection = finalist_rows[:number_of_clips]
+            if len(final_selection) < number_of_clips:
+                console.print(
+                    f"  [yellow]Note:[/] {len(final_selection)} unique moments available "
+                    f"(requested {number_of_clips}) — no redundant clips added"
+                )
 
         # ── STEPS 9-11: ONE-PASS RENDER (trim + reframe + captions) ──────────
         console.print(f"[9-11/12] Rendering {len(final_selection)} clips (trim+reframe+captions, 1 pass)...")
@@ -316,6 +346,9 @@ def process_video(
                 "review": review_count,
                 "reject": reject_count,
                 "series_detected": len(series_ids),
+                "dedup_groups": dedup_report.get("groups", 0),
+                "dedup_archived": dedup_report.get("archived", 0),
+                "dedup_cross_job": dedup_report.get("cross_job_archived", 0),
                 "total_time_s": round(timer.total, 1),
             },
             "series_ids": series_ids,

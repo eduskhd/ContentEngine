@@ -414,6 +414,9 @@ def init_db():
         _add_column_if_missing(conn, "candidates", "smart_end", "REAL")
         _add_column_if_missing(conn, "candidates", "series_id", "TEXT")
         _add_column_if_missing(conn, "candidates", "series_part", "INTEGER DEFAULT 0")
+        # Moment deduplication (2026-10-08)
+        _add_column_if_missing(conn, "candidates", "moment_group_id", "TEXT")
+        _add_column_if_missing(conn, "candidates", "group_evidence", "TEXT")
         # Future: social metrics prediction loop
         _add_column_if_missing(conn, "post_metrics", "predicted_virality_score", "REAL")
         _add_column_if_missing(conn, "post_metrics", "actual_vs_predicted_delta", "REAL")
@@ -741,6 +744,7 @@ _CANDIDATE_COLS = frozenset({
     "emotion_score", "retention_score", "importance_score",
     "hook_time", "virality_reasons", "smart_start", "smart_end",
     "series_id", "series_part",
+    "moment_group_id", "group_evidence",
 })
 
 

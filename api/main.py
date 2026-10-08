@@ -2005,6 +2005,36 @@ async def get_creator_impact(creator_id: str):
     return dbmod.get_creator_impact(creator_id)
 
 
+@app.get("/creators/{creator_id}/packages")
+async def list_creator_packages(creator_id: str):
+    conn = dbmod.get_db()
+    try:
+        if creator_id == "__unassigned__":
+            slugs = [r[0] for r in conn.execute(
+                "SELECT DISTINCT creator_slug FROM videos WHERE creator_id IS NULL AND creator_slug IS NOT NULL"
+            ).fetchall()]
+        else:
+            slugs = [r[0] for r in conn.execute(
+                "SELECT DISTINCT creator_slug FROM videos WHERE creator_id=? AND creator_slug IS NOT NULL",
+                (creator_id,),
+            ).fetchall()]
+        if not slugs:
+            return []
+        placeholders = ",".join("?" * len(slugs))
+        rows = conn.execute(
+            f"""SELECT p.*, COUNT(i.id) as item_count
+                FROM clip_packages p
+                LEFT JOIN clip_package_items i ON i.package_id = p.id
+                WHERE p.creator_slug IN ({placeholders})
+                GROUP BY p.id
+                ORDER BY p.created_at DESC""",
+            slugs,
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 @app.delete("/creators/{creator_id}")
 async def delete_creator(creator_id: str, action: str = Query("unassign")):
     conn = dbmod.get_db()
