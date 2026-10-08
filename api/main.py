@@ -1945,8 +1945,15 @@ async def remove_collection_items(collection_id: str, body: dict = Body(...)):
 
 
 @app.get("/creators")
-async def list_creators():
-    return dbmod.get_creators()
+async def list_creators(search: str = Query("")):
+    creators = dbmod.get_creators()
+    if search:
+        q = search.strip().lower()
+        import unicodedata
+        def norm(s): return unicodedata.normalize('NFD', s or '').encode('ascii','ignore').decode().lower()
+        nq = norm(q)
+        creators = [c for c in creators if nq in norm(c.get('name','')) or nq in norm(c.get('handle',''))]
+    return creators
 
 
 @app.post("/creators")
@@ -2031,6 +2038,96 @@ async def list_creator_packages(creator_id: str):
             slugs,
         ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+@app.get("/packages")
+async def list_packages_global(
+    creator_id: str = Query(""),
+    sort: str = Query("newest"),
+    page: int = Query(1),
+    limit: int = Query(24),
+    search: str = Query(""),
+):
+    """Return all clip_packages with latest_clip_at, clip_count, creator info. Paginated."""
+    sort_map = {
+        "newest": "CASE WHEN ps.latest_clip_at IS NULL THEN 1 ELSE 0 END, ps.latest_clip_at DESC, p.id DESC",
+        "oldest": "CASE WHEN ps.latest_clip_at IS NULL THEN 1 ELSE 0 END, ps.latest_clip_at ASC, p.id ASC",
+        "name_asc": "p.name COLLATE NOCASE ASC, p.id ASC",
+        "name_desc": "p.name COLLATE NOCASE DESC, p.id ASC",
+    }
+    order_clause = sort_map.get(sort, sort_map["newest"])
+
+    base_cte = """
+        WITH creator_map AS (
+            SELECT v.creator_slug, MIN(c.id) AS creator_id, MIN(c.name) AS creator_name,
+                   MIN(c.avatar_color) AS avatar_color
+            FROM videos v
+            JOIN creators c ON c.id = v.creator_id
+            WHERE v.creator_slug IS NOT NULL AND v.creator_id IS NOT NULL
+            GROUP BY v.creator_slug
+        ),
+        pkg_clips AS (
+            SELECT pi.package_id, cl.candidate_id, MIN(cl.created_at) AS birth
+            FROM clip_package_items pi
+            JOIN publications pub ON pub.id = pi.pub_id
+            JOIN clips cl ON cl.id = pub.clip_id
+            LEFT JOIN candidates ca ON ca.id = cl.candidate_id
+            WHERE (ca.id IS NULL OR ca.status != 'GROUPED_ALT')
+            GROUP BY pi.package_id, cl.candidate_id
+        ),
+        pkg_stats AS (
+            SELECT package_id, COUNT(DISTINCT candidate_id) AS clip_count, MAX(birth) AS latest_clip_at
+            FROM pkg_clips
+            GROUP BY package_id
+        )
+    """
+
+    where_parts = []
+    params: list = []
+
+    if creator_id == "__unassigned__":
+        where_parts.append("cm.creator_id IS NULL")
+    elif creator_id:
+        where_parts.append("cm.creator_id = ?")
+        params.append(creator_id)
+
+    if search:
+        where_parts.append("p.name LIKE ?")
+        params.append(f"%{search}%")
+
+    where_clause = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+
+    select_body = f"""
+        SELECT p.id, p.name, p.description, p.creator_slug, p.created_at, p.updated_at,
+               COALESCE(ps.clip_count, 0) AS clip_count,
+               ps.latest_clip_at,
+               cm.creator_id, cm.creator_name, cm.avatar_color,
+               (SELECT COUNT(*) FROM clip_package_items WHERE package_id = p.id) AS item_count
+        FROM clip_packages p
+        LEFT JOIN pkg_stats ps ON ps.package_id = p.id
+        LEFT JOIN creator_map cm ON cm.creator_slug = p.creator_slug
+        {where_clause}
+    """
+
+    conn = dbmod.get_db()
+    try:
+        count_row = conn.execute(
+            base_cte + f"SELECT COUNT(*) FROM clip_packages p LEFT JOIN pkg_stats ps ON ps.package_id = p.id LEFT JOIN creator_map cm ON cm.creator_slug = p.creator_slug {where_clause}",
+            params,
+        ).fetchone()
+        total = count_row[0] if count_row else 0
+
+        offset = (max(page, 1) - 1) * limit
+        rows = conn.execute(
+            base_cte + select_body + f"ORDER BY {order_clause} LIMIT ? OFFSET ?",
+            params + [limit, offset],
+        ).fetchall()
+
+        packages = [dict(r) for r in rows]
+        pages = max(1, (total + limit - 1) // limit)
+        return {"packages": packages, "total": total, "page": page, "pages": pages}
     finally:
         conn.close()
 

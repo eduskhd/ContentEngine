@@ -243,6 +243,33 @@ input[type=file]{font-size:13px;color:#888}
 .lib-nav-item.active .lib-nav-count{background:#1e2a3a;color:#60a5fa}
 .lib-new-btn{margin:8px;padding:8px;background:none;border:1px dashed #2a2a2a;color:#888;border-radius:7px;font-size:12px;cursor:pointer;width:calc(100% - 16px);text-align:left;transition:all .15s}
 .lib-new-btn:hover{border-color:#3b82f6;color:#3b82f6}
+/* Compact creator selector */
+.lib-creator-sel{padding:0 4px 4px;position:relative}
+.lib-creator-sel-btn{width:100%;background:#161616;border:1px solid #2a2a2a;color:#aaa;padding:7px 10px;border-radius:7px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:6px;transition:border-color .15s;box-sizing:border-box}
+.lib-creator-sel-btn:hover,.lib-creator-sel-btn.open{border-color:#3b82f6;color:#ddd}
+.lib-creator-sel-arrow{font-size:9px;flex-shrink:0;color:#666}
+.lib-creator-dropdown{position:absolute;left:4px;right:4px;top:calc(100% + 2px);background:#1a1a1a;border:1px solid #3b82f6;border-radius:8px;z-index:200;box-shadow:0 8px 24px #000c;overflow:hidden}
+.lib-creator-search-inp{width:100%;box-sizing:border-box;background:#111;border:none;border-bottom:1px solid #2a2a2a;color:#ccc;padding:8px 10px;font-size:12px;outline:none}
+.lib-creator-search-inp:focus{border-bottom-color:#3b82f6}
+.lib-creator-opt{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:12px;color:#aaa;cursor:pointer;transition:background .1s}
+.lib-creator-opt:hover,.lib-creator-opt.focused{background:#2a2a2a;color:#ddd}
+.lib-creator-opt.sel{color:#60a5fa;background:#0f172a}
+.lib-creator-opt .co-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+/* Package cards */
+.pkg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.pkg-card{background:#161616;border:1px solid #222;border-radius:10px;padding:14px;cursor:pointer;transition:border-color .15s;display:flex;flex-direction:column;gap:8px}
+.pkg-card:hover{border-color:#3b82f6}
+.pkg-card-header{display:flex;align-items:flex-start;gap:10px}
+.pkg-thumb{width:48px;height:48px;border-radius:7px;background:#111;border:1px solid #1a1a1a;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;overflow:hidden}
+.pkg-card-title{font-size:13px;font-weight:600;color:#ddd;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.pkg-card-creator{font-size:11px;color:#666;display:flex;align-items:center;gap:5px;margin-top:2px}
+.pkg-card-meta{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.pkg-card-meta-item{font-size:11px;color:#555;display:flex;align-items:center;gap:4px}
+.pkg-card-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+/* Mobile creator button */
+.lib-mobile-creator{display:none;background:#161616;border:1px solid #2a2a2a;color:#aaa;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;gap:5px;align-items:center}
+.lib-mobile-creator:hover{border-color:#3b82f6;color:#ddd}
+@media(max-width:700px){.lib-mobile-creator{display:flex}.pkg-grid{grid-template-columns:1fr}}
 .lib-main{flex:1;display:flex;flex-direction:column;overflow:hidden;background:#0d0d0d}
 .lib-toolbar{display:flex;align-items:center;gap:10px;padding:12px 20px;border-bottom:1px solid #1a1a1a;flex-shrink:0;flex-wrap:wrap}
 .lib-breadcrumbs{font-size:13px;color:#888;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -613,7 +640,10 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     </div>
     <div class="lib-sidebar-inner">
       <div class="lib-nav-sep">Library</div>
-      <div class="lib-nav-item active" id="lnav-creators" onclick="libNav('creators',this)">
+      <div class="lib-nav-item" id="lnav-latest-pkgs" onclick="libNavPackages(this)">
+        <span class="lib-nav-label">&#128230; Últimos Paquetes</span>
+      </div>
+      <div class="lib-nav-item" id="lnav-creators" onclick="libNav('creators',this)">
         <span class="lib-nav-label">All Creators</span>
       </div>
       <div class="lib-nav-item" id="lnav-all-videos" onclick="libNav('all-videos',this)">
@@ -628,9 +658,22 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         <span class="lib-nav-label">Failed</span>
         <span class="lib-nav-count" id="lnc-failed"></span>
       </div>
-      <div class="lib-nav-sep">Creators</div>
-      <div id="lib-sidebar-creators"></div>
-      <div class="lib-nav-item" id="lnav-unassigned" onclick="libNav('creator:__unassigned__',this)">
+      <div class="lib-nav-sep">Creador</div>
+      <div class="lib-creator-sel" id="lib-creator-sel-wrap">
+        <button class="lib-creator-sel-btn" id="lib-creator-sel-btn" onclick="toggleCreatorDropdown(event)">
+          <span id="lib-creator-sel-label">Todos los creadores</span>
+          <span class="lib-creator-sel-arrow">&#9660;</span>
+        </button>
+        <div class="lib-creator-dropdown" id="lib-creator-dropdown" style="display:none">
+          <input class="lib-creator-search-inp" id="lib-creator-search-inp"
+                 placeholder="Buscar creador…"
+                 oninput="filterCreatorDropdown(this.value)"
+                 onkeydown="creatorDropdownKey(event)">
+          <div id="lib-creator-options"></div>
+        </div>
+      </div>
+      <div id="lib-sidebar-creators" style="display:none"></div>
+      <div class="lib-nav-item" id="lnav-unassigned" style="display:none" onclick="libNav('creator:__unassigned__',this)">
         <span class="lib-nav-label">Unassigned</span>
         <span class="lib-nav-count" id="lnc-unassigned"></span>
       </div>
@@ -659,6 +702,9 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           <button class="btn btn-danger btn-sm" onclick="bulkDeleteFlow()">Delete</button>
           <button class="btn btn-outline btn-sm" onclick="clearSelection()">Cancel</button>
         </div>
+        <button class="lib-mobile-creator" id="lib-mobile-creator-btn" onclick="toggleCreatorDropdown(event)">
+          <span id="lib-mobile-creator-label">Creador</span> &#9660;
+        </button>
         <button class="btn btn-primary btn-sm" style="margin-right:6px" onclick="openLibUploadModal('')">+ Upload</button>
         <button class="lib-select-btn" id="lib-sel-btn" onclick="toggleSelectMode()">Select</button>
         <button class="lib-view-btn active" id="lib-vbtn-grid" onclick="setLibView('grid')" title="Grid">⊞</button>
@@ -667,6 +713,16 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     </div>
     <!-- Filter chip bar (shown in video views) -->
     <div id="lib-filters-row" style="display:none;flex-direction:column;position:relative">
+      <div id="lib-pkg-sort-wrap" style="display:none;align-items:center;gap:8px;padding:0 20px 8px;flex-wrap:wrap">
+        <span style="font-size:11px;color:#555;white-space:nowrap">Ordenar por:</span>
+        <select id="lib-pkg-sort-sel" class="lib-filter-sel" onchange="setPkgSort(this.value)">
+          <option value="newest">M&#225;s recientes</option>
+          <option value="oldest">M&#225;s antiguos</option>
+          <option value="name_asc">Nombre: A&#8211;Z</option>
+          <option value="name_desc">Nombre: Z&#8211;A</option>
+        </select>
+        <span id="lib-pkg-hint" style="font-size:10px;color:#444">seg&#250;n los &#250;ltimos clips creados en cada paquete</span>
+      </div>
       <div id="lib-clip-sort-wrap" style="display:none;align-items:center;gap:8px;padding:0 20px 8px;flex-wrap:wrap">
         <span style="font-size:11px;color:#555;white-space:nowrap">Ordenar por:</span>
         <select id="lib-clip-sort-sel" class="lib-filter-sel" onchange="setLibClipSort(this.value)">
@@ -1911,6 +1967,11 @@ function _routeFor(tab) {
     if (v === 'all-videos')  return 'library/all';
     if (v === 'processing')  return 'library/proc';
     if (v === 'failed')      return 'library/fail';
+    if (v === 'packages') {
+      if (typeof _libPkgCreatorId !== 'undefined' && _libPkgCreatorId)
+        return 'library/packages/cr/' + _libPkgCreatorId;
+      return 'library/packages';
+    }
     return 'library';
   }
   if (tab === 'publishing') {
@@ -2849,8 +2910,14 @@ async function loadOverview() {
 let _libView = 'grid';          // 'grid' | 'list'
 let _libSelectMode = false;
 let _libSelected = new Set();   // video_ids selected
-let _libCurrentView = 'creators';
+let _libCurrentView = 'packages';
 let _libCurrentCreatorId = null;
+let _libPkgSort = localStorage.getItem('lib_pkg_sort') || 'newest';
+let _libPkgCreatorId = null;
+let _libPkgCreatorName = null;
+let _libPkgPage = 1;
+let _libCreatorDropdownOpen = false;
+let _libCreators_loaded = false;
 let _libPackageVideoId = null;   // non-null while user is viewing a package panel
 let _pkgPublish = {};            // pending publish state for the modal
 let _libCreatorTab = 'videos';  // 'videos' | 'clips' | 'series'
@@ -2933,10 +3000,22 @@ async function loadLibrary() {
   if (!_pollIsBackground || Date.now() - _sidebarRefreshedAt > 30000) {
     await refreshSidebarCounts();
     _sidebarRefreshedAt = Date.now();
+    _syncSidebarActive(_libCurrentView);
   }
   // Skip reloadCurrentView if navigation already changed the view while sidebar was refreshing.
   if (_libCurrentView !== _viewSnapshot) return;
   await reloadCurrentView();
+}
+
+function _syncSidebarActive(view) {
+  document.querySelectorAll('.lib-nav-item').forEach(x => x.classList.remove('active'));
+  if (view === 'packages')       { const el = document.getElementById('lnav-latest-pkgs'); if (el) el.classList.add('active'); }
+  else if (view === 'creators')  { const el = document.getElementById('lnav-creators');    if (el) el.classList.add('active'); }
+  else if (view === 'all-videos'){ const el = document.getElementById('lnav-all-videos');  if (el) el.classList.add('active'); }
+  else if (view === 'processing'){ const el = document.getElementById('lnav-processing');  if (el) el.classList.add('active'); }
+  else if (view === 'failed')    { const el = document.getElementById('lnav-failed');      if (el) el.classList.add('active'); }
+  else if (view.startsWith('creator:'))    { const el = document.getElementById('lnav-cr-' + view.slice(8));   if (el) el.classList.add('active'); }
+  else if (view.startsWith('collection:')){ const el = document.getElementById('lnav-coll-' + view.slice(11)); if (el) el.classList.add('active'); }
 }
 
 async function refreshSidebarCounts() {
@@ -2990,6 +3069,7 @@ async function refreshSidebarCounts() {
 async function reloadCurrentView() {
   const v = _libCurrentView;
   if (v === 'creators') return showCreatorsGrid();
+  if (v === 'packages') return showLatestPackages();
   if (v.startsWith('creator:')) {
     if (_libPackageVideoId) return;  // keep package panel visible while user browses package
     return showCreatorDetail(v.slice(8));
@@ -3007,7 +3087,10 @@ function libNav(view, el, _opts) {
   // Highlight sidebar
   document.querySelectorAll('.lib-nav-item').forEach(x => x.classList.remove('active'));
   if (el) el.classList.add('active');
-  else if (view.startsWith('creator:')) {
+  else if (view === 'packages') {
+    const x = document.getElementById('lnav-latest-pkgs');
+    if (x) x.classList.add('active');
+  } else if (view.startsWith('creator:')) {
     const x = document.getElementById('lnav-cr-' + view.slice(8));
     if (x) x.classList.add('active');
   } else if (view.startsWith('collection:')) {
@@ -3015,7 +3098,7 @@ function libNav(view, el, _opts) {
     if (x) x.classList.add('active');
   }
   // Filters: show only in video views
-  const showFilters = view === 'all-videos' || view.startsWith('creator:') || view.startsWith('collection:');
+  const showFilters = view === 'all-videos' || view === 'packages' || view.startsWith('creator:') || view.startsWith('collection:');
   const fr = document.getElementById('lib-filters-row');
   if (fr) fr.style.display = showFilters ? 'flex' : 'none';
   if (showFilters) {
@@ -3354,7 +3437,213 @@ async function showCreatorsGrid() {
   } catch(e) { el.innerHTML = `<div class="empty">Error loading: ${_esc(e.message)}</div>`; }
 }
 
-// â"€â"€ Creator detail â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// ── Packages global view ──────────────────────────────────────────────────────
+function libNavPackages(el) {
+  _libPkgCreatorId = null;
+  _libPkgCreatorName = null;
+  _libPkgPage = 1;
+  const sl = document.getElementById('lib-creator-sel-label');
+  if (sl) sl.textContent = 'Todos los creadores';
+  const ml = document.getElementById('lib-mobile-creator-label');
+  if (ml) ml.textContent = 'Creador';
+  libNav('packages', el);
+}
+
+async function showLatestPackages() {
+  const el = document.getElementById('lib-content');
+  if (!_pollIsBackground) el.innerHTML = '<div class="empty">Cargando paquetes…</div>';
+
+  const creatorLabel = _libPkgCreatorName || 'Todos los creadores';
+  const breadLabel = _libPkgCreatorId
+    ? `Paquetes de ${_esc(creatorLabel)}`
+    : 'Últimos Paquetes';
+  setBreadcrumb(
+    `<span onclick="libNavPackages(document.getElementById('lnav-latest-pkgs'))">Library</span>` +
+    `<span class="sep">›</span><span class="cur">${breadLabel}</span>`
+  );
+
+  const params = new URLSearchParams({ sort: _libPkgSort, page: String(_libPkgPage), limit: '24' });
+  if (_libPkgCreatorId) params.set('creator_id', _libPkgCreatorId);
+
+  let data;
+  try {
+    data = await api('/packages?' + params.toString());
+  } catch(e) {
+    el.innerHTML = '<div class="empty">Error cargando paquetes</div>';
+    return;
+  }
+
+  const pkgs = data.packages || [];
+  if (!pkgs.length) {
+    smartRender('lib-content', `<div class="empty">No hay paquetes${_libPkgCreatorId ? ' para este creador' : ''}</div>`);
+    return;
+  }
+
+  let html = `<div class="pkg-grid">${pkgs.map(_renderPkgCard).join('')}</div>`;
+
+  if (data.pages > 1) {
+    html += `<div style="display:flex;justify-content:center;gap:8px;margin-top:20px;padding-bottom:10px">`;
+    for (let p = 1; p <= data.pages; p++) {
+      html += `<button class="btn ${p === data.page ? 'btn-primary' : 'btn-outline'} btn-sm"` +
+              ` onclick="pkgNavPage(${p})"${p === data.page ? ' disabled' : ''}>${p}</button>`;
+    }
+    html += `</div>`;
+  }
+
+  html += `<div style="font-size:11px;color:#333;text-align:center;padding:8px 0">${data.total} paquete${data.total===1?'':'s'}</div>`;
+  smartRender('lib-content', html);
+}
+
+function pkgNavPage(p) {
+  _libPkgPage = p;
+  showLatestPackages();
+}
+
+function setPkgSort(val) {
+  _libPkgSort = val;
+  localStorage.setItem('lib_pkg_sort', val);
+  _libPkgPage = 1;
+  const sel = document.getElementById('lib-pkg-sort-sel');
+  if (sel && sel.value !== val) sel.value = val;
+  if (_libCurrentView === 'packages') showLatestPackages();
+}
+
+function _renderPkgCard(p) {
+  const creatorColor = p.avatar_color || '#555';
+  const creatorName = p.creator_name || 'Sin asignar';
+  const dateStr = p.latest_clip_at ? _fmtClipDate(p.latest_clip_at) : 'Fecha desconocida';
+  const clipCount = p.clip_count || 0;
+  const safeId = _esc(p.id);
+  const safeName = _esc(p.name);
+  const safeCrId = _esc(p.creator_id || '');
+  return `<div class="pkg-card" onclick="openPackageDetail('${safeId}','${safeCrId}')">` +
+    `<div class="pkg-card-header">` +
+      `<div class="pkg-thumb">&#128230;</div>` +
+      `<div style="flex:1;min-width:0">` +
+        `<div class="pkg-card-title" title="${safeName}">${safeName}</div>` +
+        `<div class="pkg-card-creator">` +
+          `<span style="width:8px;height:8px;border-radius:50%;background:${creatorColor};display:inline-block;flex-shrink:0"></span>` +
+          `${_esc(creatorName)}` +
+        `</div>` +
+      `</div>` +
+    `</div>` +
+    `<div class="pkg-card-meta">` +
+      `<div class="pkg-card-meta-item">&#128250; ${clipCount} clip${clipCount===1?'':'s'}</div>` +
+      `<div class="pkg-card-meta-item" title="Último clip nuevo">&#128197; ${dateStr}</div>` +
+    `</div>` +
+    `<div class="pkg-card-actions">` +
+      `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();uploadPackage('${safeId}')">Upload</button>` +
+      `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deletePackageGlobal('${safeId}','${safeName}')">Eliminar</button>` +
+    `</div>` +
+  `</div>`;
+}
+
+function openPackageDetail(pkgId, creatorId) {
+  const targetCreator = creatorId && creatorId !== 'null' && creatorId !== '' ? creatorId : '__unassigned__';
+  _libCreatorTab = 'packages';
+  libNav('creator:' + targetCreator, null);
+}
+
+async function deletePackageGlobal(id, name) {
+  if (!confirm(`Eliminar paquete "${name}"? Los clips no se borrarán.`)) return;
+  try {
+    await api('/packages/'+id, {method:'DELETE'});
+    toast('Paquete eliminado', 'success');
+    showLatestPackages();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function toggleCreatorDropdown(e) {
+  if (e) e.stopPropagation();
+  _libCreatorDropdownOpen = !_libCreatorDropdownOpen;
+  const dd = document.getElementById('lib-creator-dropdown');
+  const btn = document.getElementById('lib-creator-sel-btn');
+  if (!dd) return;
+  dd.style.display = _libCreatorDropdownOpen ? 'block' : 'none';
+  if (btn) btn.classList.toggle('open', _libCreatorDropdownOpen);
+  if (_libCreatorDropdownOpen) {
+    if (!_libCreators_loaded || !_libCreators.length) {
+      try { _libCreators = await api('/creators'); _libCreators_loaded = true; } catch(_e) {}
+    }
+    _buildCreatorDropdownOptions('');
+    const inp = document.getElementById('lib-creator-search-inp');
+    if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 50); }
+  }
+}
+
+function _buildCreatorDropdownOptions(q) {
+  const opts = document.getElementById('lib-creator-options');
+  if (!opts) return;
+  const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const nq = norm(q.trim());
+  const filtered = nq
+    ? _libCreators.filter(c => norm(c.name).includes(nq) || norm(c.handle||'').includes(nq))
+    : _libCreators;
+
+  const allSel = !_libPkgCreatorId;
+  const unaSel = _libPkgCreatorId === '__unassigned__';
+
+  let html = `<div class="lib-creator-opt${allSel?' sel':''}" onclick="selectPkgCreator(null,'Todos los creadores')">` +
+    `<span class="co-dot" style="background:#555"></span>Todos los creadores</div>`;
+  if (!nq) {
+    html += `<div class="lib-creator-opt${unaSel?' sel':''}" onclick="selectPkgCreator('__unassigned__','Sin asignar')">` +
+      `<span class="co-dot" style="background:#374151"></span>Sin asignar</div>`;
+  }
+  if (filtered.length) {
+    html += '<div style="height:1px;background:#2a2a2a;margin:4px 0"></div>';
+    html += filtered.map(c => {
+      const isSel = _libPkgCreatorId === c.id;
+      return `<div class="lib-creator-opt${isSel?' sel':''}" onclick="selectPkgCreator('${c.id}','${_esc(c.name)}')">` +
+        `<span class="co-dot" style="background:${c.avatar_color||'#3b82f6'}"></span>${_esc(c.name)}</div>`;
+    }).join('');
+  } else if (nq) {
+    html += '<div style="padding:8px 10px;font-size:12px;color:#444">No hay resultados</div>';
+  }
+  opts.innerHTML = html;
+}
+
+function filterCreatorDropdown(q) { _buildCreatorDropdownOptions(q); }
+
+function creatorDropdownKey(e) {
+  if (e.key === 'Escape') {
+    _libCreatorDropdownOpen = false;
+    const dd = document.getElementById('lib-creator-dropdown');
+    if (dd) dd.style.display = 'none';
+    const btn = document.getElementById('lib-creator-sel-btn');
+    if (btn) { btn.classList.remove('open'); btn.focus(); }
+  }
+}
+
+function selectPkgCreator(id, name) {
+  _libCreatorDropdownOpen = false;
+  _libPkgCreatorId = id;
+  _libPkgCreatorName = name;
+  _libPkgPage = 1;
+  const dd = document.getElementById('lib-creator-dropdown');
+  if (dd) dd.style.display = 'none';
+  const btn = document.getElementById('lib-creator-sel-btn');
+  if (btn) btn.classList.remove('open');
+  const label = id ? name : 'Todos los creadores';
+  const sl = document.getElementById('lib-creator-sel-label');
+  if (sl) sl.textContent = label;
+  const ml = document.getElementById('lib-mobile-creator-label');
+  if (ml) ml.textContent = label;
+  libNav('packages', document.getElementById('lnav-latest-pkgs'));
+}
+
+document.addEventListener('click', function(e) {
+  if (!_libCreatorDropdownOpen) return;
+  const wrap = document.getElementById('lib-creator-sel-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    _libCreatorDropdownOpen = false;
+    const dd = document.getElementById('lib-creator-dropdown');
+    if (dd) dd.style.display = 'none';
+    const btn = document.getElementById('lib-creator-sel-btn');
+    if (btn) btn.classList.remove('open');
+  }
+});
+
+// ── Creator detail ────────────────────────────────────────────────────────────
 async function showCreatorDetail(creatorId) {
   _libPackageVideoId = null;
 
@@ -3445,16 +3734,23 @@ function _syncClipSortVisibility() {
   const isCreatorView = _libCurrentView.startsWith('creator:');
   const isCreatorClips = isCreatorView && _libCreatorTab === 'clips';
   const isCreatorPackages = isCreatorView && _libCreatorTab === 'packages';
+  const isPkgView = _libCurrentView === 'packages';
   const clipWrap = document.getElementById('lib-clip-sort-wrap');
   if (clipWrap) clipWrap.style.display = isCreatorClips ? 'flex' : 'none';
   const videoWrap = document.getElementById('lib-video-sort-wrap');
   if (videoWrap) {
-    videoWrap.style.display = (!isCreatorClips && !isCreatorPackages) ? 'flex' : 'none';
+    videoWrap.style.display = (!isCreatorClips && !isCreatorPackages && !isPkgView) ? 'flex' : 'none';
     const sel = document.getElementById('lib-video-sort-sel');
     if (sel) sel.value = _libFilters.sort || 'last_clipped';
   }
+  const pkgWrap = document.getElementById('lib-pkg-sort-wrap');
+  if (pkgWrap) {
+    pkgWrap.style.display = isPkgView ? 'flex' : 'none';
+    const sel = document.getElementById('lib-pkg-sort-sel');
+    if (sel) sel.value = _libPkgSort;
+  }
   const chips = document.getElementById('fc-chips');
-  if (chips) chips.style.display = isCreatorClips ? 'none' : 'block';
+  if (chips) chips.style.display = (isCreatorClips || isPkgView) ? 'none' : 'block';
 }
 
 function setLibVideoSort(val) {
@@ -7057,6 +7353,11 @@ async function runStorageScan() {
         else if (sub === 'all')          libNav('all-videos',                  null, {push: false});
         else if (sub === 'proc')         libNav('processing',                  null, {push: false});
         else if (sub === 'fail')         libNav('failed',                      null, {push: false});
+        else if (sub.startsWith('packages')) {
+          const crMatch = sub.match(/^packages\/cr\/(.+)$/);
+          if (crMatch) { _libPkgCreatorId = crMatch[1]; }
+          libNav('packages', null, {push: false});
+        }
       }, 300);
     } else if (tab === 'publishing' && sub) {
       setTimeout(() => pubNav(sub, {push: false}), 200);
