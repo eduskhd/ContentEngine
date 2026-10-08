@@ -2916,6 +2916,7 @@ let _libPkgSort = localStorage.getItem('lib_pkg_sort') || 'newest';
 let _libPkgCreatorId = null;
 let _libPkgCreatorName = null;
 let _libPkgPage = 1;
+let _libPkgEpoch = 0;   // incremented on every showLatestPackages call; stale fetches are discarded
 let _libCreatorDropdownOpen = false;
 let _libCreators_loaded = false;
 let _libPackageVideoId = null;   // non-null while user is viewing a package panel
@@ -3450,6 +3451,7 @@ function libNavPackages(el) {
 }
 
 async function showLatestPackages() {
+  const epoch = ++_libPkgEpoch;   // stale-fetch guard: discard if a newer call fires before this resolves
   const el = document.getElementById('lib-content');
   if (!_pollIsBackground) {
     delete _renderCache['lib-content']; // concurrent calls: second smartRender must write, not skip
@@ -3472,9 +3474,12 @@ async function showLatestPackages() {
   try {
     data = await api('/packages?' + params.toString());
   } catch(e) {
+    if (epoch !== _libPkgEpoch) return;
     el.innerHTML = '<div class="empty">Error cargando paquetes</div>';
     return;
   }
+
+  if (epoch !== _libPkgEpoch) return;  // a newer call already in flight — discard stale result
 
   const pkgs = data.packages || [];
   if (!pkgs.length) {
