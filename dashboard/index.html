@@ -6,6 +6,7 @@
 <title>AI Content Engine</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
+:focus-visible{outline:2px solid #3b82f6;outline-offset:2px}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d0d0d;color:#e0e0e0;min-height:100vh}
 a{color:inherit;text-decoration:none}
 
@@ -27,7 +28,7 @@ main{padding:24px;max-width:1280px;margin:0 auto}
 section{display:none}
 section.active{display:block;animation:_ce-fadein .13s ease}
 @keyframes _ce-fadein{from{opacity:0;translate:0 4px}to{opacity:1;translate:0 0}}
-@media(prefers-reduced-motion:reduce){section.active{animation:none}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;animation-iteration-count:1!important}}
 
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:24px}
 .card{background:#161616;border:1px solid #222;border-radius:10px;padding:18px}
@@ -65,7 +66,7 @@ tr:hover td{background:#1c1c1c}
 /* Upload section */
 .input-group{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
 .input-group label{font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.5px}
-.url-input{background:#111;border:1px solid #333;color:#e0e0e0;padding:10px 14px;border-radius:8px;font-size:14px;width:100%;outline:none;transition:border-color .2s}
+.url-input{background:#111;border:1px solid #333;color:#e0e0e0;padding:10px 14px;border-radius:8px;font-size:14px;width:100%;transition:border-color .2s}
 .url-input:focus{border-color:#3b82f6}
 .file-zone{border:2px dashed #2a2a2a;border-radius:10px;padding:28px;text-align:center;transition:border-color .2s;cursor:pointer}
 .file-zone:hover{border-color:#3b82f6}
@@ -116,7 +117,7 @@ input[type=file]{font-size:13px;color:#888}
 #video-modal{display:none;position:fixed;inset:0;z-index:500;background:#000c;align-items:center;justify-content:center;padding:12px}
 #video-modal.open{display:flex}
 #video-modal .modal-inner{background:#111;border:1px solid #222;border-radius:12px;width:100%;max-width:900px;max-height:96vh;overflow:hidden;display:flex;flex-direction:row;position:relative}
-#video-modal .modal-close{position:absolute;top:10px;right:14px;cursor:pointer;font-size:20px;color:#999;z-index:10;line-height:1}
+#video-modal .modal-close{position:absolute;top:10px;right:14px;cursor:pointer;font-size:20px;color:#999;z-index:10;line-height:1;background:none;border:none;padding:0}
 #video-modal .modal-close:hover{color:#fff}
 /* Left: video + actions */
 .modal-left{display:flex;flex-direction:column;flex:0 0 auto;width:300px;padding:14px;border-right:1px solid #1c1c1c}
@@ -154,7 +155,7 @@ input[type=file]{font-size:13px;color:#888}
 .preset-btn .picon{font-size:20px}
 .words-list{display:flex;flex-direction:column;gap:4px;max-height:360px;overflow-y:auto}
 .word-item{display:flex;align-items:center;gap:6px;padding:4px 6px;background:#1a1a1a;border-radius:4px}
-.word-item input{flex:1;background:transparent;border:none;color:#e0e0e0;font-size:13px;outline:none;padding:2px 4px}
+.word-item input{flex:1;background:transparent;border:none;color:#e0e0e0;font-size:13px;padding:2px 4px}
 .word-item input:focus{background:#222;border-radius:3px}
 .word-item .ts{font-size:11px;color:#888;font-family:monospace;white-space:nowrap}
 .rerender-btn{width:100%;margin-top:auto;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;transition:opacity .15s}
@@ -174,7 +175,7 @@ input[type=file]{font-size:13px;color:#888}
 .eval-reason-btn:hover{border-color:#444;color:#bbb}
 .eval-reason-btn.active{border-color:#ef4444;color:#ef4444;background:#1f0a0a}
 .eval-notes{width:100%;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;color:#ddd;font-size:12px;padding:8px;resize:vertical;font-family:inherit;min-height:56px}
-.eval-notes:focus{outline:none;border-color:#3b82f6}
+.eval-notes:focus{border-color:#3b82f6}
 .eval-timer-row{display:flex;align-items:center;gap:8px}
 .eval-timer-display{font-family:monospace;font-size:18px;font-weight:700;color:#e0e0e0;min-width:56px}
 .eval-timer-btn{padding:5px 10px;border:1px solid #2a2a2a;border-radius:6px;background:#1a1a1a;color:#aaa;font-size:12px;cursor:pointer;transition:border-color .15s}
@@ -191,9 +192,9 @@ input[type=file]{font-size:13px;color:#888}
 .missed-item .mi-del:hover{color:#ef4444}
 .missed-add-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .missed-ts-input{width:72px;padding:5px 6px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;color:#ddd;font-size:12px;font-family:monospace}
-.missed-ts-input:focus{outline:none;border-color:#3b82f6}
+.missed-ts-input:focus{border-color:#3b82f6}
 .missed-notes-input{flex:1;min-width:80px;padding:5px 8px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;color:#ddd;font-size:12px}
-.missed-notes-input:focus{outline:none;border-color:#3b82f6}
+.missed-notes-input:focus{border-color:#3b82f6}
 .missed-add-btn{padding:5px 10px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap}
 .missed-add-btn:hover{opacity:.85}
 @media(max-width:620px){
@@ -232,10 +233,10 @@ input[type=file]{font-size:13px;color:#888}
 .lib-sidebar{width:220px;flex-shrink:0;background:#0f0f0f;border-right:1px solid #1a1a1a;display:flex;flex-direction:column;overflow:hidden}
 .lib-sidebar-inner{flex:1;overflow-y:auto;padding:10px 8px}
 .lib-search-wrap{padding:10px 8px 4px}
-.lib-search{width:100%;background:#1a1a1a;border:1px solid #2a2a2a;color:#ddd;padding:7px 10px;border-radius:7px;font-size:12px;outline:none}
+.lib-search{width:100%;background:#1a1a1a;border:1px solid #2a2a2a;color:#ddd;padding:7px 10px;border-radius:7px;font-size:12px}
 .lib-search:focus{border-color:#3b82f6}
 .lib-nav-sep{font-size:11px;color:#888;letter-spacing:.8px;text-transform:uppercase;padding:12px 8px 4px;font-weight:600}
-.lib-nav-item{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:7px;cursor:pointer;font-size:13px;color:#888;transition:background .12s,color .12s;gap:6px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap}
+.lib-nav-item{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:7px;cursor:pointer;font-size:13px;color:#888;transition:background .12s,color .12s;gap:6px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;background:none;border:none;width:100%;text-align:left;font-family:inherit}
 .lib-nav-item:hover{background:#1a1a1a;color:#ccc}
 .lib-nav-item.active{background:#1e2a3a;color:#60a5fa;font-weight:500}
 .lib-nav-item .lib-nav-label{flex:1;overflow:hidden;text-overflow:ellipsis;min-width:0}
@@ -249,9 +250,9 @@ input[type=file]{font-size:13px;color:#888}
 .lib-creator-sel-btn:hover,.lib-creator-sel-btn.open{border-color:#3b82f6;color:#ddd}
 .lib-creator-sel-arrow{font-size:9px;flex-shrink:0;color:#666}
 .lib-creator-dropdown{position:absolute;left:4px;right:4px;top:calc(100% + 2px);background:#1a1a1a;border:1px solid #3b82f6;border-radius:8px;z-index:200;box-shadow:0 8px 24px #000c;overflow:hidden}
-.lib-creator-search-inp{width:100%;box-sizing:border-box;background:#111;border:none;border-bottom:1px solid #2a2a2a;color:#ccc;padding:8px 10px;font-size:12px;outline:none}
+.lib-creator-search-inp{width:100%;box-sizing:border-box;background:#111;border:none;border-bottom:1px solid #2a2a2a;color:#ccc;padding:8px 10px;font-size:12px}
 .lib-creator-search-inp:focus{border-bottom-color:#3b82f6}
-.lib-creator-opt{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:12px;color:#aaa;cursor:pointer;transition:background .1s}
+.lib-creator-opt{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:12px;color:#aaa;cursor:pointer;transition:background .1s;background:none;border:none;width:100%;text-align:left;font-family:inherit}
 .lib-creator-opt:hover,.lib-creator-opt.focused{background:#2a2a2a;color:#ddd}
 .lib-creator-opt.sel{color:#60a5fa;background:#0f172a}
 .lib-creator-opt .co-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
@@ -390,7 +391,7 @@ input[type=file]{font-size:13px;color:#888}
 .lib-modal-overlay.open{display:flex}
 .lib-modal{background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:24px;width:100%;max-width:440px;position:relative}
 .lib-modal h2{font-size:15px;font-weight:600;color:#ddd;margin-bottom:16px}
-.lib-modal-input{width:100%;background:#1a1a1a;border:1px solid #2a2a2a;color:#ddd;padding:9px 12px;border-radius:7px;font-size:13px;outline:none;margin-bottom:12px}
+.lib-modal-input{width:100%;background:#1a1a1a;border:1px solid #2a2a2a;color:#ddd;padding:9px 12px;border-radius:7px;font-size:13px;margin-bottom:12px}
 .lib-modal-input:focus{border-color:#3b82f6}
 .lib-modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 .lib-modal-close{position:absolute;top:12px;right:14px;background:none;border:none;color:#888;font-size:18px;cursor:pointer;line-height:1}
@@ -429,7 +430,7 @@ input[type=file]{font-size:13px;color:#888}
 .pub-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
 .pub-toolbar h2{font-size:15px;font-weight:600;color:#fff;flex:1}
 .pub-filter-sel{background:#111;border:1px solid #2a2a2a;color:#aaa;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer}
-.pub-filter-sel:focus{outline:none;border-color:#3b82f6}
+.pub-filter-sel:focus{border-color:#3b82f6}
 .pub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
 .pub-list-wrap{display:flex;flex-direction:column;gap:5px}
 .pub-card{background:#161616;border:1px solid #1e1e1e;border-radius:10px;overflow:hidden;position:relative;transition:border-color .15s}
@@ -473,7 +474,7 @@ input[type=file]{font-size:13px;color:#888}
 .pub-field{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
 .pub-field label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.4px}
 .pub-field input,.pub-field textarea{background:#111;border:1px solid #2a2a2a;color:#e0e0e0;padding:7px 11px;border-radius:6px;font-size:13px;width:100%;font-family:inherit}
-.pub-field input:focus,.pub-field textarea:focus{outline:none;border-color:#3b82f6}
+.pub-field input:focus,.pub-field textarea:focus{border-color:#3b82f6}
 .pub-field textarea{resize:vertical;min-height:72px}
 .pub-mark-modal{background:#161616;border:1px solid #2a2a2a;border-radius:12px;width:min(420px,95vw);padding:22px;position:relative}
 /* List view rows */
@@ -520,7 +521,7 @@ input[type=file]{font-size:13px;color:#888}
 .nj-label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px}
 .nj-required{color:#f87171;font-size:11px}
 .nj-optional{color:#888;font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;margin-left:2px}
-.nj-input{background:#111;border:1px solid #2a2a2a;color:#e0e0e0;padding:10px 14px;border-radius:8px;font-size:14px;width:100%;outline:none;transition:border-color .2s;font-family:inherit}
+.nj-input{background:#111;border:1px solid #2a2a2a;color:#e0e0e0;padding:10px 14px;border-radius:8px;font-size:14px;width:100%;transition:border-color .2s;font-family:inherit}
 .nj-input:focus{border-color:#3b82f6}
 .nj-url-wrap{position:relative}
 .nj-url-wrap .nj-input{padding-right:38px}
@@ -565,7 +566,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 .nj-adv-body{padding:12px 14px;border-top:1px solid #1e1e1e}
 .nj-adv-row{display:flex;gap:16px;flex-wrap:wrap}
 .nj-field-inline{flex:1;min-width:120px;margin-bottom:0}
-.nj-select{background:#1a1a1a;border:1px solid #2a2a2a;color:#e0e0e0;padding:8px 10px;border-radius:7px;font-size:13px;width:100%;outline:none;transition:border-color .2s}
+.nj-select{background:#1a1a1a;border:1px solid #2a2a2a;color:#e0e0e0;padding:8px 10px;border-radius:7px;font-size:13px;width:100%;transition:border-color .2s}
 .nj-select:focus{border-color:#3b82f6}
 .nj-creator-suggest{display:flex;align-items:center;gap:8px;background:#0d1827;border:1px solid #1e3050;border-radius:6px;padding:7px 10px;font-size:12px;color:#7daad4;margin-top:4px}
 .nj-suggest-btn{background:none;border:1px solid #1e3050;color:#3b82f6;padding:2px 9px;border-radius:5px;font-size:11px;cursor:pointer;flex-shrink:0;transition:background .15s}
@@ -636,28 +637,28 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
   <!-- Sidebar -->
   <aside class="lib-sidebar">
     <div class="lib-search-wrap">
-      <input class="lib-search" id="lib-search-input" placeholder="Search creators or videos…" oninput="libSearchChanged(this.value)">
+      <input class="lib-search" id="lib-search-input" aria-label="Search creators or videos" placeholder="Search creators or videos…" oninput="libSearchChanged(this.value)">
     </div>
     <div class="lib-sidebar-inner">
       <div class="lib-nav-sep">Library</div>
-      <div class="lib-nav-item" id="lnav-latest-pkgs" onclick="libNavPackages(this)">
+      <button type="button" class="lib-nav-item" id="lnav-latest-pkgs" onclick="libNavPackages(this)">
         <span class="lib-nav-label">&#128230; Últimos Paquetes</span>
-      </div>
-      <div class="lib-nav-item" id="lnav-creators" onclick="libNav('creators',this)">
+      </button>
+      <button type="button" class="lib-nav-item" id="lnav-creators" onclick="libNav('creators',this)">
         <span class="lib-nav-label">All Creators</span>
-      </div>
-      <div class="lib-nav-item" id="lnav-all-videos" onclick="libNav('all-videos',this)">
+      </button>
+      <button type="button" class="lib-nav-item" id="lnav-all-videos" onclick="libNav('all-videos',this)">
         <span class="lib-nav-label">All Videos</span>
         <span class="lib-nav-count" id="lnc-videos"></span>
-      </div>
-      <div class="lib-nav-item" id="lnav-processing" onclick="libNav('processing',this)">
+      </button>
+      <button type="button" class="lib-nav-item" id="lnav-processing" onclick="libNav('processing',this)">
         <span class="lib-nav-label">⏳ Processing</span>
         <span class="lib-nav-count" id="lnc-processing"></span>
-      </div>
-      <div class="lib-nav-item" id="lnav-failed" onclick="libNav('failed',this)">
+      </button>
+      <button type="button" class="lib-nav-item" id="lnav-failed" onclick="libNav('failed',this)">
         <span class="lib-nav-label">Failed</span>
         <span class="lib-nav-count" id="lnc-failed"></span>
-      </div>
+      </button>
       <div class="lib-nav-sep">Creador</div>
       <div class="lib-creator-sel" id="lib-creator-sel-wrap">
         <button class="lib-creator-sel-btn" id="lib-creator-sel-btn" onclick="toggleCreatorDropdown(event)">
@@ -666,6 +667,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         </button>
         <div class="lib-creator-dropdown" id="lib-creator-dropdown" style="display:none">
           <input class="lib-creator-search-inp" id="lib-creator-search-inp"
+                 aria-label="Buscar creador"
                  placeholder="Buscar creador…"
                  oninput="filterCreatorDropdown(this.value)"
                  onkeydown="creatorDropdownKey(event)">
@@ -673,10 +675,10 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         </div>
       </div>
       <div id="lib-sidebar-creators" style="display:none"></div>
-      <div class="lib-nav-item" id="lnav-unassigned" style="display:none" onclick="libNav('creator:__unassigned__',this)">
+      <button type="button" class="lib-nav-item" id="lnav-unassigned" style="display:none" onclick="libNav('creator:__unassigned__',this)">
         <span class="lib-nav-label">Unassigned</span>
         <span class="lib-nav-count" id="lnc-unassigned"></span>
-      </div>
+      </button>
       <div class="lib-nav-sep-mini">Collections
         <button onclick="showCollectionModal()" title="New collection">+</button>
       </div>
@@ -757,9 +759,9 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 </section>
 
 <!-- Creator modal -->
-<div class="lib-modal-overlay" id="creator-modal" onclick="if(event.target===this)closeCreatorModal()">
+<div class="lib-modal-overlay" id="creator-modal" role="dialog" aria-modal="true" aria-labelledby="cm-title" onclick="if(event.target===this)closeCreatorModal()">
   <div class="lib-modal">
-    <button class="lib-modal-close" onclick="closeCreatorModal()">✕</button>
+    <button class="lib-modal-close" aria-label="Close" onclick="closeCreatorModal()">✕</button>
     <h2 id="cm-title">New Creator</h2>
     <input class="lib-modal-input" id="cm-name" placeholder="Creator name (e.g. MrBeast)" autofocus>
     <input class="lib-modal-input" id="cm-handle" placeholder="Handle / username (optional)">
@@ -772,9 +774,9 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 </div>
 
 <!-- Delete confirm modal -->
-<div class="lib-modal-overlay" id="delete-modal" onclick="if(event.target===this)closeDeleteModal()">
+<div class="lib-modal-overlay" id="delete-modal" role="dialog" aria-modal="true" aria-labelledby="dm-title" onclick="if(event.target===this)closeDeleteModal()">
   <div class="lib-modal">
-    <button class="lib-modal-close" onclick="closeDeleteModal()">✕</button>
+    <button class="lib-modal-close" aria-label="Close" onclick="closeDeleteModal()">✕</button>
     <h2 id="dm-title">Delete videos?</h2>
     <div id="dm-impact">
       <div class="dm-impact-grid" id="dm-impact-grid" style="display:none"></div>
@@ -790,9 +792,9 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 </div>
 
 <!-- Collection modal (create / edit) -->
-<div class="lib-modal-overlay" id="coll-modal" onclick="if(event.target===this)closeCollModal()">
+<div class="lib-modal-overlay" id="coll-modal" role="dialog" aria-modal="true" aria-labelledby="coll-modal-title" onclick="if(event.target===this)closeCollModal()">
   <div class="lib-modal">
-    <button class="lib-modal-close" onclick="closeCollModal()">✕</button>
+    <button class="lib-modal-close" aria-label="Close" onclick="closeCollModal()">✕</button>
     <h2 id="coll-modal-title">New Collection</h2>
     <input class="lib-modal-input" id="coll-modal-name" placeholder="Collection name" autofocus>
     <input class="lib-modal-input" id="coll-modal-desc" placeholder="Description (optional)">
@@ -808,9 +810,9 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 </div>
 
 <!-- Add to Collection modal -->
-<div class="lib-modal-overlay" id="add-coll-modal" onclick="if(event.target===this)closeAddCollModal()">
+<div class="lib-modal-overlay" id="add-coll-modal" role="dialog" aria-modal="true" aria-label="Add to Collection" onclick="if(event.target===this)closeAddCollModal()">
   <div class="lib-modal">
-    <button class="lib-modal-close" onclick="closeAddCollModal()">✕</button>
+    <button class="lib-modal-close" aria-label="Close" onclick="closeAddCollModal()">✕</button>
     <h2>Add to Collection</h2>
     <p style="font-size:12px;color:#888;margin-bottom:12px" id="acm-subtitle"></p>
     <div id="acm-list" style="max-height:220px;overflow-y:auto;margin-bottom:12px"></div>
@@ -822,9 +824,9 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 </div>
 
 <!-- Assign creator modal -->
-<div class="lib-modal-overlay" id="assign-modal" onclick="if(event.target===this)closeAssignModal()">
+<div class="lib-modal-overlay" id="assign-modal" role="dialog" aria-modal="true" aria-label="Assign Creator" onclick="if(event.target===this)closeAssignModal()">
   <div class="lib-modal">
-    <button class="lib-modal-close" onclick="closeAssignModal()">✕</button>
+    <button class="lib-modal-close" aria-label="Close" onclick="closeAssignModal()">✕</button>
     <h2>Assign Creator</h2>
     <p style="font-size:12px;color:#888;margin-bottom:12px" id="am-subtitle"></p>
     <input class="lib-modal-input" id="am-search" placeholder="Search creators…" oninput="filterAssignList(this.value)">
@@ -940,7 +942,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
       <div class="nj-field">
         <label class="nj-label">Video URL <span class="nj-required">*</span></label>
         <div class="nj-url-wrap">
-          <input type="text" id="nj-url-input" class="nj-input"
+          <input type="text" id="nj-url-input" class="nj-input" aria-label="Video URL"
             placeholder="https://youtube.com/watch?v=… · youtu.be/… · tiktok.com/…"
             oninput="njUrlChanged(this.value)">
           <span class="nj-url-spinner" id="nj-url-spinner"></span>
@@ -949,7 +951,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
       </div>
       <!-- Metadata preview card -->
       <div class="nj-preview-card" id="nj-preview" style="display:none">
-        <img class="nj-thumb" id="nj-thumb" src="" alt="">
+        <img class="nj-thumb" id="nj-thumb" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Video thumbnail">
         <div class="nj-preview-info">
           <div class="nj-preview-title" id="nj-preview-title"></div>
           <div class="nj-preview-meta" id="nj-preview-meta"></div>
@@ -1214,9 +1216,9 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 </section>
 
 <!-- Publication edit modal -->
-<div class="pub-modal-overlay" id="pub-edit-modal" onclick="if(event.target===this)closePubModal()">
+<div class="pub-modal-overlay" id="pub-edit-modal" role="dialog" aria-modal="true" aria-labelledby="pem-heading" onclick="if(event.target===this)closePubModal()">
   <div class="pub-modal">
-    <button class="pub-modal-close" onclick="closePubModal()">✕</button>
+    <button class="pub-modal-close" aria-label="Close" onclick="closePubModal()">✕</button>
     <h2 id="pem-heading">Publication Details</h2>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:11px">
       <span style="color:#666">Metadata:</span>
@@ -1326,9 +1328,9 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 </div>
 
 <!-- Mark published modal -->
-<div class="pub-modal-overlay" id="pub-mark-modal" onclick="if(event.target===this)closePubMarkModal()">
+<div class="pub-modal-overlay" id="pub-mark-modal" role="dialog" aria-modal="true" aria-label="Mark as Published" onclick="if(event.target===this)closePubMarkModal()">
   <div class="pub-mark-modal">
-    <button class="pub-modal-close" onclick="closePubMarkModal()">✕</button>
+    <button class="pub-modal-close" aria-label="Close" onclick="closePubMarkModal()">✕</button>
     <h2 style="font-size:14px;font-weight:600;color:#fff;margin-bottom:12px">Mark as Published</h2>
     <div id="pmm-series-warning" style="display:none;background:#1a1200;border:1px solid #854d0e;border-radius:6px;padding:8px 12px;font-size:12px;color:#fbbf24;margin-bottom:12px"></div>
     <p style="font-size:12px;color:#888;margin-bottom:14px">Record that you have manually published this clip on the platform.</p>
@@ -1351,9 +1353,9 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 </div>
 
 <!-- ═════════════ BATCH UPLOAD MODAL ═════════════ -->
-<div class="pub-modal-overlay" id="batch-upload-modal" onclick="if(event.target===this)closeBatchUploadModal()">
+<div class="pub-modal-overlay" id="batch-upload-modal" role="dialog" aria-modal="true" aria-label="Upload to YouTube" onclick="if(event.target===this)closeBatchUploadModal()">
   <div class="pub-modal" style="max-width:560px">
-    <button class="pub-modal-close" onclick="closeBatchUploadModal()">✕</button>
+    <button class="pub-modal-close" aria-label="Close" onclick="closeBatchUploadModal()">✕</button>
     <h2 style="font-size:14px;font-weight:600;color:#fff;margin-bottom:4px">Upload to YouTube</h2>
     <p style="font-size:12px;color:#888;margin-bottom:12px">Clips will be uploaded one by one in the background. Uploads already sent cannot be undone.</p>
     <div id="bum-channel-info" style="background:#111;border-radius:6px;padding:8px 12px;font-size:12px;color:#aaa;margin-bottom:12px"></div>
@@ -1488,9 +1490,9 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 </div>
 
 <!-- Library upload modal -->
-<div class="lib-modal-overlay" id="lib-upload-modal" onclick="if(event.target===this)closeLibUploadModal()">
+<div class="lib-modal-overlay" id="lib-upload-modal" role="dialog" aria-modal="true" aria-label="Upload Video" onclick="if(event.target===this)closeLibUploadModal()">
   <div class="lib-modal" style="max-width:500px;width:92%">
-    <button class="lib-modal-close" onclick="closeLibUploadModal()">✕</button>
+    <button class="lib-modal-close" aria-label="Close" onclick="closeLibUploadModal()">✕</button>
     <h2>Upload Video</h2>
 
     <div class="nj-source-tabs" style="margin-bottom:16px">
@@ -1529,7 +1531,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 
     <div style="margin-top:14px">
       <label style="display:block;margin-bottom:6px;font-size:12px;color:#888">Creator <span style="color:#444">optional</span></label>
-      <select id="lum-creator-id" style="width:100%;background:#111;border:1px solid #222;color:#ccc;padding:8px 10px;border-radius:6px;font-size:13px;outline:none;cursor:pointer">
+      <select id="lum-creator-id" style="width:100%;background:#111;border:1px solid #222;color:#ccc;padding:8px 10px;border-radius:6px;font-size:13px;cursor:pointer">
         <option value="">Unassigned</option>
       </select>
     </div>
@@ -1605,9 +1607,9 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 </div>
 
 <!-- Video player modal with caption editor -->
-<div id="video-modal" onclick="if(event.target===this)closePlayer()">
+<div id="video-modal" role="dialog" aria-modal="true" aria-label="Clip player" onclick="if(event.target===this)closePlayer()">
   <div class="modal-inner">
-    <span class="modal-close" onclick="closePlayer()">✕</span>
+    <button type="button" class="modal-close" aria-label="Close" onclick="closePlayer()">✕</button>
 
     <!-- LEFT: video + actions -->
     <div class="modal-left">
@@ -3040,26 +3042,26 @@ async function refreshSidebarCounts() {
       ? _libCreators.filter(c => c.name.toLowerCase().includes(_libSearchQ.toLowerCase()))
       : _libCreators;
     smartRender('lib-sidebar-creators', filtered.map(c => `
-      <div class="lib-nav-item" id="lnav-cr-${c.id}" onclick="libNav('creator:${c.id}',this)">
+      <button type="button" class="lib-nav-item" id="lnav-cr-${c.id}" onclick="libNav('creator:${c.id}',this)">
         <span class="lib-nav-label" style="display:flex;align-items:center;gap:6px">
           <span style="width:8px;height:8px;border-radius:50%;background:${c.avatar_color||'#3b82f6'};flex-shrink:0"></span>
           ${_esc(c.name)}
         </span>
         <span class="lib-nav-count">${c.video_count||0}</span>
-      </div>
+      </button>
     `).join(''));
 
     // Sidebar collections
     const collContainer = document.getElementById('lib-sidebar-collections');
     if (_libCollections.length) {
       collContainer.innerHTML = _libCollections.map(c => `
-        <div class="lib-nav-item" id="lnav-coll-${c.id}" onclick="libNav('collection:${c.id}',this)">
+        <button type="button" class="lib-nav-item" id="lnav-coll-${c.id}" onclick="libNav('collection:${c.id}',this)">
           <span class="lib-nav-label" style="display:flex;align-items:center;gap:6px">
             <span class="coll-dot" style="background:${c.color||'#3b82f6'}"></span>
             ${_esc(c.name)}
           </span>
           <span class="lib-nav-count">${c.item_count||0}</span>
-        </div>
+        </button>
       `).join('');
     } else {
       collContainer.innerHTML = '<div style="padding:4px 12px;font-size:11px;color:#333">No collections yet</div>';
@@ -3565,18 +3567,31 @@ async function toggleCreatorDropdown(e) {
   if (e) e.stopPropagation();
   _libCreatorDropdownOpen = !_libCreatorDropdownOpen;
   const dd = document.getElementById('lib-creator-dropdown');
-  const btn = document.getElementById('lib-creator-sel-btn');
+  const btn = document.getElementById('lib-creator-sel-btn') || document.getElementById('lib-mobile-creator-btn');
   if (!dd) return;
-  dd.style.display = _libCreatorDropdownOpen ? 'block' : 'none';
-  if (btn) btn.classList.toggle('open', _libCreatorDropdownOpen);
   if (_libCreatorDropdownOpen) {
+    // Position fixed relative to the trigger button to escape overflow:hidden ancestors
+    const anchor = document.getElementById('lib-creator-sel-btn') || document.getElementById('lib-mobile-creator-btn');
+    if (anchor) {
+      const r = anchor.getBoundingClientRect();
+      dd.style.position = 'fixed';
+      dd.style.top = r.bottom + 2 + 'px';
+      dd.style.left = r.left + 'px';
+      dd.style.width = r.width + 'px';
+      dd.style.right = 'auto';
+    }
+    dd.style.display = 'block';
     if (!_libCreators_loaded || !_libCreators.length) {
       try { _libCreators = await api('/creators'); _libCreators_loaded = true; } catch(_e) {}
     }
     _buildCreatorDropdownOptions('');
     const inp = document.getElementById('lib-creator-search-inp');
     if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 50); }
+  } else {
+    dd.style.display = 'none';
   }
+  const selBtn = document.getElementById('lib-creator-sel-btn');
+  if (selBtn) selBtn.classList.toggle('open', _libCreatorDropdownOpen);
 }
 
 function _buildCreatorDropdownOptions(q) {
@@ -3591,18 +3606,18 @@ function _buildCreatorDropdownOptions(q) {
   const allSel = !_libPkgCreatorId;
   const unaSel = _libPkgCreatorId === '__unassigned__';
 
-  let html = `<div class="lib-creator-opt${allSel?' sel':''}" onclick="selectPkgCreator(null,'Todos los creadores')">` +
-    `<span class="co-dot" style="background:#555"></span>Todos los creadores</div>`;
+  let html = `<button type="button" class="lib-creator-opt${allSel?' sel':''}" onclick="selectPkgCreator(null,'Todos los creadores')">` +
+    `<span class="co-dot" style="background:#555"></span>Todos los creadores</button>`;
   if (!nq) {
-    html += `<div class="lib-creator-opt${unaSel?' sel':''}" onclick="selectPkgCreator('__unassigned__','Sin asignar')">` +
-      `<span class="co-dot" style="background:#374151"></span>Sin asignar</div>`;
+    html += `<button type="button" class="lib-creator-opt${unaSel?' sel':''}" onclick="selectPkgCreator('__unassigned__','Sin asignar')">` +
+      `<span class="co-dot" style="background:#374151"></span>Sin asignar</button>`;
   }
   if (filtered.length) {
     html += '<div style="height:1px;background:#2a2a2a;margin:4px 0"></div>';
     html += filtered.map(c => {
       const isSel = _libPkgCreatorId === c.id;
-      return `<div class="lib-creator-opt${isSel?' sel':''}" onclick="selectPkgCreator('${c.id}','${_esc(c.name)}')">` +
-        `<span class="co-dot" style="background:${c.avatar_color||'#3b82f6'}"></span>${_esc(c.name)}</div>`;
+      return `<button type="button" class="lib-creator-opt${isSel?' sel':''}" onclick="selectPkgCreator('${c.id}','${_esc(c.name)}')">` +
+        `<span class="co-dot" style="background:${c.avatar_color||'#3b82f6'}"></span>${_esc(c.name)}</button>`;
     }).join('');
   } else if (nq) {
     html += '<div style="padding:8px 10px;font-size:12px;color:#444">No hay resultados</div>';
@@ -7414,6 +7429,43 @@ async function runStorageScan() {
 
   // Initial routing: parse existing hash or default to review
   _activateFromRoute(location.hash.slice(1), !location.hash);
+})();
+
+// ── Focus trap for modals ──────────────────────────────────────────────────
+// Traps Tab within the topmost open dialog; closes on Escape.
+(function() {
+  const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  const DIALOG_SEL = '.lib-modal-overlay.open,.pub-modal-overlay.open,#video-modal.open';
+
+  function getTopDialog() {
+    const all = document.querySelectorAll(DIALOG_SEL);
+    return all.length ? all[all.length - 1] : null;
+  }
+
+  document.addEventListener('keydown', function(e) {
+    const dlg = getTopDialog();
+    if (!dlg) return;
+
+    if (e.key === 'Escape') {
+      // Click the overlay to trigger its built-in close handler
+      const closer = dlg.querySelector('.lib-modal-close,.pub-modal-close,.modal-close');
+      if (closer) closer.click();
+      return;
+    }
+
+    if (e.key === 'Tab') {
+      const focusable = Array.from(dlg.querySelectorAll(FOCUSABLE)).filter(el => {
+        return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+      });
+      if (!focusable.length) { e.preventDefault(); return; }
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    }
+  });
 })();
 </script>
 </body>
