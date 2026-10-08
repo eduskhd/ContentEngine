@@ -3233,11 +3233,6 @@ async def export_evaluations(
 
 # ── CLIP PACKAGES ─────────────────────────────────────────────────────────────
 
-@app.get("/packages")
-async def list_packages():
-    return dbmod.list_packages()
-
-
 @app.post("/packages")
 async def create_package(body: dict = Body(...)):
     name = (body.get("name") or "").strip()

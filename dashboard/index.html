@@ -7345,6 +7345,22 @@ async function runStorageScan() {
     const tab   = VALID_TABS.has(parts[0]) ? parts[0] : 'review';
     const sub   = parts.slice(1).join('/');
 
+    // Pre-set packages creator state BEFORE showTab so loadLibrary uses the correct filter
+    // on its first call, avoiding a flash of stale content.
+    if (tab === 'library' && sub.startsWith('packages')) {
+      const crMatch = sub.match(/^packages\/cr\/(.+)$/);
+      if (crMatch) {
+        _libPkgCreatorId = crMatch[1];
+        _libPkgPage = 1;
+        // Also set name now if creators list is already loaded
+        const found = _libCreators.find(c => c.id === crMatch[1]);
+        if (found) _libPkgCreatorName = found.name;
+      } else {
+        _libPkgCreatorId = null;
+        _libPkgCreatorName = null;
+      }
+    }
+
     showTab(tab, null, {push});
 
     // Restore sub-navigation after the tab's initial data load has started
@@ -7363,7 +7379,22 @@ async function runStorageScan() {
         else if (sub === 'fail')         libNav('failed',                      null, {push: false});
         else if (sub.startsWith('packages')) {
           const crMatch = sub.match(/^packages\/cr\/(.+)$/);
-          if (crMatch) { _libPkgCreatorId = crMatch[1]; }
+          if (crMatch) {
+            // ID was pre-set before showTab; update name+label now that creators list is loaded
+            const found = _libCreators.find(c => c.id === crMatch[1]);
+            if (found) {
+              _libPkgCreatorName = found.name;
+              const sl = document.getElementById('lib-creator-sel-label');
+              if (sl) sl.textContent = found.name;
+              const ml = document.getElementById('lib-mobile-creator-label');
+              if (ml) ml.textContent = found.name;
+            }
+          } else {
+            const sl = document.getElementById('lib-creator-sel-label');
+            if (sl) sl.textContent = 'Todos los creadores';
+            const ml = document.getElementById('lib-mobile-creator-label');
+            if (ml) ml.textContent = 'Creador';
+          }
           libNav('packages', null, {push: false});
         }
       }, 300);
