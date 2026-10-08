@@ -3451,7 +3451,10 @@ function libNavPackages(el) {
 
 async function showLatestPackages() {
   const el = document.getElementById('lib-content');
-  if (!_pollIsBackground) el.innerHTML = '<div class="empty">Cargando paquetes…</div>';
+  if (!_pollIsBackground) {
+    delete _renderCache['lib-content']; // concurrent calls: second smartRender must write, not skip
+    el.innerHTML = '<div class="empty">Cargando paquetes…</div>';
+  }
 
   const creatorLabel = _libPkgCreatorName || 'Todos los creadores';
   const breadLabel = _libPkgCreatorId
