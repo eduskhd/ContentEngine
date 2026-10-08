@@ -2117,13 +2117,13 @@ def get_clip(clip_id: str) -> dict | None:
 
 # ── Clip package helpers ──────────────────────────────────────────────────────
 
-def create_package(name: str, description: str = "") -> str:
+def create_package(name: str, description: str = "", creator_slug: str = "") -> str:
     pid = new_id()
     ts = now()
     with db() as conn:
         conn.execute(
-            "INSERT INTO clip_packages (id, name, description, created_at, updated_at) VALUES (?,?,?,?,?)",
-            (pid, name, description or "", ts, ts),
+            "INSERT INTO clip_packages (id, name, description, creator_slug, created_at, updated_at) VALUES (?,?,?,?,?,?)",
+            (pid, name, description or "", creator_slug or None, ts, ts),
         )
     return pid
 
@@ -2158,7 +2158,7 @@ def get_package(package_id: str) -> dict | None:
 
 
 def update_package(package_id: str, **kwargs):
-    allowed = {k: v for k, v in kwargs.items() if k in ("name", "description")}
+    allowed = {k: v for k, v in kwargs.items() if k in ("name", "description", "creator_slug")}
     if not allowed:
         return
     allowed["updated_at"] = now()

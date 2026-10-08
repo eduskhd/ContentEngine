@@ -2071,8 +2071,10 @@ async def list_packages_global(
         pkg_clips AS (
             SELECT pi.package_id, cl.candidate_id, MIN(cl.created_at) AS birth
             FROM clip_package_items pi
-            JOIN publications pub ON pub.id = pi.pub_id
-            JOIN clips cl ON cl.id = pub.clip_id
+            JOIN clips cl ON cl.id = COALESCE(
+                (SELECT clip_id FROM publications WHERE id = pi.pub_id),
+                (SELECT clip_id FROM prepublish_decisions WHERE id = pi.pub_id)
+            )
             LEFT JOIN candidates ca ON ca.id = cl.candidate_id
             WHERE (ca.id IS NULL OR ca.status != 'GROUPED_ALT')
             GROUP BY pi.package_id, cl.candidate_id
@@ -3240,7 +3242,32 @@ async def create_package(body: dict = Body(...)):
         raise HTTPException(400, "name is required")
     description = (body.get("description") or "").strip()
     pub_ids = body.get("pub_ids") or []
-    pid = dbmod.create_package(name, description)
+    creator_slug = (body.get("creator_slug") or "").strip()
+
+    # Auto-derive creator_slug from the first item's video if not provided
+    if not creator_slug and pub_ids:
+        conn = dbmod.get_db()
+        try:
+            row = conn.execute("""
+                SELECT v.creator_slug FROM clips cl
+                JOIN candidates ca ON ca.id = cl.candidate_id
+                JOIN videos v ON v.id = ca.video_id
+                WHERE cl.id = (
+                    SELECT clip_id FROM publications WHERE id = ? UNION ALL
+                    SELECT clip_id FROM prepublish_decisions WHERE id = ?
+                    LIMIT 1
+                )
+                AND v.creator_slug IS NOT NULL
+                LIMIT 1
+            """, (pub_ids[0], pub_ids[0])).fetchone()
+            if row:
+                creator_slug = row[0] or ""
+        except Exception:
+            pass
+        finally:
+            conn.close()
+
+    pid = dbmod.create_package(name, description, creator_slug)
     if pub_ids:
         dbmod.add_package_items(pid, pub_ids)
     return {"id": pid, "name": name}
