@@ -60,17 +60,19 @@ Frames de referencia guardados en `docs/reframing-progress/frames/`.
 - 12 clips dev con anotaciones editoriales
 - 12 clips reservados para validación final
 
-## Fase 3: Pendiente — Columna `framing_plan` en `clips`
+## Fase 3: COMPLETADA — Columna `framing_plan` en `clips`
 
-Migración Alembic: añadir `clips.framing_plan TEXT` para almacenamiento persistente a nivel de clip (además de `candidates.framing_plan`).
+Migración Alembic `0007_a720229ca710`: añadida `clips.framing_plan TEXT`. Aplicada y en producción. HEAD de Alembic en este estado.
 
-## Fase 4: Pendiente — Endpoint de re-render con nuevo framing
+Nota: 0 clips tienen `framing_plan` aceptado (la UI existe pero ningún usuario ha aceptado un reframe todavía).
 
-`POST /clips/{id}/reframe` — acepta nuevo plan o auto-genera con `plan_clip_v2`, re-renderiza el clip con el framing actualizado.
+## Fase 4: COMPLETADA — Endpoint de re-render con nuevo framing
 
-## Fase 5: Pendiente — UI de framing en dashboard
+`POST /clips/{id}/accept-reframe-variant` — implementado en `api/main.py`. Persiste el `framing_plan` aceptado en `clips.framing_plan` y re-renderiza el clip.
 
-Editor visual de encuadre en el modal de clip: vista before/after, selector de región, botón guardar/aprobar, estado de plan.
+## Fase 5: COMPLETADA — UI de framing en dashboard
+
+Pestaña "Reframe" en el modal de clip: vista before/after, estado PENDING/ACCEPTED/REJECTED, botón aceptar/rechazar, badge de estado.
 
 ## Fase 6: Pendiente — Tests automatizados y validación
 

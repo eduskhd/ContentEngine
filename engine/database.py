@@ -911,7 +911,7 @@ def _avatar_color(name: str) -> str:
     import hashlib
     COLORS = ["#3b82f6","#8b5cf6","#ec4899","#ef4444","#f97316",
               "#eab308","#22c55e","#06b6d4","#14b8a6","#a855f7"]
-    h = int(hashlib.md5(name.encode()).hexdigest(), 16)
+    h = int(hashlib.md5(name.encode(), usedforsecurity=False).hexdigest(), 16)
     return COLORS[h % len(COLORS)]
 
 
@@ -1996,7 +1996,7 @@ def claim_yt_upload_session(worker_id: str) -> dict | None:
             ORDER BY COALESCE(b.created_at, s.created_at) ASC,
                      s.series_part ASC,
                      s.created_at ASC
-            LIMIT 20
+            LIMIT 50
         """, (stale_threshold, now_iso)).fetchall()
 
         if not candidates:
@@ -2010,8 +2010,11 @@ def claim_yt_upload_session(worker_id: str) -> dict | None:
             spart = row.get("series_part") or 0
 
             # Rule 1: batch ordering — skip if an earlier batch still has pending/active sessions.
-            # Exception: QUOTA_EXCEEDED sessions waiting on a time-window retry are not
-            # considered active blockers — they will be retried independently.
+            # Exceptions:
+            #   - QUOTA_EXCEEDED sessions waiting on a time-window retry are not blockers.
+            #   - Sessions in the older batch that are themselves series-blocked (waiting for
+            #     an earlier series_part that lives in a newer batch) are not counted as
+            #     blockers — counting them would create a cross-batch deadlock.
             if batch_id_ref:
                 batch_created_at = row.get("batch_created_at")
                 if batch_created_at:
@@ -2026,6 +2029,17 @@ def claim_yt_upload_session(worker_id: str) -> dict | None:
                           AND NOT (s2.error_code='QUOTA_EXCEEDED'
                                    AND s2.next_attempt_at IS NOT NULL
                                    AND s2.next_attempt_at > datetime('now'))
+                          AND (
+                            s2.series_id IS NULL
+                            OR COALESCE(s2.series_part, 0) = 0
+                            OR NOT EXISTS (
+                                SELECT 1 FROM yt_upload_sessions s3
+                                WHERE s3.series_id = s2.series_id
+                                  AND s3.series_part < s2.series_part
+                                  AND s3.status NOT IN ('private','public','unlisted',
+                                                        'needs_check','error','cancelled')
+                            )
+                          )
                         LIMIT 1
                     """, (batch_created_at,)).fetchone()
                     if blocking_batch:

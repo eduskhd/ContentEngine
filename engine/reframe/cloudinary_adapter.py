@@ -120,7 +120,8 @@ def compare_with_cloudinary(
     # ── Trim to temp file ─────────────────────────────────────────────────────
     ffmpeg_path = _find_ffmpeg()
     duration = clip_end - clip_start
-    tmp_clip = tempfile.mktemp(suffix=".mp4")
+    tmp_fd, tmp_clip = tempfile.mkstemp(suffix=".mp4")
+    os.close(tmp_fd)
     try:
         subprocess.run(
             [ffmpeg_path, "-y", "-ss", str(clip_start), "-i", source_path,
@@ -128,6 +129,10 @@ def compare_with_cloudinary(
             capture_output=True, timeout=120, check=True,
         )
     except Exception as exc:
+        try:
+            os.unlink(tmp_clip)
+        except OSError:
+            pass
         return CloudinaryResult(
             available=False, url=None, public_id=None,
             mock=False, reason=f"FFmpeg trim failed: {exc}", cost_hint="unknown",

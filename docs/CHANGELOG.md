@@ -1,5 +1,66 @@
 # Changelog
 
+## 2026-10-09 — Upload worker: deadlock fix + cycle hardening
+
+### Root cause
+22 upload sessions stuck at `attempts=0` due to a cross-batch/series deadlock:
+- Batch A (oldest): `series_part=4` sessions → Rule 2 blocked them (need `part=3` first)
+- `series_part=3` was in Batch B → Rule 1 blocked it (older Batch A still non-terminal)
+- Circular: A waits for B, B waits for A
+
+### Fixes (engine/database.py + workers/yt_upload_worker.py)
+
+**Fix 1 — Deadlock prevention in `claim_yt_upload_session` (Rule 1)**  
+Rule 1 (batch ordering) now excludes sessions that are themselves series-blocked when deciding if an older batch is a blocker. A `series_part=4` session waiting for `part=3` no longer blocks the batch containing `part=3`.
+
+**Fix 2 — `INVALID_METADATA` → fatal**  
+Added to `_FATAL_ERRORS`. Previously took 3 retry attempts (all failing immediately) before marking as error. Now fails on the first attempt.
+
+**Fix 3 — Cascade-pause only on `INVALID_FILE`**  
+`_CASCADE_PAUSE_ERRORS = {"INVALID_FILE"}`. Previously, `AUTH_REVOKED`, `PERMISSION_ERROR`, and `INVALID_METADATA` also cascade-paused all later series parts. If the YouTube token expired, the entire series would be stuck in `paused` state permanently. Now only a broken file triggers cascade-pause; auth/metadata errors leave later parts in `pending` so they can retry independently.
+
+**Fix 4 — Increase candidate LIMIT 20 → 50**  
+Defends against starvation when many sessions are blocked: the eligible session is now less likely to fall outside the scan window.
+
+## 2026-10-09 — Audit Session 2: Security scan + package item repair
+
+### Bug fixes
+- `fresh_viral_packages.py` — Root cause fix: was using `prepublish_decisions.id` as `pub_id` in `clip_package_items` instead of `publications.id`. Changed LEFT JOIN from `prepublish_decisions` to `publications` and renamed helper `ensure_prepublish` → `ensure_publication` (returns `publications.id`).
+- `engine/reframe/cloudinary_adapter.py:123` — Replaced insecure `tempfile.mktemp()` (TOCTOU race condition) with `tempfile.mkstemp()` + explicit `os.close(fd)`.
+- `engine/database.py:914` — Added `usedforsecurity=False` to MD5 call in `_avatar_color()` (Bandit B324 false alarm silenced cleanly).
+
+### DB repair
+- 483 `clip_package_items` rows repaired: corrected `pub_id` from `prepublish_decisions.id` to `publications.id` via UPDATE with JOIN.
+- DB backup before repair: `db/engine_audit2_backup_20261009_133427.sqlite`.
+- Post-repair: 0 orphan `clip_package_items`.
+
+### Docs
+- `docs/audit/FINAL_REPORT.md` — Updated with Session 2 findings (F-06 through F-10, K-07 through K-10).
+- `docs/reframing-progress/PROGRESS.md` — Marked phases 3, 4, 5 as COMPLETADA (were implemented but still marked Pending).
+
+### Security scan results
+- Bandit: 1 HIGH confirmed bug (mktemp — fixed); 1 HIGH false positive (urlopen on hardcoded YT URL); 29 MEDIUM B608 all false positives (parameterized queries).
+- pip-audit: 32 vulns in 6 packages (pip, pyjwt, cryptography, h2, hpack, multidict). All low-risk for private localhost tool. Upgrade pip/pyjwt when convenient.
+
+## 2026-10-09 — Audit: QA backfill + generate-top fix
+
+### Bug fix
+- `api/main.py` — `generate_top_clips` and `generate_series_clips` now call `run_qa` + `run_prepublish_gate` after `render_clips_onepass`. Previously, clips created via these endpoints had `visual_qa=PENDING` and `prepublish_score=0.0` permanently.
+
+### Backfill
+- Applied `run_qa` + `run_prepublish_gate` to 55 clips that were stuck in `PENDING` state (created by `generate-top` across 5 jobs: ce61a112, 10f6ea51, e8ff968e, 315a4446, ba96d45a).
+- Applied `ensure_video_package_publications` to 5 affected videos — all 55 clips now have publications.
+
+### Database
+- Cleaned ghost publication (`0e1f4833`) — set status to `failed`.
+- Deleted orphan package item (`fc80677f`) referencing non-existent publication.
+- DB backup: `db/engine_audit_backup_20261009_114922.sqlite` (494 clips).
+
+### Docs
+- `docs/audit/COVERAGE_MATRIX.md` — API endpoint coverage matrix (90+ routes).
+- `docs/audit/FINDINGS.md` — All findings with severity and fix details.
+- `docs/audit/FINAL_REPORT.md` — Executive summary and recommendations.
+
 ## 2026-10-09 — Reframe fix: background face filter + clips.framing_plan
 
 ### Bug fix

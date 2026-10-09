@@ -1819,6 +1819,12 @@ async def generate_top_clips(
         words=words, src_w=src_w, src_h=src_h, output_subdir=output_subdir,
     )
 
+    if clip_ids:
+        from engine.qa.video_qa import run_qa
+        from engine.qa.prepublish_gate import run_prepublish_gate
+        run_qa(job_id, clip_ids)
+        run_prepublish_gate(job_id, clip_ids, ["youtube_shorts"])
+
     return {"generated": clip_ids, "count": len(clip_ids)}
 
 
@@ -1859,6 +1865,12 @@ async def generate_series_clips(job_id: str, series_id: str):
         job_id=job_id, source=source_path, finalists=part_dicts,
         words=words, src_w=src_w, src_h=src_h, output_subdir=output_subdir,
     )
+
+    if clip_ids:
+        from engine.qa.video_qa import run_qa
+        from engine.qa.prepublish_gate import run_prepublish_gate
+        run_qa(job_id, clip_ids)
+        run_prepublish_gate(job_id, clip_ids, ["youtube_shorts"])
 
     return {"series_id": series_id, "generated": clip_ids, "count": len(clip_ids)}
 

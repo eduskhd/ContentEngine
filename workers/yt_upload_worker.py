@@ -21,8 +21,15 @@ logger = logging.getLogger(__name__)
 
 _WORKER_ID = f"yt-{uuid.uuid4().hex[:8]}"
 
-# Error codes that should not be retried (QUOTA_EXCEEDED is daily-renewable — not fatal)
-_FATAL_ERRORS = {"PERMISSION_ERROR", "AUTH_REVOKED", "INVALID_FILE"}
+# Error codes that mark a session as permanently failed in one attempt (no retries).
+# QUOTA_EXCEEDED is explicitly excluded — it is time-limited, not permanent.
+# INVALID_METADATA is fatal because retrying without fixing the metadata is pointless.
+_FATAL_ERRORS = {"PERMISSION_ERROR", "AUTH_REVOKED", "INVALID_FILE", "INVALID_METADATA"}
+
+# Only these fatal errors cascade-pause later series parts.
+# INVALID_FILE means the clip itself is broken — later parts can't follow a missing part.
+# Auth/metadata errors are fixable; cascade-pausing them leaves the series stuck permanently.
+_CASCADE_PAUSE_ERRORS = {"INVALID_FILE"}
 
 
 class YTUploadWorker(threading.Thread):
@@ -456,15 +463,17 @@ class YTUploadWorker(threading.Thread):
         )
         if status == "error":
             _update_pub_status(pub_id, "failed")
-            # Cascade-pause later parts of the same series
+            # Cascade-pause later parts of the same series ONLY when the file itself is
+            # permanently broken.  Auth or metadata errors are user-fixable and should not
+            # leave the whole series stuck in 'paused' forever.
             series_id = (session or {}).get("series_id")
             series_part = (session or {}).get("series_part") or 0
-            if series_id and series_part > 0:
+            if series_id and series_part > 0 and error_code in _CASCADE_PAUSE_ERRORS:
                 paused = db.pause_series_subsequent(series_id, series_part)
                 if paused:
                     logger.warning(
-                        "[YTUploadWorker] paused %d subsequent series parts for series=%s after part %d failed",
-                        paused, series_id, series_part,
+                        "[YTUploadWorker] paused %d subsequent series parts for series=%s after part %d failed (%s)",
+                        paused, series_id, series_part, error_code,
                     )
 
 
