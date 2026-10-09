@@ -45,6 +45,7 @@ _TARGET_H = 1920
 _MIN_SHIFT_PX = 60          # suppress micro-jitter between keypoints
 _HEAD_MARGIN = 0.20         # fraction of face height added above for head-room
 _BODY_MARGIN = 0.08         # lateral margin when centering on a body box
+_MIN_FACE_AREA_FRAC = 0.01  # minimum face area as fraction of proxy frame (filters background artifacts)
 
 
 # ── v1: original static plan (YuNet) ─────────────────────────────────────────
@@ -277,11 +278,13 @@ def plan_clip_v2(
         scene_track_id = None
         scene_subject_class = None
 
+        min_face_area = proxy_w * proxy_h * _MIN_FACE_AREA_FRAC
         for i, (ftime, faces, persons) in enumerate(zip(frame_times, face_results, person_results)):
             # Normalise to (x, y, w, h, score)
             dets: list = []
-            if faces:
-                for fx, fy, fw, fh in faces:
+            valid_faces = [(fx, fy, fw, fh) for fx, fy, fw, fh in faces if fw * fh >= min_face_area]
+            if valid_faces:
+                for fx, fy, fw, fh in valid_faces:
                     dets.append((fx, fy, fw, fh, 0.85))
                 subject_class = "face"
             elif persons:

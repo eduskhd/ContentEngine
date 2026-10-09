@@ -2113,12 +2113,17 @@ function rfOnTabOpen() {
     .then(r => r.json())
     .then(data => {
       const v = data.variant;
-      if (v && v.status === 'done') {
+      if (v && (v.status === 'done' || v.status === 'accepted')) {
         _rfVariantId = v.id;
         document.getElementById('rf-status').style.display = 'block';
-        document.getElementById('rf-status-text').textContent = 'Previous reframe ready';
+        document.getElementById('rf-status-text').textContent =
+          v.status === 'accepted' ? 'Reframe accepted — active render' : 'Previous reframe ready';
         document.getElementById('rf-progress-fill').style.width = '100%';
         rfShowResult(v);
+        if (v.status === 'accepted') {
+          document.getElementById('rf-actions').style.display = 'none';
+          document.getElementById('rf-accepted-badge').style.display = 'block';
+        }
       }
     })
     .catch(() => {});

@@ -780,7 +780,7 @@ _CLIP_COLS = frozenset({
     "output_path", "captioned_path", "width", "height", "fps", "duration_s", "file_size",
     "technical_qa", "visual_qa", "qa_notes", "platform_fit_scores",
     "prepublish_decision", "prepublish_score",
-    "caption_data", "caption_settings", "review_notes",
+    "caption_data", "caption_settings", "review_notes", "framing_plan",
 })
 
 

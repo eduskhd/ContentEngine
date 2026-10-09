@@ -1132,7 +1132,7 @@ async def get_smart_reframe_status(clip_id: str):
             "variant_path": variant.get("variant_path"),
             "variant_url": (
                 f"/clips/{clip_id}/smart-reframe/{variant['id']}/video"
-                if variant.get("variant_path") and variant["status"] == "done"
+                if variant.get("variant_path") and variant["status"] in ("done", "accepted")
                 else None
             ),
             "cloudinary_url": variant.get("cloudinary_url"),
@@ -1190,7 +1190,9 @@ async def accept_reframe_variant(clip_id: str, variant_id: str):
     if active_upload:
         raise HTTPException(409, "Clip has an active upload in progress — cannot replace file now")
 
-    dbmod.update_clip(clip_id, output_path=vpath, captioned_path=vpath)
+    plan_json = variant.get("plan_json")
+    dbmod.update_clip(clip_id, output_path=vpath, captioned_path=vpath,
+                      **{"framing_plan": plan_json} if plan_json else {})
     dbmod.update_reframe_variant(variant_id, status="accepted")
 
     return {"clip_id": clip_id, "variant_id": variant_id, "new_path": vpath}
