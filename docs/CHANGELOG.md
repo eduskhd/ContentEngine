@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-10-09 — Reframe fix: background face filter + clips.framing_plan
+
+### Bug fix
+- `engine/reframe/planner.py` — `plan_clip_v2()`: added `_MIN_FACE_AREA_FRAC = 0.01` filter. Any face detection where `fw * fh < 1% of proxy frame area` is discarded before entering the ByteTracker. Eliminates false positives from background screens, posters and decorative elements that are detected by MediaPipe BlazeFace but are too small to be the primary subject. Reproducing example: illojuan clip at 1067–1103s had x_offset=136 (background icon) instead of x=792 (real face). Fixed to x=792.
+
+### Schema
+- `alembic/versions/a720229ca710` — `clips.framing_plan TEXT` column (nullable). Stores the JSON framing plan that was accepted via the smart-reframe flow.
+
+### API
+- `GET /clips/{id}/smart-reframe` — now returns `variant_url` for accepted variants (not only `done`).
+- `POST /clips/{id}/smart-reframe/{vid}/accept` — persists the accepted plan's JSON to `clips.framing_plan`.
+
+### Database
+- `update_clip()` now accepts `framing_plan` kwarg.
+
+### Dashboard
+- Reframe tab: re-opening a clip with an already-accepted reframe now shows the "accepted" state badge instead of a blank panel.
+
 ## 2026-10-07 — Sprint 1: Smart Reframe (YOLOX + Scene-aware crop)
 
 ### New modules
