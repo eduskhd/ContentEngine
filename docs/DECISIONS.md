@@ -193,3 +193,18 @@ Non-obvious choices recorded here so future sessions don't relitigate them.
 **Decision:** `technical_qa` in `render_clip.py` is now set by `_check_technical_qa()` (file size, video stream, duration, fps). `visual_qa` stays "PENDING".
 
 **Why:** Technical QA can be determined by probing the output file with ffprobe — zero cost, fully automated. Visual QA (checking for black frames, motion quality, composition) requires frame-level analysis which would add meaningful latency to the render step. Since the existing QA module (`engine/qa/video_qa.py`) runs separately in step 12, visual QA is deferred there. The FAIL CLOSED rule applies to `technical_qa=FAIL` → REJECT, as before.
+
+
+## D-025 — Editorial descriptions + hashtag policy (editorial_v1)
+
+**Decision:** Replace raw-transcript captions with editorial metadata. Single source of truth is `engine/metadata_generator.py`. Caption stored in `publications.caption` is the editorial text only (20–45 words, Spanish, third person); full `snippet.description` is assembled on-the-fly by `assemble_pub_youtube_description()` at batch-creation time.
+
+**Hashtag placement:** Hashtags appear in `snippet.description` text (visible on YouTube Shorts), not only in `snippet.tags` (which YouTube uses for internal search but does NOT display). Both paths are populated.
+
+**Hashtag policy (order matters):** creator alias → topic → category → #Shorts → #ContentEngine, max 5. Banned: #FYP #ParaTi #Viral #Trending #Twitch #Kick. Rationale: creator and topic hashtags drive discovery on Shorts; #Shorts and #ContentEngine provide format + brand signal; banned tags violate YouTube's spam guidelines and offer no search benefit.
+
+**LLM vs deterministic:** LLM path (Claude Haiku, if ANTHROPIC_API_KEY set) returns `{description, topic_tag, category_tag}` in JSON — evidence-based, uses transcript as input not output. Deterministic fallback uses creator + detected topic + source_title context — never pastes transcript. Both paths set `meta_version="editorial_v1"`.
+
+**Manual edit protection:** `generate_and_save_pub_metadata(force=False)` skips any publication with `caption_prev` or `title_prev` set (populated by `PUT /publications/{id}` when the user edits). The user's text is preserved unless `force=True` is explicitly passed.
+
+**Why not store assembled description in DB:** Keeping the editorial text and hashtags separate in DB makes them independently editable in the UI. The full assembled description is a formatting concern, not editorial content.

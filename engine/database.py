@@ -1442,7 +1442,7 @@ _PUB_SELECT = """
            ca.virality_score, ca.retention_score, ca.importance_score,
            ca.virality_reasons, ca.start_s, ca.end_s,
            cr.name AS creator_name, cr.avatar_color,
-           v.source_title, v.thumbnail_path, v.creator_slug, v.video_slug
+           v.source_title, v.source_url, v.thumbnail_path, v.creator_slug, v.video_slug
     FROM publications p
     JOIN clips cl ON p.clip_id = cl.id
     JOIN candidates ca ON cl.candidate_id = ca.id
@@ -1575,6 +1575,67 @@ def validate_pub_metadata(title: str, caption: str) -> tuple[bool, str]:
     """Validate title and caption before upload. Returns (is_valid, error_reason)."""
     from engine.metadata_generator import validate_metadata
     return validate_metadata(title, caption)
+
+
+def generate_and_save_pub_metadata(pub_id: str, force: bool = False) -> dict:
+    """Generate editorial metadata for a publication and persist it.
+
+    force=False skips publications that were manually edited (caption_prev/title_prev set)
+    or that already have editorial_v1 metadata.
+    Returns {"status": "saved"|"skipped"|"error", ...}
+    """
+    pub = get_publication(pub_id)
+    if not pub:
+        return {"status": "error", "reason": "not_found", "pub_id": pub_id}
+    if not force and (pub.get("caption_prev") or pub.get("title_prev")):
+        return {"status": "skipped", "reason": "manually_edited", "pub_id": pub_id}
+    if not force and pub.get("meta_version") == "editorial_v1":
+        return {"status": "skipped", "reason": "already_editorial", "pub_id": pub_id}
+    clip_id = pub.get("clip_id")
+    if not clip_id:
+        return {"status": "error", "reason": "no_clip_id", "pub_id": pub_id}
+    from engine.metadata_generator import generate_clip_metadata as _gen
+    meta = _gen(clip_id)
+    update_publication(
+        pub_id,
+        title=meta.get("title", ""),
+        caption=meta.get("caption", ""),
+        hashtags=json.dumps(meta.get("hashtags", [])),
+        meta_version=meta.get("meta_version", "editorial_v1"),
+    )
+    return {
+        "status": "saved",
+        "pub_id": pub_id,
+        "meta_version": meta.get("meta_version"),
+        "title": meta.get("title"),
+        "caption": meta.get("caption"),
+        "hashtags": meta.get("hashtags", []),
+    }
+
+
+def assemble_pub_youtube_description(pub_id: str) -> str:
+    """Build the full snippet.description text for a YouTube upload session."""
+    pub = get_publication(pub_id)
+    if not pub:
+        return ""
+    caption = (pub.get("caption") or "").strip()
+    try:
+        raw = pub.get("hashtags") or "[]"
+        if isinstance(raw, list):
+            hashtags = raw
+        else:
+            hashtags = json.loads(raw) if raw.startswith("[") else [
+                (t if t.startswith("#") else "#" + t) for t in raw.split() if t
+            ]
+    except Exception:
+        hashtags = []
+    from engine.metadata_generator import assemble_youtube_description as _assemble
+    return _assemble(
+        caption,
+        hashtags,
+        creator_name=pub.get("creator_name") or None,
+        source_url=pub.get("source_url") or None,
+    )
 
 
 # ── Video package helpers ─────────────────────────────────────────────────────

@@ -1,5 +1,46 @@
 # Changelog
 
+## 2026-10-10 — Editorial descriptions + hashtag system (editorial_v1)
+
+### What changed
+Replaced the raw-transcript caption system with an editorial metadata pipeline for YouTube Shorts publications.
+
+**`engine/metadata_generator.py`** — complete rewrite:
+- `_CREATOR_ALIASES`: normalised creator names → canonical hashtags (#Ibai, #Auronplay, #Rubius, #IlloJuan, #Westcol, #Peereira7, etc.)
+- `_TOPIC_KEYWORDS` + `_TOPIC_NOUNS`: game/event detection → topic hashtag (#AmongUs, #Minecraft, #MarioKart, etc.)
+- `_CATEGORY_KEYWORDS`: signal-based category (#Humor, #Gaming, #Reacciones, #Clips)
+- New LLM prompt: Spanish, editorial, third person, 20–45 words, JSON output with `{description, topic_tag, category_tag}`
+- New `_det_caption()`: template-based (creator + topic + context), no transcript dump
+- New `_build_hashtags()`: order = creator → topic → category → #Shorts → #ContentEngine, max 5
+- New `_dedupe_hashtags()`: case-insensitive deduplication + banned tag filter (#FYP #ParaTi #Viral #Trending #Twitch #Kick)
+- New `assemble_youtube_description(caption, hashtags, creator_name, source_url)`: builds the full `snippet.description` text (caption + "Creador:" + "Vídeo original:" + hashtags), truncated to 5000 UTF-8 bytes
+- Updated `validate_metadata()`: rejects transcript pastes, SRT arrows, multi-timestamp patterns
+- New `validate_hashtags()`: rejects banned tags, duplicates, count > 5
+- `meta_version = "editorial_v1"` for both LLM and deterministic paths
+
+**`engine/database.py`**:
+- Added `v.source_url` to `_PUB_SELECT` (exposed in publication dicts)
+- New `generate_and_save_pub_metadata(pub_id, force=False)`: generates + persists, skips manually-edited (caption_prev/title_prev set)
+- New `assemble_pub_youtube_description(pub_id)`: looks up publication + joined data, calls `assemble_youtube_description`
+
+**`api/main.py`**:
+- Both batch-creation paths now use `assemble_pub_youtube_description(pub_id)` for `snippet.description` — hashtags now visible on YouTube Shorts (in description text), not just in `snippet.tags`
+- New `POST /admin/backfill-publication-metadata?force=False` endpoint
+
+**`dashboard/index.html`**:
+- Added collapsible "Vista previa — descripción YouTube completa" section in the Publishing modal
+- Live-updates as user edits caption/hashtags
+- Badge map updated to include `editorial_v1` (green)
+- `regenPubMetadata()` auto-expands preview on regenerate
+
+### Backfill
+- 304 `ready` publications regenerated from deterministic_v1/NULL → editorial_v1
+- 13 manually-edited publications preserved (caption_prev set)
+- Published (169) and archived (34) not touched
+
+### Tests
+`tests/test_metadata_editorial.py` — 32 tests, all passing. Covers all 10 scenarios from spec.
+
 ## 2026-10-09 — Upload worker: deadlock fix + cycle hardening
 
 ### Root cause

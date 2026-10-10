@@ -2423,6 +2423,7 @@ async def publish_video_package(video_id: str, body: dict = Body(...)):
             skipped.append({"clip_id": m["clip_id"], "position": m["position"],
                              "pub_id": pub_id, "reason": f"metadata_invalid: {_reason}"})
             continue
+        _full_desc = dbmod.assemble_pub_youtube_description(pub_id)
 
         existing_session = dbmod.get_yt_upload_session_by_pub(pub_id)
         if existing_session:
@@ -2470,7 +2471,7 @@ async def publish_video_package(video_id: str, body: dict = Body(...)):
             clip_id=m["clip_id"],
             channel_id=channel_id,
             title=_title[:100],
-            description=_desc[:5000],
+            description=_full_desc,
             tags=tags,
             is_for_kids=False,
             file_path=m["file_path"],
@@ -2998,6 +2999,56 @@ async def generate_clip_metadata(clip_id: str):
     return dbmod.generate_clip_metadata(clip_id)
 
 
+@app.post("/admin/backfill-publication-metadata")
+async def backfill_publication_metadata(force: bool = False):
+    """Generate editorial metadata for all publications that lack it (idempotent).
+
+    Targets publications with status IN ('ready','draft') where meta_version IS NULL,
+    'deterministic_v1', or 'error', and that have not been manually edited.
+
+    force=True regenerates even publications already marked editorial_v1.
+    """
+    conn = dbmod.get_db()
+    rows = conn.execute("""
+        SELECT id FROM publications
+        WHERE status IN ('ready', 'draft')
+          AND (meta_version IS NULL OR meta_version IN ('deterministic_v1', 'error'))
+          AND (caption_prev IS NULL AND title_prev IS NULL)
+    """).fetchall()
+    conn.close()
+
+    pub_ids = [r["id"] for r in rows]
+    if force:
+        conn2 = dbmod.get_db()
+        all_rows = conn2.execute(
+            "SELECT id FROM publications WHERE status IN ('ready','draft')"
+        ).fetchall()
+        conn2.close()
+        pub_ids = [r["id"] for r in all_rows]
+
+    saved = skipped = errors = 0
+    details: list[dict] = []
+    for pub_id in pub_ids:
+        result = dbmod.generate_and_save_pub_metadata(pub_id, force=force)
+        st = result.get("status")
+        if st == "saved":
+            saved += 1
+        elif st == "skipped":
+            skipped += 1
+        else:
+            errors += 1
+        if st != "saved":
+            details.append(result)
+
+    return {
+        "total_eligible": len(pub_ids),
+        "saved": saved,
+        "skipped": skipped,
+        "errors": errors,
+        "details": details[:50],
+    }
+
+
 @app.get("/clips/{clip_id}/publications")
 async def get_clip_publications(clip_id: str):
     return dbmod.get_publications_for_clip(clip_id)
@@ -3455,12 +3506,13 @@ async def create_upload_batch(body: dict = Body(...)):
         if not _valid_b:
             skipped.append({"pub_id": pub_id, "reason": f"METADATA_INVALID: {_reason_b}"})
             continue
+        _full_desc_b = dbmod.assemble_pub_youtube_description(pub_id)
         session_id = dbmod.create_yt_upload_session(
             pub_id=pub_id,
             clip_id=pub["clip_id"],
             channel_id=channel_id,
             title=_title[:100],
-            description=_desc[:5000],
+            description=_full_desc_b,
             tags=tags,
             is_for_kids=False,
             file_path=file_path,

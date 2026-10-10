@@ -1231,12 +1231,16 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     </div>
     <div class="pub-field">
       <label>Caption / Description</label>
-      <textarea id="pem-caption" rows="4" placeholder="Write a caption..."></textarea>
+      <textarea id="pem-caption" rows="4" placeholder="Write a caption..." oninput="updatePubDescPreview()"></textarea>
     </div>
     <div class="pub-field">
       <label>Hashtags (space or comma separated)</label>
-      <textarea id="pem-hashtags" rows="2" placeholder="#humor #drama ..."></textarea>
+      <textarea id="pem-hashtags" rows="2" placeholder="#humor #drama ..." oninput="updatePubDescPreview()"></textarea>
     </div>
+    <details id="pem-preview-section" style="margin-bottom:10px">
+      <summary style="cursor:pointer;font-size:11px;color:#888;user-select:none">Vista previa — descripción YouTube completa</summary>
+      <pre id="pem-yt-preview" style="margin-top:6px;padding:8px 10px;background:#111;border:1px solid #222;border-radius:5px;font-size:11px;color:#bbb;white-space:pre-wrap;word-break:break-word;max-height:140px;overflow-y:auto"></pre>
+    </details>
     <div class="pub-field">
       <label>Notes (internal)</label>
       <input id="pem-notes" placeholder="Notes…">
@@ -6338,15 +6342,17 @@ async function openPubEdit(pubId) {
     if (metaBadgeEl) {
       const mv = p.meta_version || '';
       const badgeMap = {
-        'llm_v1': {label: 'AI generated', color: '#6366f1'},
-        'deterministic_v1': {label: 'Auto generated', color: '#f59e0b'},
-        'manual': {label: 'Edited manually', color: '#22c55e'},
-        '': {label: 'Not generated', color: '#ef4444'},
+        'editorial_v1':     {label: 'Editorial',           color: '#10b981'},
+        'llm_v1':           {label: 'Editorial (IA)',       color: '#6366f1'},
+        'deterministic_v1': {label: 'Auto generado',       color: '#f59e0b'},
+        'manual':           {label: 'Editado manualmente', color: '#22c55e'},
+        '':                 {label: 'Sin generar',          color: '#ef4444'},
       };
       const b = badgeMap[mv] || badgeMap[''];
       metaBadgeEl.textContent = b.label;
       metaBadgeEl.style.color = b.color;
     }
+    updatePubDescPreview();
 
     // Warn if title/caption need attention
     const metaWarnEl = document.getElementById('pem-meta-warn');
@@ -6418,12 +6424,34 @@ async function pubMarkReady() {
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
+function _buildYtDescPreview() {
+  const caption  = (document.getElementById('pem-caption')?.value || '').trim();
+  const rawTags  = document.getElementById('pem-hashtags')?.value || '';
+  const hashtags = rawTags.split(/[\s,\n]+/).filter(Boolean).map(t => t.startsWith('#') ? t : '#'+t);
+  const creator  = (_pubCurrentPub?.creator_name || '').trim();
+  const url      = (_pubCurrentPub?.source_url || '').trim();
+  const parts    = [];
+  if (caption) parts.push(caption);
+  const meta = [];
+  if (creator) meta.push('Creador: ' + creator);
+  if (url) meta.push('Vídeo original: ' + url);
+  if (meta.length) parts.push(meta.join('\n'));
+  if (hashtags.length) parts.push(hashtags.join(' '));
+  return parts.join('\n\n');
+}
+
+function updatePubDescPreview() {
+  const el = document.getElementById('pem-yt-preview');
+  if (!el) return;
+  el.textContent = _buildYtDescPreview() || '(sin contenido)';
+}
+
 async function regenPubMetadata() {
   if (!_pubCurrentPub) return;
-  const currentTitle = (document.getElementById('pem-title').value || '').trim();
+  const currentTitle   = (document.getElementById('pem-title').value || '').trim();
   const currentCaption = (document.getElementById('pem-caption').value || '').trim();
   const hasContent = currentTitle || currentCaption;
-  const isManual = _pubCurrentPub.meta_version === 'manual';
+  const isManual   = _pubCurrentPub.meta_version === 'manual';
   if (hasContent && isManual) {
     if (!confirm('This publication has manually-edited text.\nRegenerate will replace it. Continue?')) return;
   }
@@ -6433,15 +6461,20 @@ async function regenPubMetadata() {
     document.getElementById('pem-caption').value = meta.caption || '';
     const tags = Array.isArray(meta.hashtags) ? meta.hashtags.join(' ') : (meta.hashtags||'');
     document.getElementById('pem-hashtags').value = tags;
-    // Clear the warning now that content has been regenerated
+    updatePubDescPreview();
     const warnEl = document.getElementById('pem-meta-warn');
     if (warnEl && (meta.title || meta.caption)) warnEl.style.display = 'none';
     const badgeEl = document.getElementById('pem-meta-badge');
     if (badgeEl) {
-      badgeEl.textContent = meta.meta_version === 'llm_v1' ? 'AI generated' : 'Auto generated';
-      badgeEl.style.color = meta.meta_version === 'llm_v1' ? '#6366f1' : '#f59e0b';
+      const mv = meta.meta_version || '';
+      const labels = {'editorial_v1':'Editorial','llm_v1':'Editorial (IA)'};
+      badgeEl.textContent = labels[mv] || 'Auto generado';
+      badgeEl.style.color = (mv === 'editorial_v1' || mv === 'llm_v1') ? '#10b981' : '#f59e0b';
     }
-    toast('Metadata regenerated', 'success');
+    // Expand preview section so user sees what will be sent to YouTube
+    const details = document.getElementById('pem-preview-section');
+    if (details) details.open = true;
+    toast('Metadata regenerado', 'success');
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
