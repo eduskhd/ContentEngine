@@ -255,6 +255,49 @@ def poll_video_status(video_id: str, access_token: str) -> dict:
     }
 
 
+def read_video_snippet(video_id: str, access_token: str) -> dict | None:
+    """Read a video's snippet from YouTube. Returns the snippet dict or None if not found."""
+    url = f"{_YT_VIDEOS_URL}?id={video_id}&part=snippet"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        data = json.loads(resp.read())
+    items = data.get("items", [])
+    return items[0]["snippet"] if items else None
+
+
+def update_video_description(video_id: str, access_token: str, new_description: str) -> dict:
+    """Patch snippet.description on YouTube via videos.update — preserves all other fields.
+
+    Reads the current snippet first, merges only description, then writes back.
+    Raises urllib.error.HTTPError on API failure.
+    """
+    snippet = read_video_snippet(video_id, access_token)
+    if snippet is None:
+        raise RuntimeError(f"Video {video_id} not found via videos.list")
+
+    updated_snippet = {k: v for k, v in {
+        "title":                snippet.get("title", ""),
+        "description":          new_description,
+        "categoryId":           snippet.get("categoryId", "22"),
+        "tags":                 snippet.get("tags") or [],
+        "defaultLanguage":      snippet.get("defaultLanguage"),
+        "defaultAudioLanguage": snippet.get("defaultAudioLanguage"),
+    }.items() if v is not None}
+
+    body = json.dumps({"id": video_id, "snippet": updated_snippet}).encode("utf-8")
+    req = urllib.request.Request(
+        f"{_YT_VIDEOS_URL}?part=snippet",
+        data=body,
+        headers={
+            "Authorization":  f"Bearer {access_token}",
+            "Content-Type":   "application/json",
+        },
+        method="PUT",
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read())
+
+
 # ── Error classification ──────────────────────────────────────────────────────
 
 def classify_error(exc_or_response) -> str:

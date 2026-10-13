@@ -1784,8 +1784,15 @@ def ensure_video_package_publications(video_id: str, platform: str = "youtube_sh
             try:
                 meta = _gen_meta(r["clip_id"])
                 conn.execute(
-                    "UPDATE publications SET title=?, caption=?, updated_at=? WHERE id=?",
-                    (meta.get("title", ""), meta.get("caption", ""), now(), pid)
+                    "UPDATE publications SET title=?, caption=?, hashtags=?, meta_version=?, updated_at=? WHERE id=?",
+                    (
+                        meta.get("title", ""),
+                        meta.get("caption", ""),
+                        json.dumps(meta.get("hashtags", [])),
+                        meta.get("meta_version", "editorial_v1"),
+                        now(),
+                        pid,
+                    )
                 )
             except Exception:
                 pass
@@ -1970,7 +1977,7 @@ _YT_SESSION_ALLOWED_COLS = {
     "remote_privacy_status", "bytes_sent", "file_size", "file_path", "file_hash",
     "attempts", "last_attempt_at", "next_attempt_at", "error_message", "error_code",
     "locked_at", "locked_by", "updated_at", "series_id", "series_part",
-    "privacy_status",
+    "privacy_status", "description", "tags",
 }
 
 

@@ -2416,6 +2416,10 @@ async def publish_video_package(video_id: str, body: dict = Body(...)):
             continue
 
         full_pub = dbmod.get_publication(pub_id)
+        # Auto-generate editorial metadata if publication has none yet
+        if full_pub and not full_pub.get("meta_version"):
+            dbmod.generate_and_save_pub_metadata(pub_id, force=False)
+            full_pub = dbmod.get_publication(pub_id)
         _title = (full_pub.get("title") or "").strip() if full_pub else ""
         _desc  = (full_pub.get("caption") or "").strip() if full_pub else ""
         _valid, _reason = dbmod.validate_pub_metadata(_title, _desc)
@@ -2432,19 +2436,27 @@ async def publish_video_package(video_id: str, body: dict = Body(...)):
                             "public", "unlisted", "private", "needs_check"):
                 queued_pairs.append((pub_id, existing_session["id"]))
                 continue
-            # Error state — reset for retry
+            # Error state — reset for retry with refreshed description
             try:
                 fhash = _uploader.compute_file_hash(m["file_path"])
             except Exception:
                 skipped.append({"clip_id": m["clip_id"], "position": m["position"],
                                  "pub_id": pub_id, "reason": "hash_failed"})
                 continue
+            _reset_tags = []
+            try:
+                raw = (full_pub or {}).get("hashtags") or "[]"
+                _reset_tags = json.loads(raw) if raw.startswith("[") else [t.lstrip("#") for t in raw.split() if t]
+            except Exception:
+                pass
+            _reset_full_desc = dbmod.assemble_pub_youtube_description(pub_id)
             dbmod.update_yt_upload_session(
                 existing_session["id"],
                 status="pending", session_url=None, remote_video_id=None,
                 bytes_sent=0, file_path=m["file_path"], file_hash=fhash,
                 file_size=_os2.path.getsize(m["file_path"]),
                 privacy_status=privacy_status,
+                description=_reset_full_desc, tags=json.dumps(_reset_tags),
                 error_message=None, error_code=None,
                 locked_at=None, locked_by=None, attempts=0,
                 updated_at=datetime.datetime.utcnow().isoformat(),
@@ -3054,6 +3066,107 @@ async def get_clip_publications(clip_id: str):
     return dbmod.get_publications_for_clip(clip_id)
 
 
+@app.post("/admin/repair-published-descriptions")
+async def repair_published_descriptions(dry_run: bool = True):
+    """Update snippet.description for already-published YouTube videos that lack hashtags.
+
+    Reads each video's current snippet, merges the corrected description
+    (from publications.caption + hashtags), and calls videos.update — preserving
+    title, tags, categoryId and all other snippet fields.
+
+    dry_run=True  (default) — shows plan without calling YouTube API.
+    dry_run=False — calls videos.update() for each clip.
+
+    Only targets sessions where #ContentEngine is absent from the stored description.
+    Never re-uploads; never changes video_id; never affects pending/uploading sessions.
+    """
+    from publishers import yt_auth, yt_upload as _uploader
+
+    if not dry_run and not yt_auth.is_connected():
+        raise HTTPException(400, "YouTube not connected")
+
+    conn = dbmod.get_db()
+    rows = conn.execute("""
+        SELECT s.id as session_id, s.remote_video_id, s.pub_id, s.description as current_desc,
+               cr.name as creator_name
+        FROM yt_upload_sessions s
+        LEFT JOIN publications p ON p.id = s.pub_id
+        LEFT JOIN clips cl ON cl.id = s.clip_id
+        LEFT JOIN candidates ca ON ca.id = cl.candidate_id
+        LEFT JOIN videos v ON v.id = ca.video_id
+        LEFT JOIN creators cr ON cr.id = v.creator_id
+        WHERE s.status IN ('public', 'private', 'unlisted', 'needs_check')
+          AND s.remote_video_id IS NOT NULL
+          AND s.description NOT LIKE '%#ContentEngine%'
+          AND s.pub_id IS NOT NULL
+    """).fetchall()
+    conn.close()
+
+    plan = []
+    updated = skipped_count = errors_count = 0
+    error_details: list[dict] = []
+
+    access_token = yt_auth.get_valid_token() if not dry_run else None
+
+    for r in rows:
+        pub_id     = dict(r)["pub_id"]
+        video_id   = dict(r)["remote_video_id"]
+        session_id = dict(r)["session_id"]
+
+        # Ensure publication has editorial metadata
+        pub = dbmod.get_publication(pub_id)
+        if not pub:
+            error_details.append({"session_id": session_id[:8], "reason": "pub_not_found"})
+            errors_count += 1
+            continue
+
+        if not pub.get("meta_version"):
+            dbmod.generate_and_save_pub_metadata(pub_id, force=True)
+            pub = dbmod.get_publication(pub_id)
+
+        new_desc = dbmod.assemble_pub_youtube_description(pub_id)
+        if not new_desc or "#ContentEngine" not in new_desc:
+            error_details.append({"session_id": session_id[:8], "video_id": video_id,
+                                   "reason": "assembled description still missing brand tag"})
+            errors_count += 1
+            continue
+
+        plan.append({
+            "session_id":    session_id[:8],
+            "video_id":      video_id,
+            "creator":       dict(r)["creator_name"],
+            "old_desc_len":  len(dict(r)["current_desc"] or ""),
+            "new_desc_len":  len(new_desc),
+            "preview":       new_desc[:120],
+        })
+
+        if dry_run:
+            continue
+
+        try:
+            _uploader.update_video_description(video_id, access_token, new_desc)
+            # Store the corrected description in the session record
+            dbmod.update_yt_upload_session(
+                session_id,
+                description=new_desc,
+                updated_at=datetime.datetime.utcnow().isoformat(),
+            )
+            updated += 1
+        except Exception as exc:
+            error_details.append({"session_id": session_id[:8], "video_id": video_id,
+                                   "error": str(exc)[:200]})
+            errors_count += 1
+
+    return {
+        "dry_run":       dry_run,
+        "total_affected": len(rows),
+        "updated":       updated if not dry_run else 0,
+        "errors":        errors_count,
+        "plan":          plan[:50],
+        "error_details": error_details[:20],
+    }
+
+
 # ── ADMIN / OBSERVABILITY ─────────────────────────────────────────────────────
 
 @app.get("/admin/status")
@@ -3428,6 +3541,11 @@ async def create_upload_batch(body: dict = Body(...)):
             skipped.append({"pub_id": pub_id, "reason": "Not a YouTube Shorts publication"})
             continue
 
+        # Auto-generate editorial metadata if publication has none yet
+        if not pub.get("meta_version"):
+            dbmod.generate_and_save_pub_metadata(pub_id, force=False)
+            pub = dbmod.get_publication(pub_id)
+
         clip = dbmod.get_clip(pub["clip_id"])
 
         file_path = None
@@ -3466,12 +3584,15 @@ async def create_upload_batch(body: dict = Body(...)):
                     tags = json.loads(raw) if raw.startswith("[") else [t.lstrip("#") for t in raw.split() if t]
                 except Exception:
                     pass
+                _reset_desc = dbmod.assemble_pub_youtube_description(pub_id)
                 dbmod.update_yt_upload_session(
                     existing_session["id"],
                     status="pending",
                     session_url=None,
                     remote_video_id=None,
                     bytes_sent=0,
+                    description=_reset_desc,
+                    tags=json.dumps(tags),
                     file_path=file_path,
                     file_hash=file_hash,
                     file_size=file_size,
