@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-10-13 — Hashtag pipeline audit: alias gaps, quota-poll, #Clips fallback
+
+### Root cause
+Full audit revealed four independent bugs that together prevented hashtags from reaching `snippet.description`:
+
+1. **Individual upload path** (`POST /publications/{pub_id}/youtube-upload`) used `pub.caption` (editorial text only) — no hashtags sent to YouTube
+2. **Creator alias gaps** — "pereira" (DB stores "Pereira") not in `_CREATOR_ALIASES`; also missing: theGregf, La Sotanita, Luisito Comunica, CRM Carli, Drafteados, Neymar
+3. **Topic keyword gaps** — 12 popular games missing: SonsOfTheForest, RocketLeague, LeagueOfLegends, CallOfDuty, Valorant, ApexLegends, CS2, TheForest, VeladaDelAño, FallGuys, StumbleGuys, LethalCompany
+4. **#Clips fallback always occupied a slot** even when a specific topic was already present (e.g. `#SonsOfTheForest, #Clips` → redundant and uninfomative)
+5. **Quota-exhausted poll loop** — broad `except Exception` caught `quotaExceeded` silently, all 10 polls failed → `needs_check` even for successfully uploaded videos
+
+### Fixes
+
+**`engine/metadata_generator.py`**:
+- Added "pereira" → "#Peereira7" and 6 other missing creator aliases
+- Added 12 missing topic keywords for popular games/events
+- New `_GAMING_TOPIC_TAGS` frozenset: when `category_tag == "#Clips"` and topic is a known game, upgrades to `#Gaming`
+- `_build_hashtags`: skip `#Clips` fallback when a specific topic is already present (doesn't add information)
+
+**`api/main.py`**:
+- Individual upload path now calls `assemble_pub_youtube_description(pub_id)` — hashtags reach `snippet.description` on every upload
+- Batch upload paths refresh stale descriptions before creating sessions (detects sessions without `#ContentEngine`)
+
+**`workers/yt_upload_worker.py`**:
+- Explicit `quotaExceeded`/`userRateLimitExceeded` detection in poll loop
+- Quota hit: sets `status=processing`, clears lock, `error_code=POLL_QUOTA_DEFERRED` — deferred to channel sync
+- Previously: silent catch → 10 consecutive failures → `needs_check` loop
+
+### Backfill
+- 35 Pereira publications regenerated: `#Pereira` → `#Peereira7`
+- 39 failed/archived publications with no hashtags — not touched
+
 ## 2026-10-10 — Editorial descriptions + hashtag system (editorial_v1)
 
 ### What changed
