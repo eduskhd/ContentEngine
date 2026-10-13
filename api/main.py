@@ -1511,9 +1511,23 @@ async def start_youtube_upload(pub_id: str, body: dict = Body({})):
     file_size = Path(file_path).stat().st_size
     file_hash = compute_file_hash(file_path)
 
+    # Auto-generate editorial metadata if missing
+    if not pub.get("meta_version"):
+        dbmod.generate_and_save_pub_metadata(pub_id, force=False)
+        conn2 = dbmod.get_db()
+        pub = dict(conn2.execute("SELECT * FROM publications WHERE id=?", [pub_id]).fetchone())
+        conn2.close()
+
     title = (body.get("title") or pub.get("title") or "").strip()[:100]
-    description = (body.get("description") or pub.get("caption") or "").strip()[:5000]
-    _valid, _reason = dbmod.validate_pub_metadata(title, description)
+    # Always use assembled description (caption + attribution + hashtag block)
+    # body.get("description") override allowed for manual caller control only
+    if body.get("description"):
+        description = body["description"].strip()[:5000]
+    else:
+        description = (dbmod.assemble_pub_youtube_description(pub_id) or pub.get("caption") or "").strip()
+        if len(description.encode("utf-8")) > 5000:
+            description = description.encode("utf-8")[:5000].decode("utf-8", errors="ignore")
+    _valid, _reason = dbmod.validate_pub_metadata(title, pub.get("caption") or description)
     if not _valid:
         raise HTTPException(400, f"METADATA_INVALID: {_reason} — edit title/description in Publishing before uploading")
     tags_raw = body.get("tags")
@@ -2434,6 +2448,22 @@ async def publish_video_package(video_id: str, body: dict = Body(...)):
             s_status = existing_session.get("status")
             if s_status in ("pending", "uploading", "processing", "paused",
                             "public", "unlisted", "private", "needs_check"):
+                # Refresh description if it's missing the brand tag and session hasn't started
+                if (s_status == "pending"
+                        and _full_desc
+                        and "#ContentEngine" not in (existing_session.get("description") or "")):
+                    _refresh_tags = []
+                    try:
+                        raw = (full_pub or {}).get("hashtags") or "[]"
+                        _refresh_tags = json.loads(raw) if raw.startswith("[") else [t.lstrip("#") for t in raw.split() if t]
+                    except Exception:
+                        pass
+                    dbmod.update_yt_upload_session(
+                        existing_session["id"],
+                        description=_full_desc,
+                        tags=json.dumps(_refresh_tags),
+                        updated_at=datetime.datetime.utcnow().isoformat(),
+                    )
                 queued_pairs.append((pub_id, existing_session["id"]))
                 continue
             # Error state — reset for retry with refreshed description
@@ -3621,6 +3651,21 @@ async def create_upload_batch(body: dict = Body(...)):
             status = existing_session.get("status")
             # Active/in-progress — don't touch, include in batch as-is
             if status in ("pending", "uploading", "processing", "paused"):
+                # Refresh description for pending sessions missing hashtags
+                if status == "pending" and "#ContentEngine" not in (existing_session.get("description") or ""):
+                    _rd = dbmod.assemble_pub_youtube_description(pub_id)
+                    if _rd and "#ContentEngine" in _rd:
+                        _rt = []
+                        try:
+                            raw = pub.get("hashtags") or "[]"
+                            _rt = json.loads(raw) if raw.startswith("[") else [t.lstrip("#") for t in raw.split() if t]
+                        except Exception:
+                            pass
+                        dbmod.update_yt_upload_session(
+                            existing_session["id"],
+                            description=_rd, tags=json.dumps(_rt),
+                            updated_at=datetime.datetime.utcnow().isoformat(),
+                        )
                 queued_pairs.append((pub_id, existing_session["id"]))
                 continue
             # Already uploaded (terminal) — include in batch so progress is visible, no re-upload

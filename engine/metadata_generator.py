@@ -44,25 +44,37 @@ _SHORTS_TAG    = "#Shorts"
 # Normalized creator name (lowercase, stripped) → canonical hashtag
 
 _CREATOR_ALIASES: dict[str, str] = {
-    "ibai":        "#Ibai",
-    "ibai llanos": "#Ibai",
-    "auron":       "#Auronplay",
-    "auronplay":   "#Auronplay",
-    "rubius":      "#Rubius",
-    "elrubius":    "#Rubius",
-    "el rubius":   "#Rubius",
-    "illojuan":    "#IlloJuan",
-    "illo juan":   "#IlloJuan",
-    "westcol":     "#Westcol",
-    "peereira":    "#Peereira7",
-    "peereira7":   "#Peereira7",
-    "xbuyer":      "#Xbuyer",
-    "bycalitos":   "#Bycalitos",
-    "mrbeast":     "#MrBeast",
-    "mr beast":    "#MrBeast",
-    "blv":         "#Blv",
-    "anita_rqp":   "#AnitaRQP",
-    "anita rqp":   "#AnitaRQP",
+    "ibai":             "#Ibai",
+    "ibai llanos":      "#Ibai",
+    "auron":            "#Auronplay",
+    "auronplay":        "#Auronplay",
+    "rubius":           "#Rubius",
+    "elrubius":         "#Rubius",
+    "el rubius":        "#Rubius",
+    "illojuan":         "#IlloJuan",
+    "illo juan":        "#IlloJuan",
+    "westcol":          "#Westcol",
+    "pereira":          "#Peereira7",
+    "peereira":         "#Peereira7",
+    "peereira7":        "#Peereira7",
+    "xbuyer":           "#Xbuyer",
+    "bycalitos":        "#Bycalitos",
+    "bycalitos_":       "#Bycalitos",
+    "mrbeast":          "#MrBeast",
+    "mr beast":         "#MrBeast",
+    "blv":              "#Blv",
+    "anita_rqp":        "#AnitaRQP",
+    "anita rqp":        "#AnitaRQP",
+    "thegregf":         "#TheGregf",
+    "gregf":            "#TheGregf",
+    "la sotanita":      "#LaSotanita",
+    "sotanita":         "#LaSotanita",
+    "luisito comunica": "#LuisitoComunica",
+    "luisito":          "#LuisitoComunica",
+    "crm carli":        "#CRMCarli",
+    "carli":            "#CRMCarli",
+    "drafteados":       "#Drafteados",
+    "neymar":           "#Neymar",
 }
 
 # ── Topic keywords → hashtag ───────────────────────────────────────────────────
@@ -70,13 +82,25 @@ _CREATOR_ALIASES: dict[str, str] = {
 # Keywords checked in transcript + source_title (case-insensitive)
 
 _TOPIC_KEYWORDS: list[tuple[list[str], str]] = [
-    (["among us", "among"],              "#AmongUs"),
-    (["minecraft"],                       "#Minecraft"),
-    (["mario kart", "mariokart"],         "#MarioKart"),
-    (["fortnite"],                        "#Fortnite"),
-    (["gta", "grand theft auto"],         "#GTA"),
-    (["star wars", "starwars"],           "#StarWars"),
-    (["robot", "robots", "robótica"],     "#Robot"),
+    (["among us", "among"],                          "#AmongUs"),
+    (["minecraft"],                                  "#Minecraft"),
+    (["mario kart", "mariokart"],                    "#MarioKart"),
+    (["fortnite"],                                   "#Fortnite"),
+    (["gta", "grand theft auto"],                    "#GTA"),
+    (["star wars", "starwars"],                      "#StarWars"),
+    (["robot", "robots", "robótica"],                "#Robot"),
+    (["sons of the forest", "sons of forest"],       "#SonsOfTheForest"),
+    (["rocket league"],                              "#RocketLeague"),
+    (["league of legends", "league of legend"],      "#LeagueOfLegends"),
+    (["call of duty", "warzone"],                    "#CallOfDuty"),
+    (["valorant"],                                   "#Valorant"),
+    (["apex legends", "apex"],                       "#ApexLegends"),
+    (["counter-strike", "counter strike", "cs2", "csgo"], "#CS2"),
+    (["the forest"],                                 "#TheForest"),
+    (["velada", "velada del año"],                   "#VeladaDelAño"),
+    (["fall guys"],                                  "#FallGuys"),
+    (["stumble guys"],                               "#StumbleGuys"),
+    (["lethal company"],                             "#LethalCompany"),
 ]
 
 # ── Category keywords → hashtag ────────────────────────────────────────────────
@@ -86,6 +110,14 @@ _CATEGORY_KEYWORDS: list[tuple[list[str], str]] = [
     (["gaming", "game", "jugando", "videojuego"],                 "#Gaming"),
     (["reaction", "reaccion", "reacción", "reacciona"],           "#Reacciones"),
 ]
+
+# Topic tags that imply #Gaming — used as category fallback when #Clips would be uninformative
+_GAMING_TOPIC_TAGS: frozenset[str] = frozenset({
+    "#AmongUs", "#Minecraft", "#MarioKart", "#Fortnite", "#GTA",
+    "#SonsOfTheForest", "#RocketLeague", "#LeagueOfLegends", "#CallOfDuty",
+    "#Valorant", "#ApexLegends", "#CS2", "#TheForest", "#FallGuys",
+    "#StumbleGuys", "#LethalCompany",
+})
 
 # ── Banned tags (stripped, lowercased) ────────────────────────────────────────
 
@@ -454,7 +486,13 @@ def _build_hashtags(
     if topic_tag:
         candidates.append(topic_tag)
 
-    if category_tag:
+    # Upgrade #Clips fallback to #Gaming when topic is a known game title
+    if category_tag == "#Clips" and topic_tag in _GAMING_TOPIC_TAGS:
+        category_tag = "#Gaming"
+
+    # Only add category when it adds information:
+    # - skip #Clips fallback when a specific topic is already present
+    if category_tag and not (topic_tag and category_tag == "#Clips"):
         candidates.append(category_tag)
 
     candidates.append(_SHORTS_TAG)

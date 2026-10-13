@@ -299,6 +299,7 @@ class YTUploadWorker(threading.Thread):
             )
 
             final_status = "private"
+            _poll_quota_hit = False
             for _ in range(self.PROCESS_POLL_MAX):
                 if self._stop_event.is_set():
                     break
@@ -330,12 +331,48 @@ class YTUploadWorker(threading.Thread):
                     if process_status == "uploaded":
                         # Not yet processed — keep polling
                         pass
-                except Exception:
+                except Exception as _poll_exc:
+                    _msg = str(_poll_exc)
+                    if "quotaExceeded" in _msg or "userRateLimitExceeded" in _msg:
+                        # Quota exhausted — unlock and defer to channel sync.
+                        # Upload already succeeded; the sync will confirm status.
+                        logger.warning(
+                            "[YTUploadWorker] quota exceeded polling %s — deferring to channel sync",
+                            video_id,
+                        )
+                        _poll_quota_hit = True
+                        break
                     logger.warning("[YTUploadWorker] status poll failed for %s", video_id)
                 time.sleep(self.PROCESS_POLL_DELAY)
             else:
                 # Polling exhausted — mark needs_check
                 final_status = "needs_check"
+
+            # Quota hit during poll: leave processing + unlocked so channel sync resolves it.
+            if _poll_quota_hit:
+                db.update_yt_upload_session(
+                    sid,
+                    status="processing",
+                    locked_at=None,
+                    locked_by=None,
+                    error_code="POLL_QUOTA_DEFERRED",
+                    error_message=(
+                        "Post-upload status poll aborted — API quota exhausted. "
+                        "El vídeo fue subido correctamente. El sync del canal confirmará "
+                        "el estado cuando se restaure la cuota."
+                    ),
+                    updated_at=_now(),
+                )
+                _update_pub_status(
+                    pub_id, "publishing",
+                    external_post_id=video_id,
+                    external_url=f"https://studio.youtube.com/video/{video_id}/edit",
+                )
+                logger.info(
+                    "[YTUploadWorker] session %s deferred (video_id=%s) — awaiting quota reset",
+                    sid, video_id,
+                )
+                return
 
             # 6. Check for visibility mismatch (YouTube API project restriction)
             approved_privacy = session.get("privacy_status") or "private"
