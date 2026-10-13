@@ -5,7 +5,7 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI, BackgroundTasks, HTTPException, UploadFile, File, Form, Query, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from engine.config import CONFIG
@@ -3165,6 +3165,63 @@ async def repair_published_descriptions(dry_run: bool = True):
         "plan":          plan[:50],
         "error_details": error_details[:20],
     }
+
+
+@app.post("/admin/update-channel-hashtags")
+async def update_channel_hashtags(dry_run: bool = True, reset: bool = False):
+    """
+    Audit and patch hashtag blocks on all published Shorts of the channel.
+
+    Fetches the full channel upload playlist from YouTube, reads each video's
+    current snippet, and updates snippet.description when the hashtag block
+    differs from the editorial_v1 expected value.
+
+    State is persisted at ~/.contentengine/hashtag_patch_state.json so the job
+    can resume after a quota reset without re-processing already-correct videos.
+
+    ?dry_run=true  (default) — plan only, no writes to YouTube.
+    ?reset=true    — clear saved state and start from scratch.
+
+    On quotaExceeded the job saves progress and returns 429 with retry guidance.
+    """
+    from publishers import yt_auth
+    from publishers.yt_hashtag_patch import (
+        run_patch, reset_state, load_state, _build_summary, QuotaExceeded,
+    )
+
+    if not yt_auth.is_connected():
+        raise HTTPException(400, "YouTube not connected — authenticate via /youtube/connect")
+
+    if reset:
+        reset_state()
+
+    try:
+        token = yt_auth.get_valid_token()
+    except RuntimeError as exc:
+        raise HTTPException(400, str(exc))
+    if not token:
+        raise HTTPException(400, "YouTube token unavailable — re-authenticate via /youtube/connect")
+
+    try:
+        summary = run_patch(token, dry_run=dry_run)
+    except QuotaExceeded as exc:
+        state = load_state()
+        summary = _build_summary(state)
+        summary["quota_error"] = str(exc)
+        summary["retry_after"] = "YouTube quota resets daily at 07:00 UTC. Retry in 30 min increments."
+        return JSONResponse(status_code=429, content=summary)
+
+    return summary
+
+
+@app.get("/admin/update-channel-hashtags/status")
+async def update_channel_hashtags_status():
+    """Return current state of the hashtag patch job."""
+    from publishers.yt_hashtag_patch import load_state, _build_summary
+    state = load_state()
+    if not state.get("started_at"):
+        return {"status": "not_started", "message": "No patch job has been run yet."}
+    return _build_summary(state)
 
 
 # ── ADMIN / OBSERVABILITY ─────────────────────────────────────────────────────
