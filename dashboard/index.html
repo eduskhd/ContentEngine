@@ -723,7 +723,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           <option value="name_asc">Nombre: A&#8211;Z</option>
           <option value="name_desc">Nombre: Z&#8211;A</option>
         </select>
-        <span id="lib-pkg-hint" style="font-size:10px;color:#444">seg&#250;n los &#250;ltimos clips creados en cada paquete</span>
+        <span id="lib-pkg-hint" style="font-size:10px;color:#444">por fecha de creaci&#243;n del paquete</span>
       </div>
       <div id="lib-clip-sort-wrap" style="display:none;align-items:center;gap:8px;padding:0 20px 8px;flex-wrap:wrap">
         <span style="font-size:11px;color:#555;white-space:nowrap">Ordenar por:</span>
@@ -3547,7 +3547,7 @@ function setPkgSort(val) {
 function _renderPkgCard(p) {
   const creatorColor = p.avatar_color || '#555';
   const creatorName = p.creator_name || 'Sin asignar';
-  const dateStr = p.latest_clip_at ? _fmtClipDate(p.latest_clip_at) : 'Fecha desconocida';
+  const dateStr = p.created_at ? _fmtClipDate(p.created_at) : 'Fecha desconocida';
   const clipCount = p.clip_count || 0;
   const safeId = _esc(p.id);
   const safeName = _esc(p.name);
@@ -3565,7 +3565,7 @@ function _renderPkgCard(p) {
     `</div>` +
     `<div class="pkg-card-meta">` +
       `<div class="pkg-card-meta-item">&#128250; ${clipCount} clip${clipCount===1?'':'s'}</div>` +
-      `<div class="pkg-card-meta-item" title="Último clip nuevo">&#128197; ${dateStr}</div>` +
+      `<div class="pkg-card-meta-item" title="Fecha de creación">&#128197; ${dateStr}</div>` +
     `</div>` +
     `<div class="pkg-card-actions">` +
       `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();uploadPackage('${safeId}')">Upload</button>` +

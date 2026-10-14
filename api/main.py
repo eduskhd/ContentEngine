@@ -2080,8 +2080,8 @@ async def list_packages_global(
 ):
     """Return all clip_packages with latest_clip_at, clip_count, creator info. Paginated."""
     sort_map = {
-        "newest": "CASE WHEN ps.latest_clip_at IS NULL THEN 1 ELSE 0 END, ps.latest_clip_at DESC, p.id DESC",
-        "oldest": "CASE WHEN ps.latest_clip_at IS NULL THEN 1 ELSE 0 END, ps.latest_clip_at ASC, p.id ASC",
+        "newest": "CASE WHEN p.created_at IS NULL THEN 1 ELSE 0 END, p.created_at DESC, p.id DESC",
+        "oldest": "CASE WHEN p.created_at IS NULL THEN 1 ELSE 0 END, p.created_at ASC, p.id ASC",
         "name_asc": "p.name COLLATE NOCASE ASC, p.id ASC",
         "name_desc": "p.name COLLATE NOCASE DESC, p.id ASC",
     }
