@@ -2448,22 +2448,22 @@ async def publish_video_package(video_id: str, body: dict = Body(...)):
             s_status = existing_session.get("status")
             if s_status in ("pending", "uploading", "processing", "paused",
                             "public", "unlisted", "private", "needs_check"):
-                # Refresh description if it's missing the brand tag and session hasn't started
-                if (s_status == "pending"
-                        and _full_desc
-                        and "#ContentEngine" not in (existing_session.get("description") or "")):
-                    _refresh_tags = []
-                    try:
-                        raw = (full_pub or {}).get("hashtags") or "[]"
-                        _refresh_tags = json.loads(raw) if raw.startswith("[") else [t.lstrip("#") for t in raw.split() if t]
-                    except Exception:
-                        pass
-                    dbmod.update_yt_upload_session(
-                        existing_session["id"],
-                        description=_full_desc,
-                        tags=json.dumps(_refresh_tags),
-                        updated_at=datetime.datetime.utcnow().isoformat(),
-                    )
+                # Refresh description for pending sessions with missing or mismatched hashtags
+                if s_status == "pending" and _full_desc:
+                    from publishers.yt_hashtag_patch import _description_needs_update as _dnu
+                    if _dnu(existing_session.get("description") or "", _full_desc):
+                        _refresh_tags = []
+                        try:
+                            raw = (full_pub or {}).get("hashtags") or "[]"
+                            _refresh_tags = json.loads(raw) if raw.startswith("[") else [t.lstrip("#") for t in raw.split() if t]
+                        except Exception:
+                            pass
+                        dbmod.update_yt_upload_session(
+                            existing_session["id"],
+                            description=_full_desc,
+                            tags=json.dumps(_refresh_tags),
+                            updated_at=datetime.datetime.utcnow().isoformat(),
+                        )
                 queued_pairs.append((pub_id, existing_session["id"]))
                 continue
             # Error state — reset for retry with refreshed description
@@ -3098,7 +3098,7 @@ async def get_clip_publications(clip_id: str):
 
 @app.post("/admin/repair-published-descriptions")
 async def repair_published_descriptions(dry_run: bool = True):
-    """Update snippet.description for already-published YouTube videos that lack hashtags.
+    """Update snippet.description for already-published YouTube videos with missing or wrong hashtags.
 
     Reads each video's current snippet, merges the corrected description
     (from publications.caption + hashtags), and calls videos.update — preserving
@@ -3107,10 +3107,12 @@ async def repair_published_descriptions(dry_run: bool = True):
     dry_run=True  (default) — shows plan without calling YouTube API.
     dry_run=False — calls videos.update() for each clip.
 
-    Only targets sessions where #ContentEngine is absent from the stored description.
+    Targets sessions where #ContentEngine is absent OR where the hashtag block
+    does not match the publication's current editorial hashtags.
     Never re-uploads; never changes video_id; never affects pending/uploading sessions.
     """
     from publishers import yt_auth, yt_upload as _uploader
+    from publishers.yt_hashtag_patch import _description_needs_update
 
     if not dry_run and not yt_auth.is_connected():
         raise HTTPException(400, "YouTube not connected")
@@ -3127,7 +3129,6 @@ async def repair_published_descriptions(dry_run: bool = True):
         LEFT JOIN creators cr ON cr.id = v.creator_id
         WHERE s.status IN ('public', 'private', 'unlisted', 'needs_check')
           AND s.remote_video_id IS NOT NULL
-          AND s.description NOT LIKE '%#ContentEngine%'
           AND s.pub_id IS NOT NULL
     """).fetchall()
     conn.close()
@@ -3139,9 +3140,11 @@ async def repair_published_descriptions(dry_run: bool = True):
     access_token = yt_auth.get_valid_token() if not dry_run else None
 
     for r in rows:
-        pub_id     = dict(r)["pub_id"]
-        video_id   = dict(r)["remote_video_id"]
-        session_id = dict(r)["session_id"]
+        r_dict     = dict(r)
+        pub_id     = r_dict["pub_id"]
+        video_id   = r_dict["remote_video_id"]
+        session_id = r_dict["session_id"]
+        current_desc = r_dict.get("current_desc") or ""
 
         # Ensure publication has editorial metadata
         pub = dbmod.get_publication(pub_id)
@@ -3161,12 +3164,17 @@ async def repair_published_descriptions(dry_run: bool = True):
             errors_count += 1
             continue
 
+        # Skip videos where stored description already matches expected
+        if not _description_needs_update(current_desc, new_desc):
+            skipped_count += 1
+            continue
+
         plan.append({
             "session_id":    session_id[:8],
             "video_id":      video_id,
-            "creator":       dict(r)["creator_name"],
-            "old_desc_len":  len(dict(r)["current_desc"] or ""),
-            "new_desc_len":  len(new_desc),
+            "creator":       r_dict["creator_name"],
+            "old_desc_end":  current_desc[-80:].replace("\n", " "),
+            "new_desc_end":  new_desc[-80:].replace("\n", " "),
             "preview":       new_desc[:120],
         })
 
@@ -3188,12 +3196,14 @@ async def repair_published_descriptions(dry_run: bool = True):
             errors_count += 1
 
     return {
-        "dry_run":       dry_run,
-        "total_affected": len(rows),
-        "updated":       updated if not dry_run else 0,
-        "errors":        errors_count,
-        "plan":          plan[:50],
-        "error_details": error_details[:20],
+        "dry_run":        dry_run,
+        "total_sessions": len(rows),
+        "needs_update":   len(plan),
+        "already_correct": skipped_count,
+        "updated":        updated if not dry_run else 0,
+        "errors":         errors_count,
+        "plan":           plan[:50],
+        "error_details":  error_details[:20],
     }
 
 
@@ -3651,21 +3661,23 @@ async def create_upload_batch(body: dict = Body(...)):
             status = existing_session.get("status")
             # Active/in-progress — don't touch, include in batch as-is
             if status in ("pending", "uploading", "processing", "paused"):
-                # Refresh description for pending sessions missing hashtags
-                if status == "pending" and "#ContentEngine" not in (existing_session.get("description") or ""):
+                # Refresh description for pending sessions with missing or mismatched hashtags
+                if status == "pending":
                     _rd = dbmod.assemble_pub_youtube_description(pub_id)
                     if _rd and "#ContentEngine" in _rd:
-                        _rt = []
-                        try:
-                            raw = pub.get("hashtags") or "[]"
-                            _rt = json.loads(raw) if raw.startswith("[") else [t.lstrip("#") for t in raw.split() if t]
-                        except Exception:
-                            pass
-                        dbmod.update_yt_upload_session(
-                            existing_session["id"],
-                            description=_rd, tags=json.dumps(_rt),
-                            updated_at=datetime.datetime.utcnow().isoformat(),
-                        )
+                        from publishers.yt_hashtag_patch import _description_needs_update as _dnu2
+                        if _dnu2(existing_session.get("description") or "", _rd):
+                            _rt = []
+                            try:
+                                raw = pub.get("hashtags") or "[]"
+                                _rt = json.loads(raw) if raw.startswith("[") else [t.lstrip("#") for t in raw.split() if t]
+                            except Exception:
+                                pass
+                            dbmod.update_yt_upload_session(
+                                existing_session["id"],
+                                description=_rd, tags=json.dumps(_rt),
+                                updated_at=datetime.datetime.utcnow().isoformat(),
+                            )
                 queued_pairs.append((pub_id, existing_session["id"]))
                 continue
             # Already uploaded (terminal) — include in batch so progress is visible, no re-upload

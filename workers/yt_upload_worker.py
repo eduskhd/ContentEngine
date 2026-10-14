@@ -232,6 +232,19 @@ class YTUploadWorker(threading.Thread):
                                "METADATA_MISSING: description is empty — edit in Publishing before uploading",
                                "INVALID_METADATA")
                     return
+                # Pre-upload: if stored description lacks #ContentEngine, try to refresh from publication
+                if "#ContentEngine" not in _desc and pub_id:
+                    try:
+                        refreshed = db.assemble_pub_youtube_description(pub_id)
+                        if refreshed and "#ContentEngine" in refreshed:
+                            _desc = refreshed
+                            db.update_yt_upload_session(sid, description=_desc,
+                                                        updated_at=datetime.now(tz=timezone.utc).isoformat())
+                            logger.warning("[yt_worker] refreshed description for %s — was missing #ContentEngine", sid[:8])
+                        else:
+                            logger.warning("[yt_worker] description for %s is missing #ContentEngine — proceeding with stored value", sid[:8])
+                    except Exception as _exc:
+                        logger.warning("[yt_worker] could not refresh description for %s: %s", sid[:8], _exc)
                 session_url = uploader.create_resumable_session(
                     access_token=access_token,
                     title=_title[:100],

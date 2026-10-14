@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-10-14 — Hashtag repair: 58 historical videos corrected on YouTube
+
+### Problem
+Sessions created before the 13-Oct editorial_v1 fix (08:46 UTC) were uploaded with old hashtags
+(`#Pereira #Clips #Shorts #ContentEngine`) before publications were regenerated at 10:39 UTC.
+The `repair_published_descriptions` endpoint only targeted sessions missing `#ContentEngine`
+(44 cases), missing 15 sessions that had CE but with the wrong hashtag set.
+
+### Fixes
+
+**`api/main.py` — `repair_published_descriptions`**:
+- Removed `NOT LIKE '%#ContentEngine%'` SQL filter — now scans ALL published sessions
+- Added per-row `_description_needs_update(current_desc, expected_desc)` comparison
+- Sessions already correct are counted as `already_correct` (no API call)
+- Fixes the 15-case gap where CE was present but hashtags were wrong (e.g. `#Pereira` vs `#Peereira7`)
+
+**`api/main.py` — pending session refresh** (video-package and batch-creation paths):
+- Changed condition from `"#ContentEngine" not in stored_desc` to `_description_needs_update(stored, assembled)`
+- Refreshes pending sessions with wrong hashtags, not just missing CE
+
+**`workers/yt_upload_worker.py` — pre-upload guard**:
+- If stored description is missing `#ContentEngine` at upload time, auto-refreshes from publication
+- Logs a warning but does not fail — falls back to stored value if refresh unavailable
+
+### Live repair executed 2026-10-14
+- `run_patch(dry_run=False)` corrected 58 videos on YouTube (244 inventoried, 186 already correct)
+- All 58 updates confirmed via verification read from YouTube API
+- `verified_ok=36` immediately; 22 showed `verified=False` (YouTube caching delay)
+  — all 22 confirmed correct by a second read after the run
+
+---
+
 ## 2026-10-13 — Hashtag pipeline audit: alias gaps, quota-poll, #Clips fallback
 
 ### Root cause
