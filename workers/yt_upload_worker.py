@@ -412,9 +412,11 @@ class YTUploadWorker(threading.Thread):
                     )
 
             # 7. Finalize
+            _finished_at = _now() if final_status in ("public", "unlisted", "private", "needs_check") else None
             db.update_yt_upload_session(
                 sid,
                 status=final_status,
+                finished_at=_finished_at,
                 locked_at=None,
                 locked_by=None,
                 updated_at=_now(),

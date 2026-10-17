@@ -417,6 +417,10 @@ def init_db():
         # Moment deduplication (2026-10-08)
         _add_column_if_missing(conn, "candidates", "moment_group_id", "TEXT")
         _add_column_if_missing(conn, "candidates", "group_evidence", "TEXT")
+        # Streamer Intelligence V2 (2026-10-15)
+        _add_column_if_missing(conn, "candidates", "streamer_score_v2", "TEXT DEFAULT '{}'")
+        _add_column_if_missing(conn, "candidates", "streamer_total_score", "REAL DEFAULT 0.0")
+        _add_column_if_missing(conn, "candidates", "quality_gate_result", "TEXT DEFAULT '{}'")
         # Future: social metrics prediction loop
         _add_column_if_missing(conn, "post_metrics", "predicted_virality_score", "REAL")
         _add_column_if_missing(conn, "post_metrics", "actual_vs_predicted_delta", "REAL")
@@ -465,6 +469,7 @@ def init_db():
             privacy_status TEXT DEFAULT 'private',
             series_id TEXT,
             series_part INTEGER DEFAULT 0,
+            finished_at TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             FOREIGN KEY (pub_id) REFERENCES publications(id),
@@ -2124,6 +2129,18 @@ def claim_yt_upload_session(worker_id: str) -> dict | None:
                 """, (sid_val, spart)).fetchone()
                 if blocking_series:
                     continue
+
+            # Rule 3: 8-minute minimum channel gap between successful uploads
+            channel_id = row.get("channel_id")
+            if channel_id:
+                gap_cutoff = (datetime.utcnow() - timedelta(minutes=8)).isoformat()
+                last_done = conn.execute(
+                    "SELECT MAX(finished_at) FROM yt_upload_sessions "
+                    "WHERE channel_id=? AND finished_at IS NOT NULL",
+                    (channel_id,),
+                ).fetchone()[0]
+                if last_done and last_done > gap_cutoff:
+                    continue  # gap hasn't expired yet; worker will retry on next poll
 
             chosen = row
             break

@@ -5897,9 +5897,49 @@ function renderAnalysisClips(clips) {
     const reasonTags = reasons.slice(0,4).map(r=>`<span class="reason-tag">${r}</span>`).join('');
     const imp = Math.round(c.importance_score||0);
     const ret = Math.round(c.retention_score||0);
+
+    // Streamer V2 badge
+    const sv2 = Math.round(c.streamer_total_score||0);
+    const blended = Math.round((score*0.6)+(sv2*0.4));
+    let v2Panel = '';
+    if (sv2 > 0) {
+      let v2data = {};
+      try { v2data = typeof c.streamer_score_v2 === 'string' ? JSON.parse(c.streamer_score_v2||'{}') : (c.streamer_score_v2||{}); } catch(e){}
+      const factors = v2data.factors || {};
+      const v2warnings = (v2data.warnings||[]).slice(0,2);
+      const v2reasons = (v2data.reasons||[]).slice(0,3);
+      const gateRaw = typeof c.quality_gate_result === 'string' ? (() => { try{return JSON.parse(c.quality_gate_result||'{}');}catch(e){return {};} })() : (c.quality_gate_result||{});
+      const gateDecision = gateRaw.final_decision || '';
+      const gateColor = gateDecision==='REJECT'?'#f87171':gateDecision==='REVIEW'?'#fbbf24':'#34d399';
+      const factorBars = Object.entries(factors).map(([k,v]) => {
+        const pct = Math.round(v);
+        const col = pct>=70?'#34d399':pct>=45?'#fbbf24':'#f87171';
+        return `<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">
+          <span style="width:68px;font-size:10px;color:#999;text-transform:capitalize">${k}</span>
+          <div style="flex:1;height:5px;background:#333;border-radius:3px">
+            <div style="width:${pct}%;height:5px;background:${col};border-radius:3px"></div>
+          </div>
+          <span style="width:26px;font-size:10px;color:#ccc;text-align:right">${pct}</span>
+        </div>`;
+      }).join('');
+      const warnHtml = v2warnings.map(w=>`<div style="font-size:10px;color:#fbbf24">⚠ ${w}</div>`).join('');
+      const v2ReasonTags = v2reasons.map(r=>`<span class="reason-tag" style="background:#1a2a1a;border-color:#34d399;color:#86efac">${r}</span>`).join('');
+      v2Panel = `<div style="margin-top:8px;padding:8px;background:#111;border-radius:6px;border:1px solid #222">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:10px;font-weight:700;color:#34d399;letter-spacing:.5px">STREAMER V2</span>
+          <span style="font-size:14px;font-weight:700;color:#fff">${sv2}</span>
+          <span style="font-size:10px;color:#888">Blended: <strong style="color:#ccc">${blended}</strong></span>
+          ${gateDecision?`<span style="margin-left:auto;font-size:10px;font-weight:600;color:${gateColor}">${gateDecision}</span>`:''}
+        </div>
+        ${factorBars}
+        ${warnHtml}
+        ${v2ReasonTags?`<div class="viral-reasons" style="margin-top:4px">${v2ReasonTags}</div>`:''}
+      </div>`;
+    }
+
     return `<div class="viral-card">
       <div class="viral-score ${scoreClass}" title="Virality Score">${score}</div>
-      <div class="viral-info">
+      <div class="viral-info" style="flex:1">
         <div class="viral-ts">#${i+1} &nbsp;${ts} &nbsp;<span style="color:#888">${dur}s</span></div>
         <div style="font-size:11px;color:#888;margin-top:3px">
           Importance: <span style="color:#aaa">${imp}</span> &nbsp;
@@ -5907,6 +5947,7 @@ function renderAnalysisClips(clips) {
           Hook: <span style="color:#aaa">${Math.round((c.hook_score||0))}%</span>
         </div>
         <div class="viral-reasons">${reasonTags}</div>
+        ${v2Panel}
       </div>
       <div class="viral-actions">
         <button class="btn btn-primary btn-sm" onclick="generateSingleCandidate('${c.id}')">Generate</button>
@@ -7196,6 +7237,21 @@ function _brbStatusHtml(qs) {
     const d = new Date(normed.endsWith('Z') ? normed : normed + 'Z');
     const m = Math.ceil((d - Date.now()) / 60000);
     if (m > 0) parts.push(`<span style="color:#f59e0b">prox. ${m}min</span>`);
+  }
+  // Channel gap indicator
+  if (qs.channel_gaps && qs.channel_gaps.length > 0) {
+    for (const g of qs.channel_gaps) {
+      const na = g.next_available_at;
+      const normed = na.replace(/\+00:00$/, 'Z');
+      const d = new Date(normed.endsWith('Z') ? normed : normed + 'Z');
+      const secs = Math.ceil((d - Date.now()) / 1000);
+      if (secs > 0) {
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        const label = m > 0 ? `${m}m${s}s` : `${s}s`;
+        parts.push(`<span style="color:#a78bfa">Intervalo canal: ${label}</span>`);
+      }
+    }
   }
   if (parts.length === 0 && qs.pending_total > 0)
     parts.push(`<span>${qs.pending_total} pendiente(s)</span>`);

@@ -1667,6 +1667,15 @@ async def get_job_analysis(job_id: str):
             cd["platform_scores"] = json.loads(cd.get("platform_scores") or "{}")
         except Exception:
             cd["platform_scores"] = {}
+        # Streamer V2 data (parsed for frontend consumption)
+        try:
+            cd["streamer_score_v2"] = json.loads(cd.get("streamer_score_v2") or "{}")
+        except Exception:
+            cd["streamer_score_v2"] = {}
+        try:
+            cd["quality_gate_result"] = json.loads(cd.get("quality_gate_result") or "{}")
+        except Exception:
+            cd["quality_gate_result"] = {}
         top_clips.append(cd)
 
     series_list = []
@@ -3882,14 +3891,19 @@ async def update_session_privacy(session_id: str, body: dict = Body({})):
 
 # ── YT QUEUE STATUS ───────────────────────────────────────────────────────────
 
+_CHANNEL_GAP_MINUTES = 8
+
+
 @app.get("/yt/queue-status")
 async def yt_queue_status():
     """
     Lightweight status snapshot of the YouTube upload queue.
     Used by the dashboard service status block.
     """
-    from datetime import datetime, timezone as _tz
-    now_iso = datetime.now(tz=_tz.utc).isoformat()
+    from datetime import datetime, timezone as _tz, timedelta as _td
+    now = datetime.now(tz=_tz.utc)
+    now_iso = now.isoformat()
+    gap_cutoff = (now - _td(minutes=_CHANNEL_GAP_MINUTES)).isoformat()
     conn = dbmod.get_db()
     try:
         uploading = conn.execute(
@@ -3919,6 +3933,28 @@ async def yt_queue_status():
             " AND error_code='QUOTA_EXCEEDED' AND next_attempt_at > ?",
             (now_iso,),
         ).fetchone()[0]
+
+        # Per-channel gap: find channels where last finished_at is within the 8-min gap
+        gap_rows = conn.execute(
+            "SELECT channel_id, MAX(finished_at) AS last_finished_at "
+            "FROM yt_upload_sessions "
+            "WHERE finished_at IS NOT NULL AND finished_at > ? "
+            "GROUP BY channel_id",
+            (gap_cutoff,),
+        ).fetchall()
+        channel_gaps = []
+        for r in gap_rows:
+            from datetime import datetime as _dt
+            lf = r["last_finished_at"]
+            lf_dt = _dt.fromisoformat(lf.replace("Z", "+00:00") if lf.endswith("Z") else lf)
+            if lf_dt.tzinfo is None:
+                lf_dt = lf_dt.replace(tzinfo=_tz.utc)
+            next_at = (lf_dt + _td(minutes=_CHANNEL_GAP_MINUTES)).isoformat()
+            channel_gaps.append({
+                "channel_id": r["channel_id"],
+                "last_finished_at": lf,
+                "next_available_at": next_at,
+            })
     finally:
         conn.close()
 
@@ -3926,7 +3962,7 @@ async def yt_queue_status():
         worker_state = "active"
     elif pending_eligible > 0:
         worker_state = "working"
-    elif pending_waiting > 0:
+    elif pending_waiting > 0 or channel_gaps:
         worker_state = "waiting"
     elif pending_total == 0:
         worker_state = "idle"
@@ -3941,6 +3977,8 @@ async def yt_queue_status():
         "pending_total": pending_total,
         "pending_quota": pending_quota,
         "next_attempt_at": next_attempt_at,
+        "channel_gap_minutes": _CHANNEL_GAP_MINUTES,
+        "channel_gaps": channel_gaps,
     }
 
 
@@ -4191,6 +4229,172 @@ async def get_missed_moments(job_id: str):
 async def delete_missed_moment(moment_id: str):
     dbmod.delete_missed_moment(moment_id)
     return {"deleted": True}
+
+
+# ── STREAMER INTELLIGENCE V2 ────────────────────────────────────────────────
+
+@app.get("/candidates/{candidate_id}/streamer-score")
+async def get_candidate_streamer_score(candidate_id: str):
+    """Return the Streamer Intelligence V2 score detail for a candidate."""
+    conn = dbmod.get_db()
+    row = conn.execute("SELECT * FROM candidates WHERE id=?", [candidate_id]).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "Candidate not found")
+    cand = dict(row)
+
+    v2_raw = cand.get("streamer_score_v2")
+    gate_raw = cand.get("quality_gate_result")
+
+    v2 = {}
+    gate = {}
+    if v2_raw:
+        try:
+            v2 = json.loads(v2_raw)
+        except Exception:
+            pass
+    if gate_raw:
+        try:
+            gate = json.loads(gate_raw)
+        except Exception:
+            pass
+
+    if not v2:
+        # On-demand computation if not yet scored
+        try:
+            from engine.analyzers.streamer_scorer import score_streamer_v2
+            from engine.analyzers.quality_gates import run_all_gates
+            conn2 = dbmod.get_db()
+            vid_row = conn2.execute("SELECT words_json FROM videos WHERE id=?",
+                                    [cand["video_id"]]).fetchone()
+            words = []
+            if vid_row and vid_row["words_json"]:
+                words = json.loads(vid_row["words_json"])
+            conn2.close()
+            v2 = score_streamer_v2(cand, words)
+            gate = run_all_gates(cand, words)
+            with dbmod.db() as wconn:
+                wconn.execute(
+                    "UPDATE candidates SET streamer_score_v2=?, streamer_total_score=?, "
+                    "quality_gate_result=? WHERE id=?",
+                    (json.dumps(v2), v2["total_score"], json.dumps(gate), candidate_id)
+                )
+        except Exception as exc:
+            return {"candidate_id": candidate_id, "error": str(exc), "streamer_v2": {}, "quality_gates": {}}
+
+    # Use v2.total_score as authoritative (may have just been computed on-demand)
+    total_score = v2.get("total_score") if v2 else cand.get("streamer_total_score")
+    return {
+        "candidate_id": candidate_id,
+        "start_s": cand.get("start_s"),
+        "end_s": cand.get("end_s"),
+        "virality_score": cand.get("virality_score"),
+        "streamer_total_score": total_score,
+        "streamer_v2": v2,
+        "quality_gates": gate,
+    }
+
+
+@app.post("/candidates/{candidate_id}/streamer-score/recompute")
+async def recompute_candidate_streamer_score(candidate_id: str):
+    """Force re-computation of the V2 score for a candidate."""
+    conn = dbmod.get_db()
+    row = conn.execute("SELECT * FROM candidates WHERE id=?", [candidate_id]).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "Candidate not found")
+    cand = dict(row)
+
+    try:
+        from engine.analyzers.streamer_scorer import score_streamer_v2
+        from engine.analyzers.quality_gates import run_all_gates
+        conn2 = dbmod.get_db()
+        vid_row = conn2.execute("SELECT words_json FROM videos WHERE id=?",
+                                [cand["video_id"]]).fetchone()
+        words = []
+        if vid_row and vid_row["words_json"]:
+            words = json.loads(vid_row["words_json"])
+        all_cands = conn2.execute(
+            "SELECT * FROM candidates WHERE job_id=?", [cand["job_id"]]
+        ).fetchall()
+        conn2.close()
+        all_cand_dicts = [dict(c) for c in all_cands]
+
+        v2 = score_streamer_v2(cand, words, all_candidates=all_cand_dicts)
+        gate = run_all_gates(cand, words, all_candidates=all_cand_dicts)
+
+        with dbmod.db() as wconn:
+            wconn.execute(
+                "UPDATE candidates SET streamer_score_v2=?, streamer_total_score=?, "
+                "quality_gate_result=? WHERE id=?",
+                (json.dumps(v2), v2["total_score"], json.dumps(gate), candidate_id)
+            )
+        return {"candidate_id": candidate_id, "recomputed": True, "streamer_v2": v2, "quality_gates": gate}
+    except Exception as exc:
+        raise HTTPException(500, f"Recompute failed: {exc}")
+
+
+@app.get("/jobs/{job_id}/streamer-analysis")
+async def get_job_streamer_analysis(job_id: str):
+    """Return Streamer V2 scores for all candidates in a job, ranked by blended score."""
+    conn = dbmod.get_db()
+    job = conn.execute("SELECT * FROM jobs WHERE id=?", [job_id]).fetchone()
+    if not job:
+        conn.close()
+        raise HTTPException(404, "Job not found")
+    cands = conn.execute(
+        "SELECT id, start_s, end_s, virality_score, streamer_total_score, "
+        "streamer_score_v2, quality_gate_result, status FROM candidates WHERE job_id=? "
+        "ORDER BY streamer_total_score DESC, virality_score DESC",
+        [job_id]
+    ).fetchall()
+    conn.close()
+
+    results = []
+    for c in cands:
+        cd = dict(c)
+        v2 = {}
+        gate = {}
+        try:
+            if cd.get("streamer_score_v2"):
+                v2 = json.loads(cd["streamer_score_v2"])
+        except Exception:
+            pass
+        try:
+            if cd.get("quality_gate_result"):
+                gate = json.loads(cd["quality_gate_result"])
+        except Exception:
+            pass
+        results.append({
+            "id": cd["id"],
+            "start_s": cd["start_s"],
+            "end_s": cd["end_s"],
+            "virality_score": cd["virality_score"],
+            "streamer_total_score": cd["streamer_total_score"],
+            "blended_score": round(
+                (cd["virality_score"] or 0) * 0.6 + (cd["streamer_total_score"] or 0) * 0.4, 1
+            ),
+            "status": cd["status"],
+            "v2_summary": {
+                "total_score": v2.get("total_score"),
+                "confidence": v2.get("confidence"),
+                "factors": v2.get("factors", {}),
+                "reasons": v2.get("reasons", [])[:3],
+                "warnings": v2.get("warnings", []),
+                "recommended_action": v2.get("recommended_action"),
+            },
+            "gate_decision": gate.get("final_decision", "PENDING"),
+            "gate_codes": gate.get("all_codes", []),
+        })
+
+    v2_count = sum(1 for r in results if r["streamer_total_score"] and r["streamer_total_score"] > 0)
+    return {
+        "job_id": job_id,
+        "v2_scored_count": v2_count,
+        "total_candidates": len(results),
+        "v2_enabled": CONFIG.streamer_scoring_v2_enabled,
+        "candidates": results,
+    }
 
 
 # ── DASHBOARD ────────────────────────────────────────────────────────────────
