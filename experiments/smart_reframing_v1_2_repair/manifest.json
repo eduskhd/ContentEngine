@@ -1,0 +1,218 @@
+{
+  "experiment": "smart_reframing_v1_2_repair",
+  "description": "V1.2 with P1/P2/P3/P4 fixes \u2014 16:9 source inputs, HUD penalty, per-segment decisions",
+  "fixes": [
+    "P1_correct_16x9_input",
+    "P2_correct_scene_analysis",
+    "P3_hud_penalty",
+    "P4_segment_decisions"
+  ],
+  "total_clips": 6,
+  "total_s": 698.0,
+  "clips": [
+    {
+      "name": "Rubius_4ffe7a7c",
+      "creator": "rubius",
+      "start_s": 166.33,
+      "end_s": 201.03,
+      "src": "C:\\Users\\edupo\\Desktop\\ContentEngine\\output\\downloads\\rubius_z_dxubzyojjfu.mp4",
+      "proxy": "C:\\Users\\edupo\\Desktop\\ContentEngine\\output\\proxies\\8ad0b033-35e2-436d-b75b-1286a2758a66_proxy.mp4",
+      "original": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\original\\Rubius_4ffe7a7c_original.mp4",
+        "render_s": 15.47
+      },
+      "v1_1": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\v1_1\\Rubius_4ffe7a7c_v1_1.mp4",
+        "plan_s": 2.0,
+        "render_s": 19.55,
+        "mode": "split_layout",
+        "filter_version": "v11"
+      },
+      "v1_2_repair": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\v1_2_repair\\Rubius_4ffe7a7c_v1_2_repair.mp4",
+        "plan_s": 2.6,
+        "render_s": 21.09,
+        "mode": "split_layout",
+        "filter_version": "v12_repair",
+        "split_fraction": 0.55,
+        "dominant_scene": "static_gameplay",
+        "scene_count": 3,
+        "segment_decisions_count": 3,
+        "hud_count": 1
+      }
+    },
+    {
+      "name": "AuronPlay_9e003b08",
+      "creator": "auronplay",
+      "start_s": 972.44,
+      "end_s": 1007.7,
+      "src": "C:\\Users\\edupo\\Desktop\\ContentEngine\\output\\downloads\\auron_ig3rr_d1ukw.mp4",
+      "proxy": "C:\\Users\\edupo\\Desktop\\ContentEngine\\output\\proxies\\9a4c64fa-a785-4e92-8313-4b88c5d804b0_proxy.mp4",
+      "original": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\original\\AuronPlay_9e003b08_original.mp4",
+        "render_s": 28.59
+      },
+      "v1_1": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\v1_1\\AuronPlay_9e003b08_v1_1.mp4",
+        "plan_s": 0.8,
+        "render_s": 29.18,
+        "mode": "split_layout",
+        "filter_version": "v11"
+      },
+      "v1_2_repair": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\v1_2_repair\\AuronPlay_9e003b08_v1_2_repair.mp4",
+        "plan_s": 2.25,
+        "render_s": 32.84,
+        "mode": "face_focus",
+        "filter_version": "v12_repair",
+        "split_fraction": 0.55,
+        "dominant_scene": "conversation",
+        "scene_count": 3,
+        "segment_decisions_count": 3,
+        "hud_count": 5
+      }
+    },
+    {
+      "name": "Rickyedit_2a3e3755",
+      "creator": "rickyedit",
+      "start_s": 730.49,
+      "end_s": 766.51,
+      "src": "C:\\Users\\edupo\\Desktop\\ContentEngine\\output\\downloads\\rickyedit_enqljvcbhos.mp4",
+      "proxy": "C:\\Users\\edupo\\Desktop\\ContentEngine\\output\\proxies\\e0c4b371-2275-4cce-851b-a7cd1b55b13a_proxy.mp4",
+      "original": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\original\\Rickyedit_2a3e3755_original.mp4",
+        "render_s": 69.13
+      },
+      "v1_1": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\v1_1\\Rickyedit_2a3e3755_v1_1.mp4",
+        "plan_s": 0.81,
+        "render_s": 54.74,
+        "mode": "split_layout",
+        "filter_version": "v11"
+      },
+      "v1_2_repair": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\v1_2_repair\\Rickyedit_2a3e3755_v1_2_repair.mp4",
+        "plan_s": 2.28,
+        "render_s": 70.81,
+        "mode": "face_focus",
+        "filter_version": "v12_repair",
+        "split_fraction": 0.55,
+        "dominant_scene": "conversation",
+        "scene_count": 1,
+        "segment_decisions_count": 1,
+        "hud_count": 6
+      }
+    },
+    {
+      "name": "IlloJuan_04b85e28",
+      "creator": "illojuan",
+      "start_s": 10413.83,
+      "end_s": 10450.2,
+      "src": "C:\\Users\\edupo\\Desktop\\ContentEngine\\output\\downloads\\illojuan_dvaj_nsxml0.mp4",
+      "proxy": "C:\\Users\\edupo\\Desktop\\ContentEngine\\output\\proxies\\f53b0c65-60b5-46cd-81ad-f78410b52975_proxy.mp4",
+      "original": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\original\\IlloJuan_04b85e28_original.mp4",
+        "render_s": 27.31
+      },
+      "v1_1": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\v1_1\\IlloJuan_04b85e28_v1_1.mp4",
+        "plan_s": 0.81,
+        "render_s": 28.6,
+        "mode": "split_layout",
+        "filter_version": "v11"
+      },
+      "v1_2_repair": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\v1_2_repair\\IlloJuan_04b85e28_v1_2_repair.mp4",
+        "plan_s": 2.26,
+        "render_s": 31.27,
+        "mode": "split_layout",
+        "filter_version": "v12_repair",
+        "split_fraction": 0.55,
+        "dominant_scene": "loading_or_transition",
+        "scene_count": 4,
+        "segment_decisions_count": 4,
+        "hud_count": 1
+      }
+    },
+    {
+      "name": "IlloJuan_41bd5f73",
+      "creator": "illojuan",
+      "start_s": 8994.85,
+      "end_s": 9031.05,
+      "src": "C:\\Users\\edupo\\Desktop\\ContentEngine\\output\\downloads\\illojuan_dvaj_nsxml0.mp4",
+      "proxy": "C:\\Users\\edupo\\Desktop\\ContentEngine\\output\\proxies\\f53b0c65-60b5-46cd-81ad-f78410b52975_proxy.mp4",
+      "original": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\original\\IlloJuan_41bd5f73_original.mp4",
+        "render_s": 48.65
+      },
+      "v1_1": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\v1_1\\IlloJuan_41bd5f73_v1_1.mp4",
+        "plan_s": 0.99,
+        "render_s": 43.93,
+        "mode": "split_layout",
+        "filter_version": "v11"
+      },
+      "v1_2_repair": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\v1_2_repair\\IlloJuan_41bd5f73_v1_2_repair.mp4",
+        "plan_s": 2.72,
+        "render_s": 45.2,
+        "mode": "split_layout",
+        "filter_version": "v12_repair",
+        "split_fraction": 0.55,
+        "dominant_scene": "static_gameplay",
+        "scene_count": 5,
+        "segment_decisions_count": 5,
+        "hud_count": 2
+      }
+    },
+    {
+      "name": "IlloJuan_d1378815",
+      "creator": "illojuan",
+      "start_s": 8978.85,
+      "end_s": 9014.93,
+      "src": "C:\\Users\\edupo\\Desktop\\ContentEngine\\output\\downloads\\illojuan_dvaj_nsxml0.mp4",
+      "proxy": "C:\\Users\\edupo\\Desktop\\ContentEngine\\output\\proxies\\f53b0c65-60b5-46cd-81ad-f78410b52975_proxy.mp4",
+      "original": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\original\\IlloJuan_d1378815_original.mp4",
+        "render_s": 37.17
+      },
+      "v1_1": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\v1_1\\IlloJuan_d1378815_v1_1.mp4",
+        "plan_s": 1.44,
+        "render_s": 35.04,
+        "mode": "split_layout",
+        "filter_version": "v11"
+      },
+      "v1_2_repair": {
+        "status": "ok",
+        "path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\experiments\\smart_reframing_v1_2_repair\\clips\\v1_2_repair\\IlloJuan_d1378815_v1_2_repair.mp4",
+        "plan_s": 2.44,
+        "render_s": 37.78,
+        "mode": "split_layout",
+        "filter_version": "v12_repair",
+        "split_fraction": 0.55,
+        "dominant_scene": "static_gameplay",
+        "scene_count": 6,
+        "segment_decisions_count": 6,
+        "hud_count": 1
+      }
+    }
+  ]
+}
