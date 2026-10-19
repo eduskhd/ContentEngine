@@ -329,6 +329,96 @@ async def url_info(url: str):
     }
 
 
+@app.get("/jobs/url-frame")
+async def get_url_frame(url: str, t: float = Query(10.0)):
+    """Extract a single frame from a video URL at timestamp t (no full download).
+    Returns: {frame_b64, src_width, src_height, t, frame_id}
+    """
+    import base64 as _b64
+    from pathlib import Path as _P
+    import uuid as _uuid
+
+    if not is_url(url):
+        raise HTTPException(400, "Invalid URL")
+    try:
+        validate_url(url)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+    # Get direct stream URL via yt-dlp (no download)
+    try:
+        import yt_dlp
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "noplaylist": True,
+            "format": "best[height<=720]/best",
+        }
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+
+        src_w = info.get("width") or 1920
+        src_h = info.get("height") or 1080
+
+        direct_url = None
+        if info.get("url"):
+            direct_url = info["url"]
+        elif info.get("formats"):
+            fmts = [f for f in info["formats"]
+                    if f.get("url") and f.get("vcodec", "none") != "none"
+                    and (f.get("height") or 9999) <= 720]
+            if fmts:
+                fmts.sort(key=lambda f: f.get("height") or 0, reverse=True)
+                direct_url = fmts[0]["url"]
+                src_w = fmts[0].get("width") or src_w
+                src_h = fmts[0].get("height") or src_h
+
+        if not direct_url:
+            raise HTTPException(422, "Could not extract direct stream URL")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(422, f"yt-dlp error: {str(exc)[:200]}")
+
+    preframe_dir = _P(CONFIG.output_dir) / "preframes"
+    preframe_dir.mkdir(parents=True, exist_ok=True)
+    frame_id = str(_uuid.uuid4())[:8]
+    out_jpg = preframe_dir / f"{frame_id}.jpg"
+
+    cmd = [
+        CONFIG.ffmpeg_path,
+        "-y", "-ss", str(t),
+        "-i", direct_url,
+        "-frames:v", "1",
+        "-q:v", "3",
+        str(out_jpg),
+    ]
+    try:
+        r = subprocess.run(cmd, capture_output=True, timeout=30)
+        if r.returncode != 0 or not out_jpg.exists():
+            cmd2 = [CONFIG.ffmpeg_path, "-y", "-ss", str(t), "-i", direct_url,
+                    "-frames:v", "1", "-q:v", "3", str(out_jpg)]
+            r2 = subprocess.run(cmd2, capture_output=True, timeout=30)
+            if r2.returncode != 0 or not out_jpg.exists():
+                raise HTTPException(500, f"Frame extraction failed: {r2.stderr.decode()[-300:]}")
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "Frame extraction timed out (30s)")
+
+    jpeg_bytes = out_jpg.read_bytes()
+    try:
+        out_jpg.unlink()
+    except Exception:
+        pass
+
+    return {
+        "frame_b64": _b64.b64encode(jpeg_bytes).decode(),
+        "src_width": src_w,
+        "src_height": src_h,
+        "t": t,
+        "frame_id": frame_id,
+    }
+
+
 @app.get("/jobs/url-check")
 async def url_check(url: str):
     """Check if a URL already exists in the library (duplicate detection)."""
@@ -4395,6 +4485,257 @@ async def get_job_streamer_analysis(job_id: str):
         "v2_enabled": CONFIG.streamer_scoring_v2_enabled,
         "candidates": results,
     }
+
+
+# ── CROP CONFIGS ─────────────────────────────────────────────────────────────
+
+@app.get("/jobs/{job_id}/frame")
+async def get_job_frame(job_id: str, t: float = Query(5.0)):
+    """Extract a JPEG frame from the job's source video at timestamp t (seconds).
+    Returns JSON: {frame_b64, src_width, src_height, t}
+    """
+    import base64 as _b64, tempfile as _tmp
+    conn = dbmod.get_db()
+    row = conn.execute("SELECT source_path FROM jobs WHERE id=?", [job_id]).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "Job not found")
+    source_path = row[0] if isinstance(row, (list, tuple)) else row["source_path"]
+    if not source_path or source_path.startswith("http"):
+        raise HTTPException(422, "Frame extraction not available for URL sources — use thumbnail")
+    if not Path(source_path).exists():
+        raise HTTPException(404, "Source file not found on disk")
+
+    # Probe dimensions
+    probe_cmd = [
+        CONFIG.ffprobe_path, "-v", "quiet", "-print_format", "json",
+        "-show_streams", source_path,
+    ]
+    pr = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
+    src_w = src_h = 0
+    if pr.returncode == 0:
+        import json as _j
+        pdata = _j.loads(pr.stdout)
+        for s in pdata.get("streams", []):
+            if s.get("codec_type") == "video":
+                src_w = s.get("width", 0)
+                src_h = s.get("height", 0)
+                break
+
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
+        tmp_path = tf.name
+    try:
+        cmd = [
+            CONFIG.ffmpeg_path, "-y",
+            "-ss", str(t), "-i", source_path,
+            "-frames:v", "1", "-f", "image2", "-vcodec", "mjpeg",
+            tmp_path,
+        ]
+        r = subprocess.run(cmd, capture_output=True, timeout=30)
+        if r.returncode != 0 or not Path(tmp_path).exists():
+            raise HTTPException(500, "Frame extraction failed")
+        frame_bytes = Path(tmp_path).read_bytes()
+    finally:
+        try:
+            Path(tmp_path).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    return {
+        "frame_b64": _b64.b64encode(frame_bytes).decode(),
+        "src_width": src_w,
+        "src_height": src_h,
+        "t": t,
+    }
+
+
+@app.post("/crop-configs")
+async def save_crop_config(body: dict = Body(...)):
+    """Save or replace crop config for a job."""
+    job_id = body.get("job_id")
+    if not job_id:
+        raise HTTPException(400, "job_id required")
+    # Verify job exists
+    conn = dbmod.get_db()
+    row = conn.execute("SELECT id FROM jobs WHERE id=?", [job_id]).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, f"Job {job_id} not found")
+
+    video_type = body.get("video_type", "other")
+    crop_mode = body.get("crop_mode", "auto")
+    src_w = body.get("src_width")
+    src_h = body.get("src_height")
+    gameplay_rect = body.get("gameplay_rect")
+    facecam_rect = body.get("facecam_rect")
+    split_fraction = float(body.get("split_fraction", 0.5))
+    validation_status = body.get("validation_status", "pending")
+
+    if crop_mode == "manual":
+        if not gameplay_rect or len(gameplay_rect) != 4:
+            raise HTTPException(400, "gameplay_rect [x,y,w,h] required for manual mode")
+        if not facecam_rect or len(facecam_rect) != 4:
+            raise HTTPException(400, "facecam_rect [x,y,w,h] required for manual mode")
+        for name, rect in [("gameplay_rect", gameplay_rect), ("facecam_rect", facecam_rect)]:
+            for v in rect:
+                if not (0.0 <= v <= 1.0):
+                    raise HTTPException(400, f"{name} values must be 0.0-1.0, got {v}")
+            if rect[2] <= 0 or rect[3] <= 0:
+                raise HTTPException(400, f"{name} w and h must be > 0")
+
+    cfg_id = dbmod.create_crop_config(
+        job_id, video_type, crop_mode, src_w, src_h,
+        gameplay_rect=gameplay_rect, facecam_rect=facecam_rect,
+        split_fraction=split_fraction, validation_status=validation_status,
+    )
+    return {"id": cfg_id}
+
+
+@app.get("/crop-configs/by-job/{job_id}")
+async def get_crop_config_by_job(job_id: str):
+    """Get crop config for a job."""
+    cfg = dbmod.get_crop_config(job_id)
+    if not cfg:
+        raise HTTPException(404, "No crop config for this job")
+    return cfg
+
+
+@app.post("/crop-configs/{cfg_id}/validate")
+async def validate_crop_config(cfg_id: str):
+    """Mark crop config as validated."""
+    dbmod.update_crop_config_validation(cfg_id, "validated")
+    return {"ok": True}
+
+
+@app.post("/crop-configs/preview-file")
+async def preview_crop_file(
+    file: UploadFile = File(...),
+    gameplay_rect: str = Form(...),
+    facecam_rect: str = Form(...),
+    src_width: int = Form(...),
+    src_height: int = Form(...),
+    t_start: float = Form(10.0),
+    split_fraction: float = Form(0.5),
+):
+    """Generate a 5-second preview render from an uploaded file + manual crop regions."""
+    import json as _json
+    gp = _json.loads(gameplay_rect)
+    fc = _json.loads(facecam_rect)
+
+    preview_id = str(uuid.uuid4())
+    tmp_dir = Path(CONFIG.output_dir) / "previews"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    tmp_src = tmp_dir / f"{preview_id}_src_tmp"
+    out_path = tmp_dir / f"{preview_id}.mp4"
+
+    content = await file.read()
+    with open(tmp_src, "wb") as f:
+        f.write(content)
+
+    try:
+        from engine.renderers.render_clip import _compute_split_layout_filter_manual as _csf
+        main_region = [gp[0] * src_width, gp[1] * src_height, gp[2] * src_width, gp[3] * src_height]
+        sec_region = [fc[0] * src_width, fc[1] * src_height, fc[2] * src_width, fc[3] * src_height]
+        filt = _csf(main_region, sec_region, src_width, src_height, top_fraction=split_fraction)
+
+        # split_layout filters use filter_complex + map, not -vf
+        cmd = [
+            CONFIG.ffmpeg_path,
+            "-y", "-ss", str(t_start), "-t", "5",
+            "-i", str(tmp_src),
+            "-filter_complex", filt,
+            "-map", "[out]",
+            "-map", "0:a?",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+            "-c:a", "aac", "-b:a", "128k",
+            str(out_path),
+        ]
+        r = subprocess.run(cmd, capture_output=True, timeout=120)
+        if r.returncode != 0:
+            raise HTTPException(500, f"FFmpeg failed: {r.stderr.decode()[-500:]}")
+    finally:
+        try:
+            tmp_src.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    return {"preview_url": f"/static/previews/{preview_id}.mp4", "preview_id": preview_id}
+
+
+@app.post("/crop-configs/preview-url")
+async def preview_crop_url(body: dict = Body(...)):
+    """Generate a 5-second preview render from a URL + manual crop regions.
+    Body: {url, gameplay_rect [x,y,w,h] normalized, facecam_rect, src_width, src_height, t_start, split_fraction}
+    """
+    url = body.get("url", "")
+    if not url or not is_url(url):
+        raise HTTPException(400, "Invalid URL")
+    try:
+        validate_url(url)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+    gp = body.get("gameplay_rect", [])
+    fc = body.get("facecam_rect", [])
+    if len(gp) != 4 or len(fc) != 4:
+        raise HTTPException(400, "gameplay_rect and facecam_rect must be [x,y,w,h] normalized")
+
+    src_w = int(body.get("src_width", 1920))
+    src_h = int(body.get("src_height", 1080))
+    t_start = float(body.get("t_start", 10))
+    split_fraction = float(body.get("split_fraction", 0.5))
+
+    # Get direct stream URL via yt-dlp
+    try:
+        import yt_dlp
+        opts = {"quiet": True, "no_warnings": True, "noplaylist": True,
+                "format": "best[height<=720]/best"}
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+        direct_url = info.get("url")
+        if not direct_url and info.get("formats"):
+            fmts = [f for f in info["formats"]
+                    if f.get("url") and f.get("vcodec", "none") != "none"
+                    and (f.get("height") or 9999) <= 720]
+            if fmts:
+                fmts.sort(key=lambda f: f.get("height") or 0, reverse=True)
+                direct_url = fmts[0]["url"]
+        if not direct_url:
+            raise HTTPException(422, "Could not extract stream URL")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(422, str(exc)[:200])
+
+    preview_id = str(uuid.uuid4())
+    preview_dir = Path(CONFIG.output_dir) / "previews"
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    out_path = preview_dir / f"{preview_id}.mp4"
+
+    from engine.renderers.render_clip import _compute_split_layout_filter_manual as _csf_url
+    main_region = [gp[0] * src_w, gp[1] * src_h, gp[2] * src_w, gp[3] * src_h]
+    sec_region = [fc[0] * src_w, fc[1] * src_h, fc[2] * src_w, fc[3] * src_h]
+    filt = _csf_url(main_region, sec_region, src_w, src_h, top_fraction=split_fraction)
+
+    cmd = [
+        CONFIG.ffmpeg_path, "-y",
+        "-ss", str(t_start), "-t", "5",
+        "-i", direct_url,
+        "-filter_complex", filt,
+        "-map", "[out]",
+        "-map", "0:a?",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+        "-c:a", "aac", "-b:a", "128k",
+        str(out_path),
+    ]
+    r = subprocess.run(cmd, capture_output=True, timeout=120)
+    if r.returncode != 0:
+        raise HTTPException(500, f"FFmpeg failed: {r.stderr.decode()[-400:]}")
+
+    return {"preview_url": f"/static/previews/{preview_id}.mp4", "preview_id": preview_id}
+
+
+app.mount("/static", StaticFiles(directory=CONFIG.output_dir), name="static")
 
 
 # ── DASHBOARD ────────────────────────────────────────────────────────────────

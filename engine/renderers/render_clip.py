@@ -27,7 +27,7 @@ from engine.hw_accel import detect_encoder
 from engine.captions.extractor import extract_clip_words
 from engine.captions.presets import default_settings
 from engine.captions.renderer import build_ass
-from engine.reframe.planner import plan_clip, plan_clip_v2
+from engine.reframe.planner import plan_clip, plan_clip_v2, plan_clip_v3, plan_clip_v3_1, plan_clip_v3_2
 
 TARGET_W, TARGET_H = CONFIG.target_resolution  # (1080, 1920)
 
@@ -46,6 +46,7 @@ def render_clips_onepass(
     src_h: int,
     output_subdir: str = "clips",
     proxy_path: str | None = None,
+    crop_config: dict | None = None,
 ) -> list[str]:
     """
     Render all finalist clips in a single FFmpeg pass per clip (trim+crop+caption).
@@ -91,6 +92,7 @@ def render_clips_onepass(
                 _render_one,
                 source, cand, out_path, words, caption_settings,
                 encoder, enc_opts, job_id, src_w, src_h, proxy_path,
+                crop_config,
             ): (idx, cand)
             for idx, cand, out_path in tasks
         }
@@ -124,25 +126,64 @@ def _render_one(
     src_w: int,
     src_h: int,
     proxy_path: str | None = None,
+    crop_config: dict | None = None,
 ) -> str | None:
     """Render a single clip. Returns clip_id on success, None on failure."""
     start_s = float(cand["start_s"])
     end_s = float(cand["end_s"])
     duration = end_s - start_s
 
+    # ── Manual crop config takes priority over planner ───────────────────────
+    framing_plan = None
+    if (crop_config
+            and crop_config.get("crop_mode") == "manual"
+            and crop_config.get("validation_status") in ("validated", "confirmed_no_preview")
+            and crop_config.get("gameplay_x") is not None
+            and crop_config.get("facecam_x") is not None):
+        cw = crop_config.get("src_width") or src_w
+        ch = crop_config.get("src_height") or src_h
+        framing_plan = {
+            "composition_mode": "split_layout",
+            "filter_version": "v12",
+            "version": 3.4,
+            "preset": "GAMING_MANUAL_SPLIT_50",
+            "main_region": [
+                crop_config["gameplay_x"] * cw,
+                crop_config["gameplay_y"] * ch,
+                crop_config["gameplay_w"] * cw,
+                crop_config["gameplay_h"] * ch,
+            ],
+            "secondary_region": [
+                crop_config["facecam_x"] * cw,
+                crop_config["facecam_y"] * ch,
+                crop_config["facecam_w"] * cw,
+                crop_config["facecam_h"] * ch,
+            ],
+            "v12": {
+                "split_fraction": crop_config.get("split_fraction", 0.5),
+            },
+        }
+
     # ── Framing plan: reuse stored plan or generate a new one ────────────────
-    fp_json = cand.get("framing_plan")
-    if fp_json:
-        try:
-            framing_plan = json.loads(fp_json)
-        except Exception:
-            framing_plan = None
-    else:
-        framing_plan = None
+    if framing_plan is None:
+        fp_json = cand.get("framing_plan")
+        if fp_json:
+            try:
+                framing_plan = json.loads(fp_json)
+            except Exception:
+                framing_plan = None
 
     if framing_plan is None and proxy_path:
         try:
-            framing_plan = plan_clip_v2(proxy_path, start_s, end_s, src_w, src_h)
+            if CONFIG.smart_reframing_enabled:
+                if CONFIG.smart_reframing_version == 32:
+                    framing_plan = plan_clip_v3_2(proxy_path, start_s, end_s, src_w, src_h)
+                elif CONFIG.smart_reframing_version == 31:
+                    framing_plan = plan_clip_v3_1(proxy_path, start_s, end_s, src_w, src_h)
+                else:
+                    framing_plan = plan_clip_v3(proxy_path, start_s, end_s, src_w, src_h)
+            else:
+                framing_plan = plan_clip_v2(proxy_path, start_s, end_s, src_w, src_h)
             # Persist so re-renders can reuse without re-analyzing
             with db.db() as _conn:
                 _conn.execute(
@@ -150,14 +191,57 @@ def _render_one(
                     (json.dumps(framing_plan), cand["id"]),
                 )
         except Exception as _fp_err:
-            print(f"  [reframe] plan_clip_v2 failed, using center crop: {_fp_err}")
+            print(f"  [reframe] plan_clip failed, using center crop: {_fp_err}")
             framing_plan = None
 
-    # Build crop filter — use keypoints for dynamic scene-aware framing (v2 plan)
-    if framing_plan and not framing_plan.get("fallback"):
+    # Build crop filter — use composition mode when available (v3/v3.1), else keypoints (v2/v1)
+    split_layout_filter: str | None = None
+    plan_version = framing_plan.get("version", 1) if framing_plan else 1
+    filter_ver = framing_plan.get("filter_version", "") if framing_plan else ""
+    is_v12 = filter_ver == "v12"
+    is_v11 = filter_ver == "v11"
+    if framing_plan and (isinstance(plan_version, (int, float)) and plan_version >= 3):
+        comp_mode = framing_plan.get("composition_mode", "center")
+        if (comp_mode == "split_layout"
+                and framing_plan.get("main_region")
+                and framing_plan.get("secondary_region")):
+            if framing_plan.get("preset") == "GAMING_MANUAL_SPLIT_50":
+                v12_data = framing_plan.get("v12", {})
+                top_frac = v12_data.get("split_fraction", 0.50)
+                split_layout_filter = _compute_split_layout_filter_manual(
+                    framing_plan["main_region"],
+                    framing_plan["secondary_region"],
+                    src_w, src_h,
+                    top_fraction=top_frac,
+                )
+            elif is_v12:
+                # V1.2: AR-safe filter with adaptive split fraction
+                v12_data = framing_plan.get("v12", {})
+                top_frac = v12_data.get("split_fraction", 0.60)
+                split_layout_filter = _compute_split_layout_filter_v12(
+                    framing_plan["main_region"],
+                    framing_plan["secondary_region"],
+                    src_w, src_h,
+                    top_fraction=top_frac,
+                )
+            elif is_v11:
+                split_layout_filter = _compute_split_layout_filter_v11(
+                    framing_plan["main_region"],
+                    framing_plan["secondary_region"],
+                    src_w, src_h,
+                )
+            else:
+                split_layout_filter = _compute_split_layout_filter(
+                    framing_plan["main_region"],
+                    framing_plan["secondary_region"],
+                    src_w, src_h,
+                )
+
+    if split_layout_filter:
+        crop_filter = split_layout_filter
+    elif framing_plan and not framing_plan.get("fallback"):
         x_offset = framing_plan.get("x_offset")
         kp = framing_plan.get("keypoints") or []
-        # Only use dynamic expression when there are meaningful distinct positions
         use_dynamic = (
             framing_plan.get("version", 1) >= 2
             and len(kp) > 1
@@ -263,25 +347,60 @@ def _run_ffmpeg(
     enc_opts: list[str],
     out_path: str,
 ) -> bool:
-    """Single FFmpeg call: trim + crop/scale + optional caption burn."""
-    if ass_path:
-        safe_ass = ass_path.replace("\\", "/").replace(":", "\\:")
-        vf = f"{crop_filter},ass='{safe_ass}'"
-    else:
-        vf = crop_filter
+    """Single FFmpeg call: trim + crop/scale + optional caption burn.
 
-    cmd = [
-        CONFIG.ffmpeg_path, "-y",
-        "-ss", str(start_s),
-        "-i", source,
-        "-t", str(duration),
-        "-vf", vf,
-        "-c:v", encoder,
-    ] + enc_opts + [
-        "-c:a", "aac", "-b:a", "192k",
-        "-movflags", "+faststart",
-        out_path,
-    ]
+    When crop_filter contains [out] it is treated as a filter_complex graph
+    (used for SPLIT_LAYOUT mode) and -filter_complex + -map is used instead
+    of -vf.  ASS captions are applied as a vf overlay after the complex filter.
+    """
+    is_complex = "[out]" in crop_filter
+
+    if is_complex:
+        # SPLIT_LAYOUT: filter_complex graph → captions applied in second pass
+        # For simplicity, add ASS as an overlay after vstack if available
+        if ass_path:
+            safe_ass = ass_path.replace("\\", "/").replace(":", "\\:")
+            # Replace final [out] sink with an ass filter before the output
+            filter_graph = crop_filter.replace(
+                "[out]", f"[stacked];[stacked]ass='{safe_ass}'[out]"
+            )
+        else:
+            filter_graph = crop_filter
+
+        cmd = [
+            CONFIG.ffmpeg_path, "-y",
+            "-ss", str(start_s),
+            "-i", source,
+            "-t", str(duration),
+            "-filter_complex", filter_graph,
+            "-map", "[out]",
+            "-map", "0:a?",
+            "-c:v", encoder,
+        ] + enc_opts + [
+            "-c:a", "aac", "-b:a", "192k",
+            "-movflags", "+faststart",
+            out_path,
+        ]
+    else:
+        if ass_path:
+            safe_ass = ass_path.replace("\\", "/").replace(":", "\\:")
+            vf = f"{crop_filter},ass='{safe_ass}'"
+        else:
+            vf = crop_filter
+
+        cmd = [
+            CONFIG.ffmpeg_path, "-y",
+            "-ss", str(start_s),
+            "-i", source,
+            "-t", str(duration),
+            "-vf", vf,
+            "-c:v", encoder,
+        ] + enc_opts + [
+            "-c:a", "aac", "-b:a", "192k",
+            "-movflags", "+faststart",
+            out_path,
+        ]
+
     result = subprocess.run(cmd, capture_output=True, timeout=300)
     return result.returncode == 0
 
@@ -399,6 +518,170 @@ def _build_keypoint_expr(
         this_x = clamped[i][1]
         expr = f"if(lt(t\\,{boundary_t:.3f})\\,{this_x}\\,{expr})"
     return expr
+
+
+def _compute_split_layout_filter(
+    main_region: list,
+    secondary_region: list,
+    src_w: int,
+    src_h: int,
+) -> str:
+    """Build FFmpeg filter for SPLIT_LAYOUT: gameplay top 60%, facecam bottom 40%.
+
+    main_region      = [x, y, w, h] of gameplay crop in source pixels
+    secondary_region = [x, y, w, h] of facecam crop in source pixels
+    Output: 1080x1920 (9:16) with gameplay scaled to top 1080x1152 and
+            facecam scaled to bottom 1080x768, stacked vertically.
+    """
+    gx, gy, gw, gh = (int(v) for v in main_region)
+    fx, fy, fw, fh = (int(v) for v in secondary_region)
+
+    # Guard: ensure regions fit in source frame
+    gx = max(0, min(gx, src_w - 1))
+    gy = max(0, min(gy, src_h - 1))
+    gw = max(1, min(gw, src_w - gx))
+    gh = max(1, min(gh, src_h - gy))
+    fx = max(0, min(fx, src_w - 1))
+    fy = max(0, min(fy, src_h - 1))
+    fw = max(1, min(fw, src_w - fx))
+    fh = max(1, min(fh, src_h - fy))
+
+    top_h = int(TARGET_H * 0.60)    # 1152
+    bot_h = TARGET_H - top_h        # 768
+
+    # Ensure even dimensions for codec compatibility
+    top_h = top_h - (top_h % 2)
+    bot_h = TARGET_H - top_h
+
+    return (
+        f"[0:v]split=2[main][face];"
+        f"[main]crop={gw}:{gh}:{gx}:{gy},scale={TARGET_W}:{top_h}[v0];"
+        f"[face]crop={fw}:{fh}:{fx}:{fy},scale={TARGET_W}:{bot_h}[v1];"
+        f"[v0][v1]vstack=inputs=2[out]"
+    )
+
+
+def _compute_split_layout_filter_v11(
+    main_region: list,
+    secondary_region: list,
+    src_w: int,
+    src_h: int,
+    top_fraction: float = 0.60,
+) -> str:
+    """V1.1 SPLIT_LAYOUT filter with aspect-ratio-safe scaling.
+
+    Gameplay (top portion): scale to fill + center-crop — no distortion, no black bars.
+    Facecam  (bot portion): scale to fit + pad       — face preserved, pillarbox if needed.
+
+    top_fraction: fraction of TARGET_H allocated to gameplay (default 0.60 = 1152px).
+    """
+    gx, gy, gw, gh = (int(v) for v in main_region)
+    fx, fy, fw, fh = (int(v) for v in secondary_region)
+
+    # Clamp regions to source frame
+    gx = max(0, min(gx, src_w - 1))
+    gy = max(0, min(gy, src_h - 1))
+    gw = max(1, min(gw, src_w - gx))
+    gh = max(1, min(gh, src_h - gy))
+    fx = max(0, min(fx, src_w - 1))
+    fy = max(0, min(fy, src_h - 1))
+    fw = max(1, min(fw, src_w - fx))
+    fh = max(1, min(fh, src_h - fy))
+
+    top_h = int(TARGET_H * top_fraction)
+    top_h = top_h - (top_h % 2)          # ensure even for codec
+    bot_h = TARGET_H - top_h
+    bot_h = bot_h - (bot_h % 2)
+
+    # Gameplay: scale to fill (increase AR), then center-crop to exact dimensions
+    gameplay_filter = (
+        f"crop={gw}:{gh}:{gx}:{gy},"
+        f"scale={TARGET_W}:{top_h}:force_original_aspect_ratio=increase,"
+        f"crop={TARGET_W}:{top_h}"
+    )
+
+    # Facecam: scale to fit (decrease AR), then pad to exact dimensions
+    facecam_filter = (
+        f"crop={fw}:{fh}:{fx}:{fy},"
+        f"scale={TARGET_W}:{bot_h}:force_original_aspect_ratio=decrease,"
+        f"pad={TARGET_W}:{bot_h}:(ow-iw)/2:(oh-ih)/2:black"
+    )
+
+    return (
+        f"[0:v]split=2[main][face];"
+        f"[main]{gameplay_filter}[v0];"
+        f"[face]{facecam_filter}[v1];"
+        f"[v0][v1]vstack=inputs=2[out]"
+    )
+
+
+def _compute_split_layout_filter_v12(
+    main_region: list,
+    secondary_region: list,
+    src_w: int,
+    src_h: int,
+    top_fraction: float = 0.60,
+) -> str:
+    """V1.2 SPLIT_LAYOUT filter — same AR-safe approach as V1.1 with adaptive fraction.
+
+    The split fraction is chosen by scene_analyzer.adaptive_split_fraction() and
+    stored in the framing plan's v12.split_fraction field.  This function applies it.
+
+    Gameplay (top): scale-fill + center-crop (no distortion, no black bars).
+    Facecam  (bot): scale-fit + pad with black (face preserved, possible pillarbox).
+    """
+    # Delegate to v11 filter with the adaptive top_fraction
+    return _compute_split_layout_filter_v11(
+        main_region, secondary_region, src_w, src_h, top_fraction=top_fraction
+    )
+
+
+def _compute_split_layout_filter_manual(
+    main_region: list,
+    secondary_region: list,
+    src_w: int,
+    src_h: int,
+    top_fraction: float = 0.50,
+) -> str:
+    """MANUAL mode: FIT (scale-to-fit + pad) for BOTH regions.
+
+    Preserves ALL selected pixels — no edge cropping.
+    Black bars added when selected region AR doesn't match the slot.
+    """
+    gx, gy, gw, gh = (int(v) for v in main_region)
+    fx, fy, fw, fh = (int(v) for v in secondary_region)
+
+    gx = max(0, min(gx, src_w - 1))
+    gy = max(0, min(gy, src_h - 1))
+    gw = max(1, min(gw, src_w - gx))
+    gh = max(1, min(gh, src_h - gy))
+    fx = max(0, min(fx, src_w - 1))
+    fy = max(0, min(fy, src_h - 1))
+    fw = max(1, min(fw, src_w - fx))
+    fh = max(1, min(fh, src_h - fy))
+
+    top_h = int(TARGET_H * top_fraction)
+    top_h = top_h - (top_h % 2)
+    bot_h = TARGET_H - top_h
+    bot_h = bot_h - (bot_h % 2)
+
+    gameplay_filter = (
+        f"crop={gw}:{gh}:{gx}:{gy},"
+        f"scale={TARGET_W}:{top_h}:force_original_aspect_ratio=decrease,"
+        f"pad={TARGET_W}:{top_h}:(ow-iw)/2:(oh-ih)/2:black"
+    )
+    facecam_filter = (
+        f"crop={fw}:{fh}:{fx}:{fy},"
+        f"scale={TARGET_W}:{bot_h}:force_original_aspect_ratio=decrease,"
+        f"pad={TARGET_W}:{bot_h}:(ow-iw)/2:(oh-ih)/2:black"
+    )
+
+    return (
+        f"[0:v]split=2[main][face];"
+        f"[main]{gameplay_filter}[v0];"
+        f"[face]{facecam_filter}[v1];"
+        f"[v0][v1]vstack=inputs=2[out]"
+    )
 
 
 def _probe(path: str) -> dict:

@@ -574,6 +574,50 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 .nj-submit-btn{width:100%;padding:12px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:all .15s;margin-top:4px}
 .nj-submit-btn:hover:not(:disabled){background:#2563eb}
 .nj-submit-btn:disabled{background:#1a2535;color:#2a4a7a;cursor:not-allowed}
+/* ── Crop Setup ─────────────────────────────────────────────────────────── */
+.nj-video-type-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:0}
+.nj-vtype-btn{padding:6px 14px;border-radius:20px;border:1px solid #333;background:#1a1a1a;color:#aaa;font-size:12px;cursor:pointer;transition:all .15s}
+.nj-vtype-btn.active{background:#1e3a5f;border-color:#3b82f6;color:#fff}
+.nj-crop-section{background:#111;border:1px solid #1e3a5f;border-radius:10px;padding:16px;margin-top:16px}
+.nj-crop-section-title{font-size:12px;font-weight:600;color:#3b82f6;margin-bottom:12px;text-transform:uppercase;letter-spacing:.05em}
+.nj-crop-mode-row{display:flex;gap:8px;margin-bottom:14px}
+.nj-crop-mode-btn{flex:1;padding:7px;border-radius:7px;border:1px solid #333;background:#1a1a1a;color:#aaa;font-size:12px;cursor:pointer;text-align:center;transition:all .15s}
+.nj-crop-mode-btn.active{background:#1e3a5f;border-color:#3b82f6;color:#fff}
+.nj-canvas-wrap{position:relative;width:100%;border-radius:8px;overflow:hidden;background:#000;cursor:crosshair}
+.nj-canvas-wrap video,.nj-canvas-wrap canvas{display:block;width:100%;height:auto}
+.nj-canvas-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+.nj-frame-seek{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:12px;color:#888}
+.nj-frame-seek input[type=range]{flex:1;accent-color:#3b82f6}
+.nj-region-legend{display:flex;gap:14px;margin-top:8px;font-size:11px}
+.nj-region-dot{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:4px}
+.nj-crop-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.nj-crop-actions button{padding:7px 14px;border-radius:6px;font-size:12px;cursor:pointer;border:none}
+.nj-btn-preview{background:#1e3a5f;color:#fff;border:1px solid #3b82f6 !important}
+.nj-btn-preview:hover{background:#2a4a6f}
+.nj-btn-reset{background:#2a1a1a;color:#f87171;border:1px solid #7f1d1d !important}
+.nj-crop-status{margin-top:8px;font-size:11px;padding:6px 10px;border-radius:5px;display:none}
+.nj-crop-status.ok{background:#0a2a0a;color:#4ade80;display:block}
+.nj-crop-status.warn{background:#2a1a0a;color:#f59e0b;display:block}
+.nj-crop-status.err{background:#2a0a0a;color:#f87171;display:block}
+.nj-preview-video-wrap{margin-top:10px;display:none}
+.nj-preview-video-wrap video{width:100%;max-height:300px;border-radius:6px;background:#000}
+/* ── Pre-job URL crop ─────────────────────────────────────────────────── */
+.nj-pregame-wrap{margin-top:14px;display:none}
+.nj-pregame-wrap.visible{display:block}
+.nj-frame-img-wrap{position:relative;width:100%;border-radius:8px;overflow:hidden;background:#111;cursor:crosshair;min-height:80px}
+.nj-frame-img-wrap img{display:block;width:100%;height:auto}
+.nj-frame-img-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+.nj-frame-load-row{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:#888}
+.nj-frame-load-row input[type=range]{flex:1;accent-color:#3b82f6}
+.nj-frame-load-btn{padding:5px 12px;background:#1e3a5f;border:1px solid #3b82f6;color:#fff;border-radius:5px;font-size:11px;cursor:pointer}
+.nj-frame-load-btn:disabled{opacity:.5;cursor:not-allowed}
+.nj-frame-spinner{display:none;width:14px;height:14px;border:2px solid #3b82f6;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+.nj-crop-confirm-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center}
+.nj-btn-confirm-crop{flex:1;padding:9px;background:#166534;border:1px solid #22c55e;color:#4ade80;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;display:none}
+.nj-btn-confirm-crop.visible{display:block}
+.nj-btn-confirm-crop.confirmed{background:#14532d;border-color:#15803d;color:#86efac}
+.nj-crop-confirmed-badge{font-size:11px;color:#4ade80;display:none;align-items:center;gap:4px}
+.nj-crop-confirmed-badge.visible{display:flex}
 </style>
 </head>
 <body>
@@ -964,6 +1008,51 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         <span id="nj-dup-text">This video already exists in your library.</span>
         <div class="nj-dup-links" id="nj-dup-links"></div>
       </div>
+
+      <!-- Pre-job gaming crop (URL mode) -->
+      <div class="nj-pregame-wrap" id="nj-url-crop-pregame">
+        <div class="nj-crop-section">
+          <div class="nj-crop-section-title">Gaming Crop Setup</div>
+          <div style="font-size:12px;color:#888;margin-bottom:10px">
+            Draw your regions on a real frame — no full download needed.
+          </div>
+          <div class="nj-frame-img-wrap" id="nj-url-frame-wrap">
+            <img id="nj-url-frame-img" src="" alt="Video frame" style="display:none">
+            <canvas id="nj-url-frame-canvas"></canvas>
+          </div>
+          <div class="nj-frame-load-row">
+            <span>At:</span>
+            <input type="range" id="nj-url-frame-slider" min="0" max="600" step="5" value="10"
+              oninput="document.getElementById('nj-url-frame-time').textContent=Math.round(this.value)+'s'">
+            <span id="nj-url-frame-time">10s</span>
+            <button class="nj-frame-load-btn" id="nj-url-load-frame-btn" onclick="njUrlLoadFrame()">Load frame</button>
+            <div class="nj-frame-spinner" id="nj-url-frame-spinner"></div>
+          </div>
+          <div id="nj-url-crop-step" style="font-size:12px;color:#60a5fa;margin:8px 0">
+            Step 1: Draw the <strong>Gameplay</strong> region (green)
+          </div>
+          <div class="nj-region-legend">
+            <span><span class="nj-region-dot" style="background:#22c55e"></span>Gameplay</span>
+            <span><span class="nj-region-dot" style="background:#3b82f6"></span>Facecam</span>
+          </div>
+          <div class="nj-crop-actions" style="margin-top:10px">
+            <button class="nj-btn-preview" id="nj-url-btn-preview" onclick="njUrlPreviewCrop()" disabled>Preview (5s)</button>
+            <button class="nj-btn-reset" onclick="njUrlResetCrop()">Reset</button>
+          </div>
+          <div class="nj-crop-confirm-row">
+            <button class="nj-btn-confirm-crop" id="nj-url-btn-confirm" onclick="njUrlConfirmCrop()">
+              ✓ Confirm Crop Setup
+            </button>
+            <div class="nj-crop-confirmed-badge" id="nj-url-crop-confirmed-badge">
+              <span>✓</span> Crop confirmed — ready to create job
+            </div>
+          </div>
+          <div class="nj-crop-status" id="nj-url-crop-status"></div>
+          <div class="nj-preview-video-wrap" id="nj-url-preview-wrap" style="display:none">
+            <video id="nj-url-preview-video" controls></video>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- File upload mode -->
@@ -1052,6 +1141,65 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         </div>
       </div>
     </details>
+
+    <!-- Video Type -->
+    <div class="nj-field" id="nj-vtype-field">
+      <label class="nj-label">Video Type <span class="nj-optional">optional</span></label>
+      <div class="nj-video-type-row">
+        <button class="nj-vtype-btn active" data-vtype="other"    onclick="njSetVideoType('other')">Auto</button>
+        <button class="nj-vtype-btn"        data-vtype="gaming"   onclick="njSetVideoType('gaming')">Gaming</button>
+        <button class="nj-vtype-btn"        data-vtype="talking"  onclick="njSetVideoType('talking')">Talking / Podcast</button>
+        <button class="nj-vtype-btn"        data-vtype="reaction" onclick="njSetVideoType('reaction')">Reaction</button>
+      </div>
+    </div>
+
+    <!-- Crop Setup (Gaming only) -->
+    <div id="nj-crop-setup" style="display:none">
+      <div class="nj-crop-section">
+        <div class="nj-crop-section-title">Crop Setup</div>
+        <div class="nj-crop-mode-row">
+          <button class="nj-crop-mode-btn active" data-cmode="auto"   onclick="njSetCropMode('auto')">Automatic</button>
+          <button class="nj-crop-mode-btn"        data-cmode="manual" onclick="njSetCropMode('manual')">Manual</button>
+        </div>
+
+        <!-- Manual crop area (file mode only) -->
+        <div id="nj-manual-crop-area" style="display:none">
+          <div id="nj-crop-step" style="font-size:12px;color:#60a5fa;margin-bottom:8px">Step 1: Draw the <strong>Gameplay</strong> region (green)</div>
+          <div class="nj-canvas-wrap" id="nj-canvas-wrap">
+            <video id="nj-crop-video" muted playsinline preload="metadata"></video>
+            <canvas id="nj-crop-canvas"></canvas>
+          </div>
+          <div class="nj-frame-seek">
+            <span>Frame:</span>
+            <input type="range" id="nj-seek-slider" min="0" max="100" step="0.1" value="10"
+              oninput="njSeekVideo(this.value)">
+            <span id="nj-seek-time">0s</span>
+          </div>
+          <div class="nj-region-legend">
+            <span><span class="nj-region-dot" style="background:#22c55e"></span>Gameplay</span>
+            <span><span class="nj-region-dot" style="background:#3b82f6"></span>Facecam</span>
+          </div>
+          <div class="nj-crop-actions">
+            <button class="nj-btn-preview" onclick="njPreviewCrop()" id="nj-btn-preview" disabled>Preview Crop (5s)</button>
+            <button class="nj-btn-reset" onclick="njResetCrop()">Reset</button>
+          </div>
+          <div class="nj-crop-status" id="nj-crop-status"></div>
+          <div class="nj-preview-video-wrap" id="nj-preview-video-wrap">
+            <video id="nj-preview-video" controls></video>
+          </div>
+        </div>
+
+        <!-- URL mode notice -->
+        <div id="nj-url-crop-notice" style="display:none;font-size:12px;color:#888;padding:8px 0">
+          Manual crop setup available after video download — use <strong>Edit Crop Setup</strong> in Library.
+        </div>
+
+        <!-- Auto mode notice -->
+        <div id="nj-auto-crop-notice" style="font-size:12px;color:#888;padding:4px 0">
+          Automatic mode: Smart Reframing will detect gameplay and facecam regions.
+        </div>
+      </div>
+    </div>
 
     <!-- Submit -->
     <button class="nj-submit-btn" id="nj-submit" onclick="njSubmit()" disabled>
@@ -3890,6 +4038,21 @@ async function showCreatorClips(creatorId) {
 
   let html = '';
 
+  // "Publicar todos" bar — shown when clips span multiple groups or mix grouped+ungrouped
+  const totalClips = clips.length;
+  const hasMultipleSources = groups.size > 1 || (groups.size >= 1 && ungrouped.length > 0);
+  if (hasMultipleSources && totalClips >= 2) {
+    const allClipIds = [...clips].sort((a,b)=>(a.start_s||0)-(b.start_s||0)).map(c=>c.id);
+    const safeIds = JSON.stringify(allClipIds);
+    html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#0a1a0a;border-radius:8px;border:1px solid #1a3a1a;margin-bottom:16px">
+      <span style="font-size:12px;color:#6ee7b7">${totalClips} clips disponibles (varios grupos)</span>
+      <button class="btn btn-success btn-sm" onclick="publishAllCreatorClips(${safeIds})"
+              style="font-size:12px;white-space:nowrap;background:#065f46">
+        Publicar todos (${totalClips})
+      </button>
+    </div>`;
+  }
+
   for (const g of sortedGroups) {
     const sid = g.id;
     const safeTitle = g.title.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
@@ -3994,6 +4157,38 @@ async function selectSeriesGroup(seriesId, seriesTitle) {
     toast('Error: ' + e.message, 'error');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Publicar paquete'; }
+  }
+}
+
+// Publish all clips from a creator regardless of series grouping (ordered by start_s)
+async function publishAllCreatorClips(clipIds) {
+  const btn = document.querySelector('[onclick^="publishAllCreatorClips"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Cargando…'; }
+  try {
+    if (!_ytStatus) await checkYoutubeStatus().catch(()=>{});
+    if (!(_ytStatus && _ytStatus.connected)) {
+      toast('Conecta YouTube primero (OAuth → YouTube)', 'error'); return;
+    }
+    const pubIds = [], displayItems = [];
+    for (const clipId of clipIds) {
+      try {
+        const prep = await api(`/clips/${clipId}/prepare`, {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({platforms: ['youtube_shorts']}),
+        });
+        const pubId = prep.created?.[0]?.pub_id || prep.skipped?.[0]?.pub_id;
+        if (pubId) {
+          pubIds.push(pubId);
+          displayItems.push({title: prep.metadata?.title || 'Clip', series_part: pubIds.length});
+        }
+      } catch(_) {}
+    }
+    if (!pubIds.length) { toast('No hay clips con archivo para publicar', 'error'); return; }
+    _openBatchUploadDirect(pubIds, displayItems, 'Todos los clips');
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = `Publicar todos (${clipIds.length})`; }
   }
 }
 
@@ -4107,6 +4302,7 @@ function renderVideoCards(videos, container, creatorId, _renderId) {
           ${status==='COMPLETED' && !clips ? `<button class="btn btn-primary btn-sm" onclick="openVideoJobs('${v.job_id||v.id}')">Generate</button>` : ''}
           ${status!=='COMPLETED' ? `<button class="btn btn-outline btn-sm" onclick="openVideoJobs('${v.job_id||v.id}')">Open</button>` : ''}
           ${vs ? `<span class="vc-score" style="color:${vsColor};background:#1a1a1a">▲${vs}</span>` : ''}
+          <button class="btn btn-outline btn-sm" style="color:#60a5fa;border-color:#1e3a5f;padding:4px 8px;font-size:11px" onclick="editCropSetup(‘${v.job_id||v.id}’)">Crop Setup</button>
           <button class="btn btn-outline btn-sm" style="margin-left:auto;color:#f87171;border-color:#f87171;padding:4px 8px" onclick="showDeleteConfirm([‘${v.id}’])">Delete</button>
         </div>
         ${creatorId ? `<div style="margin-top:6px">
@@ -5503,6 +5699,8 @@ function njSetSource(mode) {
     document.getElementById('nj-creator-suggest').style.display = 'none';
   }
   njUpdateSubmitState();
+  if (typeof njUpdateCropAreaVisibility === 'function') njUpdateCropAreaVisibility();
+  if (typeof njUrlResetCrop === 'function') njUrlResetCrop();
 }
 
 function njUrlChanged(val) {
@@ -5564,6 +5762,8 @@ async function njFetchMetadata(url) {
       document.getElementById('nj-creator-suggest').style.display = 'flex';
     }
     njCheckDuplicate(url);
+    njUrlShowCropIfNeeded();
+    if (_njVideoType === 'gaming' && _njCropMode === 'manual') njUrlInitCanvas();
     njUpdateSubmitState();
   } catch(e) {
     st.textContent = 'Cannot reach server';
@@ -5599,6 +5799,7 @@ function njFileSelected(input) {
   document.getElementById('nj-file-size-display').textContent = _njFmtSize(file.size);
   document.getElementById('nj-file-info').style.display = 'flex';
   njUpdateSubmitState();
+  if (typeof njUpdateCropAreaVisibility === 'function') njUpdateCropAreaVisibility();
 }
 
 function njDrop(e) {
@@ -5626,6 +5827,7 @@ function njClearFile() {
   document.getElementById('nj-file-input').value = '';
   document.getElementById('nj-file-info').style.display = 'none';
   njUpdateSubmitState();
+  if (typeof njUpdateCropAreaVisibility === 'function') njUpdateCropAreaVisibility();
 }
 
 function njApplyCreatorSuggest() {
@@ -5644,6 +5846,14 @@ function njUpdateSubmitState() {
   } else {
     enabled = !!_njSelectedFile;
   }
+  // Gaming manual URL mode: block until crop confirmed
+  const needsCropConfirm = (_njSource === 'url' && _njVideoType === 'gaming' && _njCropMode === 'manual' && _njMeta);
+  if (needsCropConfirm && !_njUrlCropConfirmed) {
+    btn.disabled = true;
+    btn.textContent = 'Confirm Crop Setup first';
+    return;
+  }
+  btn.textContent = 'Create Job';
   btn.disabled = !enabled;
 }
 
@@ -5680,6 +5890,7 @@ async function njSubmit() {
           video_name: videoName || undefined,
           language: language || undefined,
           eval_mode: evalMode,
+          video_type: _njVideoType !== 'other' ? _njVideoType : undefined,
         }),
       });
     } catch(e) { toast('Network error: ' + e.message, 'error'); btn.disabled = false; btn.textContent = 'Create Job'; return; }
@@ -5690,6 +5901,28 @@ async function njSubmit() {
     }
     const r = await resp.json();
     jobId = r.job_id; status = r.status;
+
+    // Save crop config for URL gaming manual mode
+    if (_njVideoType === 'gaming' && _njCropMode === 'manual'
+        && _njUrlCropState && _njUrlCropState.gameplay && _njUrlCropState.facecam) {
+      fetch(`${API}/crop-configs`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          job_id: jobId,
+          video_type: 'gaming',
+          crop_mode: 'manual',
+          src_width: _njUrlFrameSrcW,
+          src_height: _njUrlFrameSrcH,
+          gameplay_rect: [_njUrlCropState.gameplay.x, _njUrlCropState.gameplay.y,
+                          _njUrlCropState.gameplay.w, _njUrlCropState.gameplay.h],
+          facecam_rect:  [_njUrlCropState.facecam.x, _njUrlCropState.facecam.y,
+                          _njUrlCropState.facecam.w, _njUrlCropState.facecam.h],
+          split_fraction: 0.5,
+          validation_status: _njUrlPreviewValidated ? 'validated' : 'confirmed_no_preview',
+        }),
+      }).catch(() => {});
+    }
 
   } else {
     if (!_njSelectedFile) { toast('Select a video file', 'error'); btn.disabled = false; btn.textContent = 'Create Job'; return; }
@@ -5703,6 +5936,7 @@ async function njSubmit() {
     if (creatorId) fd.append('creator_id', creatorId);
     if (videoName) fd.append('video_name', videoName);
     if (language) fd.append('language', language);
+    if (_njVideoType && _njVideoType !== 'other') fd.append('video_type', _njVideoType);
     let resp;
     try {
       resp = await fetch(`${API}/jobs`, {method: 'POST', body: fd});
@@ -5718,6 +5952,32 @@ async function njSubmit() {
 
   toast('Job created!', 'success');
   btn.textContent = 'Create Job';
+
+  // Save crop config if manual gaming mode with both regions drawn
+  if (_njVideoType === 'gaming' && _njCropMode === 'manual'
+      && _njCropState.gameplay && _njCropState.facecam && _njSelectedFile) {
+    if (!_njPreviewValidated) {
+      njSetCropStatus('warn', 'Manual crop saved as pending — run Preview Crop to validate before clips are rendered with it.');
+    }
+    const cropVideo = document.getElementById('nj-crop-video');
+    const gpNorm = njCanvasToNorm(_njCropState.gameplay);
+    const fcNorm = njCanvasToNorm(_njCropState.facecam);
+    fetch(`${API}/crop-configs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        job_id: jobId,
+        video_type: 'gaming',
+        crop_mode: 'manual',
+        src_width: cropVideo.videoWidth,
+        src_height: cropVideo.videoHeight,
+        gameplay_rect: gpNorm,
+        facecam_rect: fcNorm,
+        split_fraction: 0.5,
+        validation_status: _njPreviewValidated ? 'validated' : 'pending',
+      }),
+    }).catch(() => {});
+  }
 
   // Show progress card
   const card = createJobCard(jobId, sourceLabel, status);
@@ -5740,6 +6000,13 @@ async function njSubmit() {
   document.getElementById('creator-sel-display').value = '';
   document.getElementById('creator-sel-id').value = '';
   document.getElementById('nj-video-name').value = '';
+  // Reset crop state
+  _njCropState = { drawing: false, step: 'gameplay', gameplay: null, facecam: null };
+  _njSavedCropConfigId = null;
+  _njPreviewValidated = false;
+  njUrlResetCrop();
+  njSetVideoType('other');
+  _njCropMode = 'auto';
   njUpdateSubmitState();
 }
 
@@ -7578,6 +7845,549 @@ async function runStorageScan() {
     }
   });
 })();
+
+// ── Crop Setup ────────────────────────────────────────────────────────────────
+let _njVideoType = 'other';
+let _njCropMode = 'auto';
+let _njCropState = { drawing: false, step: 'gameplay', gameplay: null, facecam: null };
+let _njPreviewValidated = false;
+let _njCropStart = null;
+let _njSavedCropConfigId = null;
+
+function njSetVideoType(vtype) {
+  _njVideoType = vtype;
+  document.querySelectorAll('.nj-vtype-btn').forEach(b => b.classList.toggle('active', b.dataset.vtype === vtype));
+  document.getElementById('nj-crop-setup').style.display = vtype === 'gaming' ? '' : 'none';
+  if (vtype === 'gaming') njUpdateCropAreaVisibility();
+  njUrlShowCropIfNeeded();
+  njUpdateSubmitState();
+}
+
+function njSetCropMode(mode) {
+  _njCropMode = mode;
+  document.querySelectorAll('.nj-crop-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.cmode === mode));
+  njUpdateCropAreaVisibility();
+  njUrlShowCropIfNeeded();
+  njUpdateSubmitState();
+}
+
+function njUpdateCropAreaVisibility() {
+  const isManual = _njCropMode === 'manual';
+  const isFile = _njSource === 'file';
+  document.getElementById('nj-manual-crop-area').style.display = (isManual && isFile && _njSelectedFile) ? '' : 'none';
+  // URL mode: hide the old notice when pregame panel is active
+  const isUrlManualGaming = (isManual && !isFile && _njVideoType === 'gaming');
+  document.getElementById('nj-url-crop-notice').style.display = (isManual && !isFile && !isUrlManualGaming) ? '' : 'none';
+  document.getElementById('nj-auto-crop-notice').style.display = isManual ? 'none' : '';
+  if (isManual && isFile && _njSelectedFile) njInitCropCanvas();
+}
+
+let _njCanvasInited = false;
+function njInitCropCanvas() {
+  const video = document.getElementById('nj-crop-video');
+  if (!_njSelectedFile) return;
+  // Remove any stale listeners before re-adding to prevent accumulation
+  const canvas = document.getElementById('nj-crop-canvas');
+  canvas.removeEventListener('mousedown', njCanvasMouseDown);
+  canvas.removeEventListener('mousemove', njCanvasMouseMove);
+  canvas.removeEventListener('mouseup', njCanvasMouseUp);
+  window.removeEventListener('resize', njResizeCanvas);
+  // Only re-init video src if file changed
+  if (video._cropFile !== _njSelectedFile) {
+    video._cropFile = _njSelectedFile;
+    if (video._objectUrl) URL.revokeObjectURL(video._objectUrl);
+    video._objectUrl = URL.createObjectURL(_njSelectedFile);
+    video.src = video._objectUrl;
+    video.addEventListener('loadedmetadata', () => {
+      const slider = document.getElementById('nj-seek-slider');
+      slider.max = String(Math.floor(video.duration * 10) / 10);
+      slider.value = String(Math.min(10, video.duration * 0.1));
+      video.currentTime = parseFloat(slider.value);
+      njResizeCanvas();
+    }, {once: true});
+    video.addEventListener('seeked', njRedrawCanvas);
+  }
+  canvas.addEventListener('mousedown', njCanvasMouseDown);
+  canvas.addEventListener('mousemove', njCanvasMouseMove);
+  canvas.addEventListener('mouseup', njCanvasMouseUp);
+  window.addEventListener('resize', njResizeCanvas);
+}
+
+function njResizeCanvas() {
+  const video = document.getElementById('nj-crop-video');
+  const canvas = document.getElementById('nj-crop-canvas');
+  const wrap = document.getElementById('nj-canvas-wrap');
+  canvas.width = wrap.clientWidth;
+  canvas.height = video.videoWidth
+    ? Math.round(wrap.clientWidth * video.videoHeight / video.videoWidth)
+    : Math.round(wrap.clientWidth * 9 / 16);
+  wrap.style.height = canvas.height + 'px';
+  njRedrawCanvas();
+}
+
+function njSeekVideo(val) {
+  const video = document.getElementById('nj-crop-video');
+  video.currentTime = parseFloat(val);
+  document.getElementById('nj-seek-time').textContent = Math.round(val) + 's';
+}
+
+function njCanvasCoords(e) {
+  const canvas = document.getElementById('nj-crop-canvas');
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * canvas.width / rect.width,
+    y: (e.clientY - rect.top) * canvas.height / rect.height,
+  };
+}
+
+function njCanvasMouseDown(e) {
+  e.preventDefault();
+  _njCropState.drawing = true;
+  _njCropStart = njCanvasCoords(e);
+}
+
+function njCanvasMouseMove(e) {
+  if (!_njCropState.drawing || !_njCropStart) return;
+  const cur = njCanvasCoords(e);
+  const canvas = document.getElementById('nj-crop-canvas');
+  const r = {
+    x: Math.min(_njCropStart.x, cur.x) / canvas.width,
+    y: Math.min(_njCropStart.y, cur.y) / canvas.height,
+    w: Math.abs(cur.x - _njCropStart.x) / canvas.width,
+    h: Math.abs(cur.y - _njCropStart.y) / canvas.height,
+  };
+  if (_njCropState.step === 'gameplay') _njCropState.gameplay = r;
+  else _njCropState.facecam = r;
+  njRedrawCanvas();
+}
+
+function njCanvasMouseUp(e) {
+  if (!_njCropState.drawing || !_njCropStart) return;
+  _njCropState.drawing = false;
+  const cur = njCanvasCoords(e);
+  const canvas = document.getElementById('nj-crop-canvas');
+  const px = {
+    x: Math.min(_njCropStart.x, cur.x),
+    y: Math.min(_njCropStart.y, cur.y),
+    w: Math.abs(cur.x - _njCropStart.x),
+    h: Math.abs(cur.y - _njCropStart.y),
+  };
+  if (px.w < 10 || px.h < 10) return;
+  // Store as normalized coords immediately so resize doesn't invalidate them
+  const norm = { x: px.x / canvas.width, y: px.y / canvas.height, w: px.w / canvas.width, h: px.h / canvas.height };
+  if (_njCropState.step === 'gameplay') {
+    _njCropState.gameplay = norm;
+    _njCropState.step = 'facecam';
+    document.getElementById('nj-crop-step').innerHTML = 'Step 2: Draw the <strong>Facecam</strong> region (blue)';
+  } else {
+    _njCropState.facecam = norm;
+    _njCropState.step = 'done';
+    document.getElementById('nj-crop-step').innerHTML = 'Both regions selected. Preview or confirm.';
+    document.getElementById('nj-btn-preview').disabled = false;
+    njSetCropStatus('ok', 'Gameplay and facecam regions selected. Click Preview to verify.');
+  }
+  njRedrawCanvas();
+}
+
+function njRedrawCanvas() {
+  const canvas = document.getElementById('nj-crop-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  function normToPx(n) {
+    if (!n) return null;
+    return { x: n.x * canvas.width, y: n.y * canvas.height, w: n.w * canvas.width, h: n.h * canvas.height };
+  }
+  function drawRect(r, color, label) {
+    if (!r) return;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.fillStyle = color + '33';
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.fillStyle = color;
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(label, r.x + 4, r.y + 14);
+  }
+  drawRect(normToPx(_njCropState.gameplay), '#22c55e', 'GAMEPLAY');
+  drawRect(normToPx(_njCropState.facecam), '#3b82f6', 'FACECAM');
+}
+
+function njResetCrop() {
+  _njCropState = { drawing: false, step: 'gameplay', gameplay: null, facecam: null };
+  _njSavedCropConfigId = null;
+  _njPreviewValidated = false;
+  const stepEl = document.getElementById('nj-crop-step');
+  if (stepEl) stepEl.innerHTML = 'Step 1: Draw the <strong>Gameplay</strong> region (green)';
+  const pvBtn = document.getElementById('nj-btn-preview');
+  if (pvBtn) pvBtn.disabled = true;
+  const pvWrap = document.getElementById('nj-preview-video-wrap');
+  if (pvWrap) pvWrap.style.display = 'none';
+  njSetCropStatus('', '');
+  njRedrawCanvas();
+}
+
+function njSetCropStatus(type, msg) {
+  const el = document.getElementById('nj-crop-status');
+  if (!el) return;
+  el.className = 'nj-crop-status' + (type ? ' ' + type : '');
+  el.textContent = msg;
+}
+
+function njCanvasToNorm(r) {
+  if (!r) return null;
+  return [r.x, r.y, r.w, r.h]; // already normalized — stored as 0-1 at draw time
+}
+
+async function njPreviewCrop() {
+  if (!_njCropState.gameplay || !_njCropState.facecam) {
+    njSetCropStatus('warn', 'Draw both regions first'); return;
+  }
+  if (!_njSelectedFile) { njSetCropStatus('err', 'No file selected'); return; }
+  njSetCropStatus('', 'Generating preview…');
+  document.getElementById('nj-btn-preview').disabled = true;
+
+  const video = document.getElementById('nj-crop-video');
+  const srcW = video.videoWidth;
+  const srcH = video.videoHeight;
+  const seekTime = parseFloat(document.getElementById('nj-seek-slider').value) || 10;
+  const gpNorm = njCanvasToNorm(_njCropState.gameplay);
+  const fcNorm = njCanvasToNorm(_njCropState.facecam);
+
+  const fd = new FormData();
+  fd.append('file', _njSelectedFile);
+  fd.append('gameplay_rect', JSON.stringify(gpNorm));
+  fd.append('facecam_rect', JSON.stringify(fcNorm));
+  fd.append('src_width', String(srcW));
+  fd.append('src_height', String(srcH));
+  fd.append('t_start', String(seekTime));
+  fd.append('split_fraction', '0.5');
+
+  try {
+    const resp = await fetch(`${API}/crop-configs/preview-file`, { method: 'POST', body: fd });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: 'Preview failed' }));
+      njSetCropStatus('err', err.detail || 'Preview failed');
+      document.getElementById('nj-btn-preview').disabled = false;
+      return;
+    }
+    const data = await resp.json();
+    const pvWrap = document.getElementById('nj-preview-video-wrap');
+    const pvVideo = document.getElementById('nj-preview-video');
+    pvVideo.src = data.preview_url + '?t=' + Date.now();
+    pvWrap.style.display = '';
+    pvVideo.load();
+    njSetCropStatus('ok', 'Preview ready. Looks good? The crop will be applied when you Create Job.');
+    _njSavedCropConfigId = data.preview_id || null;
+    _njPreviewValidated = true;
+  } catch (e) {
+    njSetCropStatus('err', 'Network error: ' + e.message);
+  }
+  document.getElementById('nj-btn-preview').disabled = false;
+}
+
+// ── URL-mode Pre-job Crop ─────────────────────────────────────────────────────
+let _njUrlCropState = { drawing: false, step: 'gameplay', gameplay: null, facecam: null };
+let _njUrlCropStart = null;
+let _njUrlFrameSrcW = 1920;
+let _njUrlFrameSrcH = 1080;
+let _njUrlCropConfirmed = false;
+let _njUrlPreviewValidated = false;
+
+function njUrlShowCropIfNeeded() {
+  const wrap = document.getElementById('nj-url-crop-pregame');
+  if (!wrap) return;
+  const show = _njVideoType === 'gaming' && _njCropMode === 'manual' && !!_njMeta && _njSource === 'url';
+  wrap.classList.toggle('visible', show);
+  if (show) {
+    njUrlInitCanvas();
+    const img = document.getElementById('nj-url-frame-img');
+    if (img && !img.src && _njMeta && _njMeta.thumbnail) njUrlLoadThumbnail();
+  }
+}
+
+function njUrlLoadThumbnail() {
+  const thumb = _njMeta && _njMeta.thumbnail;
+  if (!thumb) return;
+  const img = document.getElementById('nj-url-frame-img');
+  img.onload = () => {
+    _njUrlFrameSrcW = (_njMeta && _njMeta.width) || img.naturalWidth || 1920;
+    _njUrlFrameSrcH = (_njMeta && _njMeta.height) || img.naturalHeight || 1080;
+    img.style.display = '';
+    njUrlResizeCanvas();
+    njUrlSetStatus('', 'Thumbnail loaded. Click "Load frame" for a real frame, or draw regions directly.');
+  };
+  img.onerror = () => njUrlSetStatus('warn', 'Could not load thumbnail. Use Load frame button.');
+  img.src = thumb;
+  if (_njMeta && _njMeta.duration_s) {
+    const slider = document.getElementById('nj-url-frame-slider');
+    if (slider) slider.max = Math.max(60, Math.floor(_njMeta.duration_s) - 5);
+  }
+}
+
+async function njUrlLoadFrame() {
+  const url = (document.getElementById('nj-url-input') && document.getElementById('nj-url-input').value || '').trim();
+  if (!url) return;
+  const slider = document.getElementById('nj-url-frame-slider');
+  const t = slider ? (parseFloat(slider.value) || 10) : 10;
+  const timeEl = document.getElementById('nj-url-frame-time');
+  if (timeEl) timeEl.textContent = Math.round(t) + 's';
+  const btn = document.getElementById('nj-url-load-frame-btn');
+  const spinner = document.getElementById('nj-url-frame-spinner');
+  if (btn) btn.disabled = true;
+  if (spinner) spinner.style.display = 'inline-block';
+  njUrlSetStatus('', 'Extracting frame… (may take 5–15s)');
+  try {
+    const resp = await fetch(`${API}/jobs/url-frame?url=${encodeURIComponent(url)}&t=${t}`);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({detail: 'Frame extraction failed'}));
+      njUrlSetStatus('warn', (err.detail || 'Failed') + ' — thumbnail used instead.');
+      return;
+    }
+    const data = await resp.json();
+    _njUrlFrameSrcW = data.src_width || 1920;
+    _njUrlFrameSrcH = data.src_height || 1080;
+    const img = document.getElementById('nj-url-frame-img');
+    img.onload = () => { njUrlResizeCanvas(); njUrlRedrawCanvas(); };
+    img.src = 'data:image/jpeg;base64,' + data.frame_b64;
+    img.style.display = '';
+    njUrlSetStatus('ok', `Frame at ${Math.round(t)}s loaded (${_njUrlFrameSrcW}×${_njUrlFrameSrcH}). Draw regions now.`);
+    // Reset drawn regions when frame changes
+    _njUrlCropState.gameplay = null;
+    _njUrlCropState.facecam = null;
+    _njUrlCropState.step = 'gameplay';
+    _njUrlCropState.drawing = false;
+    const stepEl = document.getElementById('nj-url-crop-step');
+    if (stepEl) stepEl.innerHTML = 'Step 1: Draw the <strong>Gameplay</strong> region (green)';
+    const pvBtn = document.getElementById('nj-url-btn-preview');
+    if (pvBtn) pvBtn.disabled = true;
+  } catch(e) {
+    njUrlSetStatus('warn', 'Network error: ' + e.message);
+  } finally {
+    if (btn) btn.disabled = false;
+    if (spinner) spinner.style.display = 'none';
+  }
+}
+
+function njUrlResizeCanvas() {
+  const img = document.getElementById('nj-url-frame-img');
+  const canvas = document.getElementById('nj-url-frame-canvas');
+  const wrap = document.getElementById('nj-url-frame-wrap');
+  if (!canvas || !wrap) return;
+  const cw = wrap.clientWidth || 400;
+  const ch = (img && img.naturalHeight && img.naturalWidth)
+    ? Math.round(cw * img.naturalHeight / img.naturalWidth)
+    : Math.round(cw * 9 / 16);
+  canvas.width = cw;
+  canvas.height = ch;
+  wrap.style.height = ch + 'px';
+  njUrlRedrawCanvas();
+}
+
+function njUrlCanvasCoords(e) {
+  const canvas = document.getElementById('nj-url-frame-canvas');
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * canvas.width / rect.width,
+    y: (e.clientY - rect.top) * canvas.height / rect.height,
+  };
+}
+
+function njUrlInitCanvas() {
+  const canvas = document.getElementById('nj-url-frame-canvas');
+  if (!canvas) return;
+  canvas.removeEventListener('mousedown', _njUrlMouseDown);
+  canvas.removeEventListener('mousemove', _njUrlMouseMove);
+  canvas.removeEventListener('mouseup', _njUrlMouseUp);
+  canvas.addEventListener('mousedown', _njUrlMouseDown);
+  canvas.addEventListener('mousemove', _njUrlMouseMove);
+  canvas.addEventListener('mouseup', _njUrlMouseUp);
+  window.removeEventListener('resize', njUrlResizeCanvas);
+  window.addEventListener('resize', njUrlResizeCanvas);
+}
+
+function _njUrlMouseDown(e) {
+  e.preventDefault();
+  if (_njUrlCropState.step === 'done') return;
+  _njUrlCropState.drawing = true;
+  _njUrlCropStart = njUrlCanvasCoords(e);
+}
+
+function _njUrlMouseMove(e) {
+  if (!_njUrlCropState.drawing || !_njUrlCropStart) return;
+  const cur = njUrlCanvasCoords(e);
+  const canvas = document.getElementById('nj-url-frame-canvas');
+  const r = {
+    x: Math.min(_njUrlCropStart.x, cur.x) / canvas.width,
+    y: Math.min(_njUrlCropStart.y, cur.y) / canvas.height,
+    w: Math.abs(cur.x - _njUrlCropStart.x) / canvas.width,
+    h: Math.abs(cur.y - _njUrlCropStart.y) / canvas.height,
+  };
+  if (_njUrlCropState.step === 'gameplay') _njUrlCropState.gameplay = r;
+  else if (_njUrlCropState.step === 'facecam') _njUrlCropState.facecam = r;
+  njUrlRedrawCanvas();
+}
+
+function _njUrlMouseUp(e) {
+  if (!_njUrlCropState.drawing || !_njUrlCropStart) return;
+  _njUrlCropState.drawing = false;
+  const cur = njUrlCanvasCoords(e);
+  const canvas = document.getElementById('nj-url-frame-canvas');
+  const x = Math.min(_njUrlCropStart.x, cur.x);
+  const y = Math.min(_njUrlCropStart.y, cur.y);
+  const w = Math.abs(cur.x - _njUrlCropStart.x);
+  const h = Math.abs(cur.y - _njUrlCropStart.y);
+  _njUrlCropStart = null;
+  if (w < 10 || h < 10) return;
+  const r = { x: x / canvas.width, y: y / canvas.height, w: w / canvas.width, h: h / canvas.height };
+  if (_njUrlCropState.step === 'gameplay') {
+    _njUrlCropState.gameplay = r;
+    _njUrlCropState.step = 'facecam';
+    document.getElementById('nj-url-crop-step').innerHTML = 'Step 2: Draw the <strong>Facecam</strong> region (blue)';
+  } else if (_njUrlCropState.step === 'facecam') {
+    _njUrlCropState.facecam = r;
+    _njUrlCropState.step = 'done';
+    document.getElementById('nj-url-crop-step').innerHTML = 'Both regions drawn. Preview or confirm.';
+    const pvBtn = document.getElementById('nj-url-btn-preview');
+    if (pvBtn) pvBtn.disabled = false;
+    const confirmBtn = document.getElementById('nj-url-btn-confirm');
+    if (confirmBtn) confirmBtn.classList.add('visible');
+    njUrlSetStatus('ok', 'Regions drawn. Preview crop (5s) to verify, then confirm.');
+  }
+  njUrlRedrawCanvas();
+}
+
+function njUrlRedrawCanvas() {
+  const canvas = document.getElementById('nj-url-frame-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  function normToPx(n) {
+    return n ? { x: n.x * canvas.width, y: n.y * canvas.height, w: n.w * canvas.width, h: n.h * canvas.height } : null;
+  }
+  function drawRect(r, color, label) {
+    if (!r) return;
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.fillStyle = color + '33'; ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.fillStyle = color; ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(label, r.x + 4, r.y + 14);
+  }
+  drawRect(normToPx(_njUrlCropState.gameplay), '#22c55e', 'GAMEPLAY');
+  drawRect(normToPx(_njUrlCropState.facecam), '#3b82f6', 'FACECAM');
+}
+
+function njUrlResetCrop() {
+  _njUrlCropState = { drawing: false, step: 'gameplay', gameplay: null, facecam: null };
+  _njUrlCropStart = null;
+  _njUrlCropConfirmed = false;
+  _njUrlPreviewValidated = false;
+  const stepEl = document.getElementById('nj-url-crop-step');
+  if (stepEl) stepEl.innerHTML = 'Step 1: Draw the <strong>Gameplay</strong> region (green)';
+  const pvBtn = document.getElementById('nj-url-btn-preview');
+  if (pvBtn) pvBtn.disabled = true;
+  const confirmBtn = document.getElementById('nj-url-btn-confirm');
+  if (confirmBtn) { confirmBtn.classList.remove('visible', 'confirmed'); confirmBtn.textContent = '✓ Confirm Crop Setup'; }
+  const badge = document.getElementById('nj-url-crop-confirmed-badge');
+  if (badge) badge.classList.remove('visible');
+  const pvWrap = document.getElementById('nj-url-preview-wrap');
+  if (pvWrap) pvWrap.style.display = 'none';
+  const img = document.getElementById('nj-url-frame-img');
+  if (img) { img.src = ''; img.style.display = 'none'; }
+  const wrap = document.getElementById('nj-url-crop-pregame');
+  if (wrap) wrap.classList.remove('visible');
+  njUrlSetStatus('', '');
+  njUrlRedrawCanvas();
+}
+
+function njUrlSetStatus(type, msg) {
+  const el = document.getElementById('nj-url-crop-status');
+  if (!el) return;
+  el.className = 'nj-crop-status' + (type ? ' ' + type : '');
+  el.textContent = msg;
+}
+
+async function njUrlPreviewCrop() {
+  if (!_njUrlCropState.gameplay || !_njUrlCropState.facecam) {
+    njUrlSetStatus('warn', 'Draw both regions first'); return;
+  }
+  const url = (document.getElementById('nj-url-input') && document.getElementById('nj-url-input').value || '').trim();
+  if (!url) { njUrlSetStatus('err', 'No URL'); return; }
+  njUrlSetStatus('', 'Generating preview…');
+  const pvBtn = document.getElementById('nj-url-btn-preview');
+  if (pvBtn) pvBtn.disabled = true;
+  const slider = document.getElementById('nj-url-frame-slider');
+  const t = slider ? (parseFloat(slider.value) || 10) : 10;
+  const gp = _njUrlCropState.gameplay;
+  const fc = _njUrlCropState.facecam;
+  try {
+    const resp = await fetch(`${API}/crop-configs/preview-url`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        url,
+        gameplay_rect: [gp.x, gp.y, gp.w, gp.h],
+        facecam_rect:  [fc.x, fc.y, fc.w, fc.h],
+        src_width: _njUrlFrameSrcW,
+        src_height: _njUrlFrameSrcH,
+        t_start: t,
+        split_fraction: 0.5,
+      }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({detail: 'Preview failed'}));
+      njUrlSetStatus('err', err.detail || 'Preview failed');
+      return;
+    }
+    const data = await resp.json();
+    const pvWrap = document.getElementById('nj-url-preview-wrap');
+    const pvVideo = document.getElementById('nj-url-preview-video');
+    if (pvVideo) pvVideo.src = data.preview_url + '?t=' + Date.now();
+    if (pvWrap) pvWrap.style.display = '';
+    if (pvVideo) pvVideo.load();
+    _njUrlPreviewValidated = true;
+    njUrlSetStatus('ok', 'Preview ready. Confirm crop to enable Create Job.');
+    const confirmBtn = document.getElementById('nj-url-btn-confirm');
+    if (confirmBtn) confirmBtn.classList.add('visible');
+  } catch(e) {
+    njUrlSetStatus('err', 'Network error: ' + e.message);
+  } finally {
+    if (pvBtn) pvBtn.disabled = false;
+  }
+}
+
+function njUrlConfirmCrop() {
+  if (!_njUrlCropState.gameplay || !_njUrlCropState.facecam) {
+    njUrlSetStatus('warn', 'Draw both regions first'); return;
+  }
+  _njUrlCropConfirmed = true;
+  const btn = document.getElementById('nj-url-btn-confirm');
+  if (btn) { btn.classList.add('confirmed'); btn.textContent = '✓ Crop Confirmed'; }
+  const badge = document.getElementById('nj-url-crop-confirmed-badge');
+  if (badge) badge.classList.add('visible');
+  njUrlSetStatus('ok', _njUrlPreviewValidated
+    ? 'Crop confirmed and previewed. Ready to create job.'
+    : 'Crop confirmed (not previewed). Ready to create job.');
+  njUpdateSubmitState();
+}
+
+async function editCropSetup(jobId) {
+  try {
+    const resp = await fetch(`${API}/crop-configs/by-job/${jobId}`);
+    if (resp.ok) {
+      const cfg = await resp.json();
+      alert(
+        `Crop config:\nType: ${cfg.video_type}\nMode: ${cfg.crop_mode}\nStatus: ${cfg.validation_status}\n` +
+        `Gameplay: [${[cfg.gameplay_x, cfg.gameplay_y, cfg.gameplay_w, cfg.gameplay_h].map(v => v != null ? v.toFixed(3) : 'n/a').join(', ')}]\n` +
+        `Facecam: [${[cfg.facecam_x, cfg.facecam_y, cfg.facecam_w, cfg.facecam_h].map(v => v != null ? v.toFixed(3) : 'n/a').join(', ')}]`
+      );
+    } else {
+      alert('No crop config saved for this job.\nFor manual crop setup: use New Job with File Upload and select Gaming → Manual.');
+    }
+  } catch (e) {
+    alert('Could not load crop config.');
+  }
+}
 </script>
 </body>
 </html>
