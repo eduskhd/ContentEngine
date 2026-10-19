@@ -25,6 +25,9 @@ app.add_middleware(
 # In-memory job status cache (mirrors DB)
 _jobs: dict = {}
 
+# Cache for yt-dlp direct stream URLs keyed by source URL (expires after 1h)
+_preview_stream_cache: dict = {}
+
 # Worker pool — injected by server.py at startup
 pool = None
 
@@ -345,40 +348,54 @@ async def get_url_frame(url: str, t: float = Query(10.0)):
     except ValueError as exc:
         raise HTTPException(400, str(exc))
 
-    # Get direct stream URL via yt-dlp (no download)
-    try:
-        import yt_dlp
-        opts = {
-            "quiet": True,
-            "no_warnings": True,
-            "noplaylist": True,
-            "format": "best[height<=720]/best",
-        }
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=False)
+    # Get direct stream URL — use cache if available
+    import time as _time
+    _cached = _preview_stream_cache.get(url)
+    if _cached and _cached.get("expiry", 0) > _time.time():
+        direct_url = _cached["direct_url"]
+        src_w = _cached.get("src_width", 1920)
+        src_h = _cached.get("src_height", 1080)
+    else:
+        try:
+            import yt_dlp
+            opts = {
+                "quiet": True,
+                "no_warnings": True,
+                "noplaylist": True,
+                "format": "bestvideo[height<=720]/bestvideo/best",
+            }
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
 
-        src_w = info.get("width") or 1920
-        src_h = info.get("height") or 1080
+            src_w = info.get("width") or 1920
+            src_h = info.get("height") or 1080
 
-        direct_url = None
-        if info.get("url"):
-            direct_url = info["url"]
-        elif info.get("formats"):
-            fmts = [f for f in info["formats"]
-                    if f.get("url") and f.get("vcodec", "none") != "none"
-                    and (f.get("height") or 9999) <= 720]
-            if fmts:
-                fmts.sort(key=lambda f: f.get("height") or 0, reverse=True)
-                direct_url = fmts[0]["url"]
-                src_w = fmts[0].get("width") or src_w
-                src_h = fmts[0].get("height") or src_h
+            direct_url = None
+            if info.get("url"):
+                direct_url = info["url"]
+            elif info.get("formats"):
+                fmts = [f for f in info["formats"]
+                        if f.get("url") and f.get("vcodec", "none") != "none"
+                        and (f.get("height") or 9999) <= 720]
+                if fmts:
+                    fmts.sort(key=lambda f: f.get("height") or 0, reverse=True)
+                    direct_url = fmts[0]["url"]
+                    src_w = fmts[0].get("width") or src_w
+                    src_h = fmts[0].get("height") or src_h
 
-        if not direct_url:
-            raise HTTPException(422, "Could not extract direct stream URL")
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(422, f"yt-dlp error: {str(exc)[:200]}")
+            if not direct_url:
+                raise HTTPException(422, "Could not extract direct stream URL")
+            # Populate cache for subsequent calls
+            _preview_stream_cache[url] = {
+                "direct_url": direct_url,
+                "expiry": _time.time() + 3600,
+                "src_width": src_w,
+                "src_height": src_h,
+            }
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(422, f"yt-dlp error: {str(exc)[:200]}")
 
     preframe_dir = _P(CONFIG.output_dir) / "preframes"
     preframe_dir.mkdir(parents=True, exist_ok=True)
@@ -417,6 +434,118 @@ async def get_url_frame(url: str, t: float = Query(10.0)):
         "t": t,
         "frame_id": frame_id,
     }
+
+
+@app.post("/jobs/prepare-preview")
+async def prepare_preview_frames(body: dict = Body(...)):
+    """Extract frames at distributed timestamps from a video URL (no full download).
+    Caches the direct stream URL so repeated calls are fast.
+    Body: {url, timestamps_pct (optional)}
+    Returns: {frames, duration_s, src_width, src_height, pct_used, was_cached}
+    """
+    import time as _time
+    import concurrent.futures as _cf
+    import asyncio as _aio
+    import base64 as _b64p
+    import uuid as _uuid
+    import subprocess as _sp
+    from pathlib import Path as _P
+
+    url = (body.get("url") or "").strip()
+    if not url or not is_url(url):
+        raise HTTPException(400, "Invalid URL")
+    try:
+        validate_url(url)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+    timestamps_pct = body.get("timestamps_pct", [5, 15, 30, 50, 70, 85, 95])
+    if not isinstance(timestamps_pct, list) or len(timestamps_pct) > 20:
+        raise HTTPException(400, "timestamps_pct must be a list of ≤20 values")
+
+    # Check / populate cache
+    now = _time.time()
+    cached = _preview_stream_cache.get(url)
+    was_cached = False
+    if cached and cached.get("expiry", 0) > now:
+        direct_url = cached["direct_url"]
+        src_w = cached.get("src_width", 1920)
+        src_h = cached.get("src_height", 1080)
+        duration_s = cached.get("duration_s", 600.0)
+        was_cached = True
+    else:
+        try:
+            import yt_dlp as _ydl
+            opts = {"quiet": True, "no_warnings": True, "noplaylist": True,
+                    "format": "bestvideo[height<=720]/bestvideo/best"}
+            with _ydl.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+
+            src_w = info.get("width") or 1920
+            src_h = info.get("height") or 1080
+            duration_s = float(info.get("duration") or 600)
+
+            direct_url = info.get("url")
+            if not direct_url and info.get("formats"):
+                fmts = [f for f in info["formats"]
+                        if f.get("url") and f.get("vcodec", "none") != "none"
+                        and (f.get("height") or 9999) <= 720]
+                if fmts:
+                    fmts.sort(key=lambda f: f.get("height") or 0, reverse=True)
+                    direct_url = fmts[0]["url"]
+                    src_w = fmts[0].get("width") or src_w
+                    src_h = fmts[0].get("height") or src_h
+
+            if not direct_url:
+                raise HTTPException(422, "Could not extract direct stream URL")
+
+            _preview_stream_cache[url] = {
+                "direct_url": direct_url,
+                "expiry": now + 3600,
+                "src_width": src_w,
+                "src_height": src_h,
+                "duration_s": duration_s,
+            }
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(422, f"Stream extraction failed: {str(exc)[:300]}")
+
+    margin = 2.0
+    timestamps = [max(1.0, min(duration_s - margin, duration_s * pct / 100))
+                  for pct in timestamps_pct]
+
+    preframe_dir = _P(CONFIG.output_dir) / "preframes"
+    preframe_dir.mkdir(parents=True, exist_ok=True)
+
+    def _extract(t: float) -> dict:
+        tag = _uuid.uuid4().hex[:8]
+        out = preframe_dir / f"pv_{tag}.jpg"
+        cmd = [CONFIG.ffmpeg_path, "-y", "-ss", f"{t:.2f}", "-i", direct_url,
+               "-frames:v", "1", "-q:v", "4", str(out)]
+        try:
+            r = _sp.run(cmd, capture_output=True, timeout=35)
+            if r.returncode == 0 and out.exists():
+                data = out.read_bytes()
+                return {"t": round(t, 1), "frame_b64": _b64p.b64encode(data).decode(),
+                        "src_width": src_w, "src_height": src_h, "ok": True}
+            return {"t": round(t, 1), "ok": False, "error": "ffmpeg error"}
+        except _sp.TimeoutExpired:
+            return {"t": round(t, 1), "ok": False, "error": "timeout (35s)"}
+        finally:
+            try:
+                out.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    loop = _aio.get_event_loop()
+    with _cf.ThreadPoolExecutor(max_workers=min(4, len(timestamps))) as pool_ex:
+        futs = [loop.run_in_executor(pool_ex, _extract, t) for t in timestamps]
+        frames = list(await _aio.gather(*futs))
+
+    return {"frames": frames, "duration_s": duration_s,
+            "src_width": src_w, "src_height": src_h,
+            "pct_used": timestamps_pct, "was_cached": was_cached}
 
 
 @app.get("/jobs/url-check")
@@ -4675,8 +4804,14 @@ async def preview_crop_url(body: dict = Body(...)):
     except ValueError as exc:
         raise HTTPException(400, str(exc))
 
-    gp = body.get("gameplay_rect", [])
-    fc = body.get("facecam_rect", [])
+    def _normalise_rect(r):
+        """Accept both list [x,y,w,h] and dict {x,y,w,h}."""
+        if isinstance(r, dict):
+            return [r.get("x", 0), r.get("y", 0), r.get("w", 0), r.get("h", 0)]
+        return list(r) if r else []
+
+    gp = _normalise_rect(body.get("gameplay_rect", []))
+    fc = _normalise_rect(body.get("facecam_rect", []))
     if len(gp) != 4 or len(fc) != 4:
         raise HTTPException(400, "gameplay_rect and facecam_rect must be [x,y,w,h] normalized")
 
@@ -4685,27 +4820,43 @@ async def preview_crop_url(body: dict = Body(...)):
     t_start = float(body.get("t_start", 10))
     split_fraction = float(body.get("split_fraction", 0.5))
 
-    # Get direct stream URL via yt-dlp
-    try:
-        import yt_dlp
-        opts = {"quiet": True, "no_warnings": True, "noplaylist": True,
-                "format": "best[height<=720]/best"}
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-        direct_url = info.get("url")
-        if not direct_url and info.get("formats"):
-            fmts = [f for f in info["formats"]
-                    if f.get("url") and f.get("vcodec", "none") != "none"
-                    and (f.get("height") or 9999) <= 720]
-            if fmts:
-                fmts.sort(key=lambda f: f.get("height") or 0, reverse=True)
-                direct_url = fmts[0]["url"]
-        if not direct_url:
-            raise HTTPException(422, "Could not extract stream URL")
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(422, str(exc)[:200])
+    # Get direct stream URL — use cache if available
+    import time as _pt
+    _pc = _preview_stream_cache.get(url)
+    if _pc and _pc.get("expiry", 0) > _pt.time():
+        direct_url = _pc["direct_url"]
+        if not src_w or src_w == 1920:
+            src_w = _pc.get("src_width", src_w)
+        if not src_h or src_h == 1080:
+            src_h = _pc.get("src_height", src_h)
+    else:
+        try:
+            import yt_dlp
+            opts = {"quiet": True, "no_warnings": True, "noplaylist": True,
+                    "format": "bestvideo[height<=720]/bestvideo/best"}
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+            direct_url = info.get("url")
+            if not direct_url and info.get("formats"):
+                fmts = [f for f in info["formats"]
+                        if f.get("url") and f.get("vcodec", "none") != "none"
+                        and (f.get("height") or 9999) <= 720]
+                if fmts:
+                    fmts.sort(key=lambda f: f.get("height") or 0, reverse=True)
+                    direct_url = fmts[0]["url"]
+            if not direct_url:
+                raise HTTPException(422, "Could not extract stream URL")
+            _preview_stream_cache[url] = {
+                "direct_url": direct_url,
+                "expiry": _pt.time() + 3600,
+                "src_width": info.get("width") or src_w,
+                "src_height": info.get("height") or src_h,
+                "duration_s": float(info.get("duration") or 600),
+            }
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(422, str(exc)[:200])
 
     preview_id = str(uuid.uuid4())
     preview_dir = Path(CONFIG.output_dir) / "previews"

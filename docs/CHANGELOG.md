@@ -1,5 +1,68 @@
 # Changelog
 
+## 2026-10-20 — feat: Real video frame gallery + manual crop selector (Gaming mode)
+
+### What changed
+- New Job URL mode now extracts real video frames instead of using YouTube thumbnail for crop definition
+- `POST /jobs/prepare-preview` — extracts 7 frames at distributed timestamps (5%–95%) in parallel; caches yt-dlp direct URL for 1h
+- Frame gallery UI: horizontal strip of thumbnails with real timestamps; click to load in canvas editor
+- Canvas editor shows yellow (gameplay) and green (camera) regions with 8 resize handles + move
+- Overlay: drawn regions appear on ALL gallery thumbnails for cross-frame validation
+- Custom timestamp input: load any frame from the video
+- Preview 50/50: POST /crop-configs/preview-url generates 5s FFmpeg split layout preview
+- Confirm → enables Create Job; crop config saved with validation_status='validated'
+- Gaming Crop Setup panel moved to below Video Type / Crop Setup buttons for natural UX flow
+
+### Bugs fixed
+- yt-dlp format `best[height<=720]/best` → `bestvideo[height<=720]/bestvideo/best` (3 endpoints)
+- `/crop-configs/preview-url` now uses shared `_preview_stream_cache` instead of re-fetching
+- `gameplay_rect` dict→list normalization in preview endpoint
+- Preview button disabled state now visually distinct (CSS)
+- Dead code removed: `njUrlLoadThumbnail`, `njUrlLoadFrame`, slider references
+- Colors: gameplay=yellow (#facc15), facecam=green (#22c55e) per spec
+
+### Tests
+28 passing (test_crop_config.py × 17 + test_frame_preview.py × 11)
+
+---
+
+## 2026-10-19 — Smart Reframing V1.2.1: F1/F2/F4 fixes + experiment renders
+
+### Problem
+V1.2 produced face_focus (gameplay lost) on AuronPlay and Rickyedit clips.
+Root causes: FACE_REACTION threshold too low (corner facecam triggered it), and
+decide_v12() suppressed SPLIT_LAYOUT unconditionally on face_reaction scenes.
+
+### Fixes (engine/reframe/)
+
+**scene_analyzer.py (F1):** Raised FACE_REACTION thresholds so corner facecam
+overlays (~6% frame area) no longer trigger FACE_REACTION. New values:
+- `_FACE_REACTION_AREA` 0.07 → 0.15
+- `_FACE_HIT_REACTION`  0.50 → 0.65
+- `_FACE_CONVERSATION`  0.30 → 0.35
+
+**composition.py (F2):** Added `_FACECAM_PROTECT_THRESHOLD = 0.60` guard in
+`decide_v12()`. When `has_facecam=True` and `facecam_confidence >= 0.60`, the
+SPLIT_LAYOUT path is protected even if scene type is face_reaction/conversation.
+
+**planner.py (F4a):** `plan_clip_v3_2()` now computes a duration-weighted average
+split_fraction from split-layout segment decisions (step 10c). New `plan_clip_v3_3()`
+wrapper tags the plan with version=3.3 and v13_fixes metadata.
+
+### Tests
+19 new tests in `tests/test_reframe_v2.py` (T81-T85 + ConfidenceGate + regressions).
+All pass.
+
+### Experiment
+`experiments/visual_framing_quality_repair/`: 6 v_new clips rendered, 6 contact
+sheets (A/B/C), comparison.html for editorial voting. AuronPlay and Rickyedit
+changed from face_focus → split_layout (gameplay restored).
+
+**Status:** F1/F2 code changes are live in production modules. Awaiting editorial
+review of comparison.html before considering this approved for the next pipeline job.
+
+---
+
 ## 2026-10-14 — Hashtag repair: 58 historical videos corrected on YouTube
 
 ### Problem

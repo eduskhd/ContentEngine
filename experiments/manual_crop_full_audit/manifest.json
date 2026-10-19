@@ -1,0 +1,33 @@
+{
+  "experiment": "manual_crop_full_audit",
+  "date": "2026-10-20",
+  "status": "COMPLETE_VERIFIED",
+  "tests_passing": 28,
+  "bugs_fixed": 6,
+  "contact_sheets": [
+    "01_gallery_real_frames.png",
+    "02_frame_selected_canvas.png",
+    "03_regions_drawn.png",
+    "04_regions_preserved_frame_change.png",
+    "05_preview_50_50.png",
+    "06_crop_confirmed.png",
+    "07_yellow_gameplay_green_facecam.png"
+  ],
+  "files_changed": [
+    "api/main.py",
+    "dashboard/index.html",
+    "tests/test_frame_preview.py"
+  ],
+  "new_endpoints": [
+    "POST /jobs/prepare-preview",
+    "GET /jobs/url-frame (cache updated)"
+  ],
+  "bugs_fixed_list": [
+    "yt-dlp format string: best[height<=720]/best → bestvideo[height<=720]/bestvideo/best (3 endpoints)",
+    "Cache _preview_stream_cache not shared in /crop-configs/preview-url",
+    "gameplay_rect dict vs list: added _normalise_rect() helper",
+    "Preview button disabled state not visually distinct",
+    "Dead code removed: njUrlLoadThumbnail, njUrlLoadFrame",
+    "Colors: gameplay=green → yellow (#facc15), facecam=blue → green (#22c55e)"
+  ]
+}
