@@ -618,6 +618,21 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 .nj-btn-confirm-crop.confirmed{background:#14532d;border-color:#15803d;color:#86efac}
 .nj-crop-confirmed-badge{font-size:11px;color:#4ade80;display:none;align-items:center;gap:4px}
 .nj-crop-confirmed-badge.visible{display:flex}
+/* ── Region draw-mode buttons ──────────────────────────────────────────── */
+.nj-draw-mode-row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.nj-draw-mode-btn{padding:8px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;border:2px solid transparent;line-height:1.2}
+.nj-draw-mode-btn.gameplay{background:#14532d;color:#4ade80;border-color:#22c55e}
+.nj-draw-mode-btn.gameplay.active{background:#22c55e;color:#000;border-color:#22c55e}
+.nj-draw-mode-btn.facecam{background:#1e3a5f;color:#60a5fa;border-color:#3b82f6}
+.nj-draw-mode-btn.facecam.active{background:#3b82f6;color:#000;border-color:#3b82f6}
+.nj-frame-placeholder{text-align:center;padding:40px 20px;color:#555;font-size:12px;line-height:1.6;min-height:120px;display:flex;align-items:center;justify-content:center}
+.nj-frame-placeholder.hidden{display:none}
+.nj-url-frame-canvas-cursor-draw{cursor:crosshair!important}
+.nj-url-frame-canvas-cursor-move{cursor:move!important}
+.nj-url-frame-canvas-cursor-resize-nw,.nj-url-frame-canvas-cursor-resize-se{cursor:nwse-resize!important}
+.nj-url-frame-canvas-cursor-resize-ne,.nj-url-frame-canvas-cursor-resize-sw{cursor:nesw-resize!important}
+.nj-url-frame-canvas-cursor-resize-n,.nj-url-frame-canvas-cursor-resize-s{cursor:ns-resize!important}
+.nj-url-frame-canvas-cursor-resize-e,.nj-url-frame-canvas-cursor-resize-w{cursor:ew-resize!important}
 </style>
 </head>
 <body>
@@ -1013,13 +1028,33 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
       <div class="nj-pregame-wrap" id="nj-url-crop-pregame">
         <div class="nj-crop-section">
           <div class="nj-crop-section-title">Gaming Crop Setup</div>
-          <div style="font-size:12px;color:#888;margin-bottom:10px">
-            Draw your regions on a real frame — no full download needed.
+          <div style="font-size:12px;color:#888;margin-bottom:12px">
+            Mark the gameplay area and camera area on a real video frame before starting the pipeline.
           </div>
+
+          <!-- Mode buttons -->
+          <div class="nj-draw-mode-row">
+            <button id="nj-url-btn-gameplay" class="nj-draw-mode-btn gameplay"
+              onclick="njUrlSetDrawMode('gameplay')">▣ Select Gameplay Region</button>
+            <button id="nj-url-btn-facecam" class="nj-draw-mode-btn facecam"
+              onclick="njUrlSetDrawMode('facecam')">▣ Select Camera Region</button>
+          </div>
+
+          <!-- Step hint -->
+          <div id="nj-url-crop-step" style="font-size:12px;color:#60a5fa;margin:6px 0 10px">
+            Click a button above, then drag on the frame to draw a region
+          </div>
+
+          <!-- Frame + canvas overlay -->
           <div class="nj-frame-img-wrap" id="nj-url-frame-wrap">
             <img id="nj-url-frame-img" src="" alt="Video frame" style="display:none">
-            <canvas id="nj-url-frame-canvas"></canvas>
+            <canvas id="nj-url-frame-canvas" style="touch-action:none"></canvas>
+            <div class="nj-frame-placeholder" id="nj-url-frame-placeholder">
+              Enter a URL above to load a thumbnail, or use "Load frame" for a real video frame
+            </div>
           </div>
+
+          <!-- Seek row -->
           <div class="nj-frame-load-row">
             <span>At:</span>
             <input type="range" id="nj-url-frame-slider" min="0" max="600" step="5" value="10"
@@ -1028,17 +1063,20 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
             <button class="nj-frame-load-btn" id="nj-url-load-frame-btn" onclick="njUrlLoadFrame()">Load frame</button>
             <div class="nj-frame-spinner" id="nj-url-frame-spinner"></div>
           </div>
-          <div id="nj-url-crop-step" style="font-size:12px;color:#60a5fa;margin:8px 0">
-            Step 1: Draw the <strong>Gameplay</strong> region (green)
-          </div>
-          <div class="nj-region-legend">
+
+          <!-- Legend -->
+          <div class="nj-region-legend" style="margin-top:8px">
             <span><span class="nj-region-dot" style="background:#22c55e"></span>Gameplay</span>
-            <span><span class="nj-region-dot" style="background:#3b82f6"></span>Facecam</span>
+            <span><span class="nj-region-dot" style="background:#3b82f6"></span>Camera</span>
           </div>
+
+          <!-- Actions -->
           <div class="nj-crop-actions" style="margin-top:10px">
             <button class="nj-btn-preview" id="nj-url-btn-preview" onclick="njUrlPreviewCrop()" disabled>Preview (5s)</button>
-            <button class="nj-btn-reset" onclick="njUrlResetCrop()">Reset</button>
+            <button class="nj-btn-reset" onclick="njUrlResetRegions()">Reset Regions</button>
           </div>
+
+          <!-- Confirm -->
           <div class="nj-crop-confirm-row">
             <button class="nj-btn-confirm-crop" id="nj-url-btn-confirm" onclick="njUrlConfirmCrop()">
               ✓ Confirm Crop Setup
@@ -1047,6 +1085,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
               <span>✓</span> Crop confirmed — ready to create job
             </div>
           </div>
+
           <div class="nj-crop-status" id="nj-url-crop-status"></div>
           <div class="nj-preview-video-wrap" id="nj-url-preview-wrap" style="display:none">
             <video id="nj-url-preview-video" controls></video>
@@ -5700,7 +5739,8 @@ function njSetSource(mode) {
   }
   njUpdateSubmitState();
   if (typeof njUpdateCropAreaVisibility === 'function') njUpdateCropAreaVisibility();
-  if (typeof njUrlResetCrop === 'function') njUrlResetCrop();
+  if (typeof njUrlResetRegions === 'function') njUrlResetRegions();
+  njUrlShowCropIfNeeded();
 }
 
 function njUrlChanged(val) {
@@ -6004,7 +6044,7 @@ async function njSubmit() {
   _njCropState = { drawing: false, step: 'gameplay', gameplay: null, facecam: null };
   _njSavedCropConfigId = null;
   _njPreviewValidated = false;
-  njUrlResetCrop();
+  if (typeof njUrlResetRegions === 'function') njUrlResetRegions();
   njSetVideoType('other');
   _njCropMode = 'auto';
   njUpdateSubmitState();
@@ -8087,22 +8127,31 @@ async function njPreviewCrop() {
 }
 
 // ── URL-mode Pre-job Crop ─────────────────────────────────────────────────────
-let _njUrlCropState = { drawing: false, step: 'gameplay', gameplay: null, facecam: null };
-let _njUrlCropStart = null;
+// Rect state: normalized [0-1] coords
+let _njUrlCropState = { gameplay: null, facecam: null };
 let _njUrlFrameSrcW = 1920;
 let _njUrlFrameSrcH = 1080;
 let _njUrlCropConfirmed = false;
 let _njUrlPreviewValidated = false;
+let _njUrlDrawMode = null;  // 'gameplay' | 'facecam' | null
+// Drag state (draw / move / resize)
+let _njUrlDrag = null;
+// { type:'draw'|'move'|'resize', target:'gameplay'|'facecam',
+//   handle:str|null, startPtr:{x,y}, startRect:{x,y,w,h}, pointerId:num }
 
 function njUrlShowCropIfNeeded() {
   const wrap = document.getElementById('nj-url-crop-pregame');
   if (!wrap) return;
-  const show = _njVideoType === 'gaming' && _njCropMode === 'manual' && !!_njMeta && _njSource === 'url';
-  wrap.classList.toggle('visible', show);
+  // Show whenever Gaming + Manual is selected in URL mode — no metadata required
+  const show = _njVideoType === 'gaming' && _njCropMode === 'manual' && _njSource === 'url';
+  wrap.classList.toggle('visible', !!show);
   if (show) {
     njUrlInitCanvas();
+    // Load thumbnail if metadata just became available and no frame loaded yet
     const img = document.getElementById('nj-url-frame-img');
-    if (img && !img.src && _njMeta && _njMeta.thumbnail) njUrlLoadThumbnail();
+    if (img && !img.getAttribute('src') && _njMeta && _njMeta.thumbnail) {
+      njUrlLoadThumbnail();
+    }
   }
 }
 
@@ -8114,10 +8163,12 @@ function njUrlLoadThumbnail() {
     _njUrlFrameSrcW = (_njMeta && _njMeta.width) || img.naturalWidth || 1920;
     _njUrlFrameSrcH = (_njMeta && _njMeta.height) || img.naturalHeight || 1080;
     img.style.display = '';
+    const ph = document.getElementById('nj-url-frame-placeholder');
+    if (ph) ph.classList.add('hidden');
     njUrlResizeCanvas();
-    njUrlSetStatus('', 'Thumbnail loaded. Click "Load frame" for a real frame, or draw regions directly.');
+    njUrlSetStatus('', 'Thumbnail loaded. Click "Load frame" for a real video frame, or draw regions now.');
   };
-  img.onerror = () => njUrlSetStatus('warn', 'Could not load thumbnail. Use Load frame button.');
+  img.onerror = () => njUrlSetStatus('warn', 'Could not load thumbnail. Use "Load frame" button.');
   img.src = thumb;
   if (_njMeta && _njMeta.duration_s) {
     const slider = document.getElementById('nj-url-frame-slider');
@@ -8126,8 +8177,9 @@ function njUrlLoadThumbnail() {
 }
 
 async function njUrlLoadFrame() {
-  const url = (document.getElementById('nj-url-input') && document.getElementById('nj-url-input').value || '').trim();
-  if (!url) return;
+  const urlInput = document.getElementById('nj-url-input');
+  const url = urlInput ? urlInput.value.trim() : '';
+  if (!url) { njUrlSetStatus('warn', 'Enter a URL first'); return; }
   const slider = document.getElementById('nj-url-frame-slider');
   const t = slider ? (parseFloat(slider.value) || 10) : 10;
   const timeEl = document.getElementById('nj-url-frame-time');
@@ -8136,31 +8188,28 @@ async function njUrlLoadFrame() {
   const spinner = document.getElementById('nj-url-frame-spinner');
   if (btn) btn.disabled = true;
   if (spinner) spinner.style.display = 'inline-block';
-  njUrlSetStatus('', 'Extracting frame… (may take 5–15s)');
+  njUrlSetStatus('', 'Extracting frame… (5–15s)');
   try {
     const resp = await fetch(`${API}/jobs/url-frame?url=${encodeURIComponent(url)}&t=${t}`);
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({detail: 'Frame extraction failed'}));
-      njUrlSetStatus('warn', (err.detail || 'Failed') + ' — thumbnail used instead.');
+      njUrlSetStatus('warn', (err.detail || 'Failed') + ' — falling back to thumbnail.');
+      njUrlLoadThumbnail();
       return;
     }
     const data = await resp.json();
     _njUrlFrameSrcW = data.src_width || 1920;
     _njUrlFrameSrcH = data.src_height || 1080;
     const img = document.getElementById('nj-url-frame-img');
-    img.onload = () => { njUrlResizeCanvas(); njUrlRedrawCanvas(); };
+    img.onload = () => {
+      img.style.display = '';
+      const ph = document.getElementById('nj-url-frame-placeholder');
+      if (ph) ph.classList.add('hidden');
+      njUrlResizeCanvas();
+      njUrlRedrawCanvas();
+    };
     img.src = 'data:image/jpeg;base64,' + data.frame_b64;
-    img.style.display = '';
-    njUrlSetStatus('ok', `Frame at ${Math.round(t)}s loaded (${_njUrlFrameSrcW}×${_njUrlFrameSrcH}). Draw regions now.`);
-    // Reset drawn regions when frame changes
-    _njUrlCropState.gameplay = null;
-    _njUrlCropState.facecam = null;
-    _njUrlCropState.step = 'gameplay';
-    _njUrlCropState.drawing = false;
-    const stepEl = document.getElementById('nj-url-crop-step');
-    if (stepEl) stepEl.innerHTML = 'Step 1: Draw the <strong>Gameplay</strong> region (green)';
-    const pvBtn = document.getElementById('nj-url-btn-preview');
-    if (pvBtn) pvBtn.disabled = true;
+    njUrlSetStatus('ok', `Frame at ${Math.round(t)}s loaded. Click a mode button and draw your regions.`);
   } catch(e) {
     njUrlSetStatus('warn', 'Network error: ' + e.message);
   } finally {
@@ -8169,13 +8218,14 @@ async function njUrlLoadFrame() {
   }
 }
 
+// ── Canvas geometry ──────────────────────────────────────────────────────────
 function njUrlResizeCanvas() {
   const img = document.getElementById('nj-url-frame-img');
   const canvas = document.getElementById('nj-url-frame-canvas');
   const wrap = document.getElementById('nj-url-frame-wrap');
   if (!canvas || !wrap) return;
-  const cw = wrap.clientWidth || 400;
-  const ch = (img && img.naturalHeight && img.naturalWidth)
+  const cw = Math.max(100, wrap.clientWidth);
+  const ch = (img && img.naturalWidth && img.naturalHeight)
     ? Math.round(cw * img.naturalHeight / img.naturalWidth)
     : Math.round(cw * 9 / 16);
   canvas.width = cw;
@@ -8184,119 +8234,243 @@ function njUrlResizeCanvas() {
   njUrlRedrawCanvas();
 }
 
-function njUrlCanvasCoords(e) {
+function _njUrlPtrCoords(e) {
   const canvas = document.getElementById('nj-url-frame-canvas');
-  const rect = canvas.getBoundingClientRect();
+  const r = canvas.getBoundingClientRect();
   return {
-    x: (e.clientX - rect.left) * canvas.width / rect.width,
-    y: (e.clientY - rect.top) * canvas.height / rect.height,
+    x: (e.clientX - r.left) * canvas.width / r.width,
+    y: (e.clientY - r.top) * canvas.height / r.height,
   };
 }
 
+function _njUrlNormToPx(n, canvas) {
+  return n ? { x: n.x * canvas.width, y: n.y * canvas.height,
+               w: n.w * canvas.width,  h: n.h * canvas.height } : null;
+}
+
+// ── Hit-test for resize handles / interior ────────────────────────────────────
+const _NJ_HIT = 10;
+function _njUrlHitTest(px, py, canvas) {
+  for (const target of ['gameplay', 'facecam']) {
+    const nr = _njUrlCropState[target];
+    if (!nr) continue;
+    const r = _njUrlNormToPx(nr, canvas);
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    const hpts = [
+      {id:'nw',x:r.x,y:r.y}, {id:'n',x:cx,y:r.y}, {id:'ne',x:r.x+r.w,y:r.y},
+      {id:'e',x:r.x+r.w,y:cy}, {id:'se',x:r.x+r.w,y:r.y+r.h},
+      {id:'s',x:cx,y:r.y+r.h}, {id:'sw',x:r.x,y:r.y+r.h}, {id:'w',x:r.x,y:cy},
+    ];
+    for (const h of hpts)
+      if (Math.abs(px-h.x) <= _NJ_HIT && Math.abs(py-h.y) <= _NJ_HIT)
+        return { target, handle: h.id };
+    if (px >= r.x && px <= r.x+r.w && py >= r.y && py <= r.y+r.h)
+      return { target, handle: null };
+  }
+  return null;
+}
+
+function _njUrlApplyResize(handle, startRect, startPtr, curPtr, canvas) {
+  let {x, y, w, h} = startRect;
+  const dx = (curPtr.x - startPtr.x) / canvas.width;
+  const dy = (curPtr.y - startPtr.y) / canvas.height;
+  if (handle === 'se')      { w += dx; h += dy; }
+  else if (handle === 'sw') { x += dx; w -= dx; h += dy; }
+  else if (handle === 'ne') { y += dy; w += dx; h -= dy; }
+  else if (handle === 'nw') { x += dx; y += dy; w -= dx; h -= dy; }
+  else if (handle === 'n')  { y += dy; h -= dy; }
+  else if (handle === 's')  { h += dy; }
+  else if (handle === 'e')  { w += dx; }
+  else if (handle === 'w')  { x += dx; w -= dx; }
+  if (w < 0) { x += w; w = -w; }
+  if (h < 0) { y += h; h = -h; }
+  const m = 0.02;
+  w = Math.max(m, w); h = Math.max(m, h);
+  x = Math.max(0, Math.min(1-w, x)); y = Math.max(0, Math.min(1-h, y));
+  return { x, y, w: Math.min(1-x, w), h: Math.min(1-y, h) };
+}
+
+// ── Pointer event handlers ────────────────────────────────────────────────────
 function njUrlInitCanvas() {
   const canvas = document.getElementById('nj-url-frame-canvas');
   if (!canvas) return;
-  canvas.removeEventListener('mousedown', _njUrlMouseDown);
-  canvas.removeEventListener('mousemove', _njUrlMouseMove);
-  canvas.removeEventListener('mouseup', _njUrlMouseUp);
-  canvas.addEventListener('mousedown', _njUrlMouseDown);
-  canvas.addEventListener('mousemove', _njUrlMouseMove);
-  canvas.addEventListener('mouseup', _njUrlMouseUp);
+  canvas.removeEventListener('pointerdown',  _njUrlPtrDown);
+  canvas.removeEventListener('pointermove',  _njUrlPtrMove);
+  canvas.removeEventListener('pointerup',    _njUrlPtrUp);
+  canvas.removeEventListener('pointercancel', _njUrlPtrUp);
+  canvas.addEventListener('pointerdown',  _njUrlPtrDown);
+  canvas.addEventListener('pointermove',  _njUrlPtrMove);
+  canvas.addEventListener('pointerup',    _njUrlPtrUp);
+  canvas.addEventListener('pointercancel', _njUrlPtrUp);
   window.removeEventListener('resize', njUrlResizeCanvas);
   window.addEventListener('resize', njUrlResizeCanvas);
+  njUrlResizeCanvas();
 }
 
-function _njUrlMouseDown(e) {
+function _njUrlPtrDown(e) {
   e.preventDefault();
-  if (_njUrlCropState.step === 'done') return;
-  _njUrlCropState.drawing = true;
-  _njUrlCropStart = njUrlCanvasCoords(e);
+  const canvas = e.currentTarget;
+  const ptr = _njUrlPtrCoords(e);
+  if (_njUrlDrawMode) {
+    const prevRect = _njUrlCropState[_njUrlDrawMode] || null;
+    _njUrlDrag = { type:'draw', target:_njUrlDrawMode,
+                   startPtr:ptr, startRect:prevRect, pointerId:e.pointerId };
+    canvas.setPointerCapture(e.pointerId);
+  } else {
+    const hit = _njUrlHitTest(ptr.x, ptr.y, canvas);
+    if (hit) {
+      _njUrlDrag = { type: hit.handle ? 'resize' : 'move',
+                     target:hit.target, handle:hit.handle,
+                     startPtr:ptr, startRect:{..._njUrlCropState[hit.target]},
+                     pointerId:e.pointerId };
+      canvas.setPointerCapture(e.pointerId);
+    }
+  }
 }
 
-function _njUrlMouseMove(e) {
-  if (!_njUrlCropState.drawing || !_njUrlCropStart) return;
-  const cur = njUrlCanvasCoords(e);
-  const canvas = document.getElementById('nj-url-frame-canvas');
-  const r = {
-    x: Math.min(_njUrlCropStart.x, cur.x) / canvas.width,
-    y: Math.min(_njUrlCropStart.y, cur.y) / canvas.height,
-    w: Math.abs(cur.x - _njUrlCropStart.x) / canvas.width,
-    h: Math.abs(cur.y - _njUrlCropStart.y) / canvas.height,
-  };
-  if (_njUrlCropState.step === 'gameplay') _njUrlCropState.gameplay = r;
-  else if (_njUrlCropState.step === 'facecam') _njUrlCropState.facecam = r;
-  njUrlRedrawCanvas();
-}
-
-function _njUrlMouseUp(e) {
-  if (!_njUrlCropState.drawing || !_njUrlCropStart) return;
-  _njUrlCropState.drawing = false;
-  const cur = njUrlCanvasCoords(e);
-  const canvas = document.getElementById('nj-url-frame-canvas');
-  const x = Math.min(_njUrlCropStart.x, cur.x);
-  const y = Math.min(_njUrlCropStart.y, cur.y);
-  const w = Math.abs(cur.x - _njUrlCropStart.x);
-  const h = Math.abs(cur.y - _njUrlCropStart.y);
-  _njUrlCropStart = null;
-  if (w < 10 || h < 10) return;
-  const r = { x: x / canvas.width, y: y / canvas.height, w: w / canvas.width, h: h / canvas.height };
-  if (_njUrlCropState.step === 'gameplay') {
-    _njUrlCropState.gameplay = r;
-    _njUrlCropState.step = 'facecam';
-    document.getElementById('nj-url-crop-step').innerHTML = 'Step 2: Draw the <strong>Facecam</strong> region (blue)';
-  } else if (_njUrlCropState.step === 'facecam') {
-    _njUrlCropState.facecam = r;
-    _njUrlCropState.step = 'done';
-    document.getElementById('nj-url-crop-step').innerHTML = 'Both regions drawn. Preview or confirm.';
-    const pvBtn = document.getElementById('nj-url-btn-preview');
-    if (pvBtn) pvBtn.disabled = false;
-    const confirmBtn = document.getElementById('nj-url-btn-confirm');
-    if (confirmBtn) confirmBtn.classList.add('visible');
-    njUrlSetStatus('ok', 'Regions drawn. Preview crop (5s) to verify, then confirm.');
+function _njUrlPtrMove(e) {
+  const canvas = e.currentTarget;
+  const ptr = _njUrlPtrCoords(e);
+  if (!_njUrlDrag || _njUrlDrag.pointerId !== e.pointerId) {
+    // Update cursor on hover
+    const hit = _njUrlHitTest(ptr.x, ptr.y, canvas);
+    if (_njUrlDrawMode) canvas.style.cursor = 'crosshair';
+    else if (!hit) canvas.style.cursor = 'default';
+    else if (!hit.handle) canvas.style.cursor = 'move';
+    else {
+      const m = {n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',
+                 nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize'};
+      canvas.style.cursor = m[hit.handle] || 'default';
+    }
+    return;
+  }
+  e.preventDefault();
+  const d = _njUrlDrag;
+  if (d.type === 'draw') {
+    const sx = d.startPtr.x, sy = d.startPtr.y;
+    _njUrlCropState[d.target] = {
+      x: Math.min(sx, ptr.x) / canvas.width,
+      y: Math.min(sy, ptr.y) / canvas.height,
+      w: Math.abs(ptr.x - sx) / canvas.width,
+      h: Math.abs(ptr.y - sy) / canvas.height,
+    };
+  } else if (d.type === 'move') {
+    const dx = (ptr.x - d.startPtr.x) / canvas.width;
+    const dy = (ptr.y - d.startPtr.y) / canvas.height;
+    const sr = d.startRect;
+    _njUrlCropState[d.target] = {
+      x: Math.max(0, Math.min(1-sr.w, sr.x+dx)),
+      y: Math.max(0, Math.min(1-sr.h, sr.y+dy)),
+      w: sr.w, h: sr.h,
+    };
+  } else if (d.type === 'resize') {
+    _njUrlCropState[d.target] = _njUrlApplyResize(d.handle, d.startRect, d.startPtr, ptr, canvas);
   }
   njUrlRedrawCanvas();
 }
 
+function _njUrlPtrUp(e) {
+  if (!_njUrlDrag || _njUrlDrag.pointerId !== e.pointerId) return;
+  e.preventDefault();
+  const canvas = e.currentTarget;
+  const ptr = _njUrlPtrCoords(e);
+  const d = _njUrlDrag;
+  if (d.type === 'draw') {
+    const sw = Math.abs(ptr.x - d.startPtr.x);
+    const sh = Math.abs(ptr.y - d.startPtr.y);
+    if (sw < 10 || sh < 10) _njUrlCropState[d.target] = d.startRect; // too small — restore
+    // Exit draw mode
+    _njUrlDrawMode = null;
+    document.getElementById('nj-url-btn-gameplay')?.classList.remove('active');
+    document.getElementById('nj-url-btn-facecam')?.classList.remove('active');
+    canvas.style.cursor = 'default';
+  }
+  _njUrlDrag = null;
+  njUrlRedrawCanvas();
+  njUrlUpdateStepHint();
+  njUrlUpdateConfirmState();
+}
+
+// ── Mode buttons ──────────────────────────────────────────────────────────────
+function njUrlSetDrawMode(mode) {
+  _njUrlDrawMode = (_njUrlDrawMode === mode) ? null : mode;
+  document.getElementById('nj-url-btn-gameplay')?.classList.toggle('active', _njUrlDrawMode === 'gameplay');
+  document.getElementById('nj-url-btn-facecam')?.classList.toggle('active', _njUrlDrawMode === 'facecam');
+  const canvas = document.getElementById('nj-url-frame-canvas');
+  if (canvas) canvas.style.cursor = _njUrlDrawMode ? 'crosshair' : 'default';
+  njUrlUpdateStepHint();
+}
+
+function njUrlUpdateStepHint() {
+  const el = document.getElementById('nj-url-crop-step');
+  if (!el) return;
+  if (_njUrlDrawMode === 'gameplay')
+    el.innerHTML = 'Drag to draw the <strong style="color:#22c55e">Gameplay</strong> region';
+  else if (_njUrlDrawMode === 'facecam')
+    el.innerHTML = 'Drag to draw the <strong style="color:#3b82f6">Camera</strong> region';
+  else if (_njUrlCropState.gameplay && _njUrlCropState.facecam)
+    el.innerHTML = 'Both regions set. Drag to move or resize. Preview or confirm when ready.';
+  else if (_njUrlCropState.gameplay)
+    el.innerHTML = '✓ Gameplay set — click <strong style="color:#3b82f6">Select Camera</strong> and draw';
+  else if (_njUrlCropState.facecam)
+    el.innerHTML = '✓ Camera set — click <strong style="color:#22c55e">Select Gameplay</strong> and draw';
+  else
+    el.innerHTML = 'Click a button above, then drag on the frame to draw a region';
+}
+
+function njUrlUpdateConfirmState() {
+  const both = !!(_njUrlCropState.gameplay && _njUrlCropState.facecam);
+  const pvBtn = document.getElementById('nj-url-btn-preview');
+  if (pvBtn) pvBtn.disabled = !both;
+  document.getElementById('nj-url-btn-confirm')?.classList.toggle('visible', both);
+  njUpdateSubmitState();
+}
+
+// ── Canvas rendering ──────────────────────────────────────────────────────────
 function njUrlRedrawCanvas() {
   const canvas = document.getElementById('nj-url-frame-canvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  function normToPx(n) {
-    return n ? { x: n.x * canvas.width, y: n.y * canvas.height, w: n.w * canvas.width, h: n.h * canvas.height } : null;
+  const COLORS = { gameplay: '#22c55e', facecam: '#3b82f6' };
+  const LABELS = { gameplay: 'GAMEPLAY', facecam: 'CAMERA' };
+  for (const [key, nr] of Object.entries(_njUrlCropState)) {
+    if (!nr) continue;
+    const r = _njUrlNormToPx(nr, canvas);
+    const color = COLORS[key];
+    ctx.fillStyle = color + '28'; ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = color;
+    ctx.fillText(LABELS[key], r.x + 5, r.y + 16);
+    if (!_njUrlDrawMode) {
+      // Resize handles
+      const cx = r.x+r.w/2, cy = r.y+r.h/2;
+      const hpts = [{x:r.x,y:r.y},{x:cx,y:r.y},{x:r.x+r.w,y:r.y},
+        {x:r.x+r.w,y:cy},{x:r.x+r.w,y:r.y+r.h},
+        {x:cx,y:r.y+r.h},{x:r.x,y:r.y+r.h},{x:r.x,y:cy}];
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+      for (const h of hpts) { ctx.fillRect(h.x-4,h.y-4,8,8); ctx.strokeRect(h.x-4,h.y-4,8,8); }
+    }
   }
-  function drawRect(r, color, label) {
-    if (!r) return;
-    ctx.strokeStyle = color; ctx.lineWidth = 2;
-    ctx.strokeRect(r.x, r.y, r.w, r.h);
-    ctx.fillStyle = color + '33'; ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.fillStyle = color; ctx.font = 'bold 12px sans-serif';
-    ctx.fillText(label, r.x + 4, r.y + 14);
-  }
-  drawRect(normToPx(_njUrlCropState.gameplay), '#22c55e', 'GAMEPLAY');
-  drawRect(normToPx(_njUrlCropState.facecam), '#3b82f6', 'FACECAM');
 }
 
-function njUrlResetCrop() {
-  _njUrlCropState = { drawing: false, step: 'gameplay', gameplay: null, facecam: null };
-  _njUrlCropStart = null;
-  _njUrlCropConfirmed = false;
-  _njUrlPreviewValidated = false;
-  const stepEl = document.getElementById('nj-url-crop-step');
-  if (stepEl) stepEl.innerHTML = 'Step 1: Draw the <strong>Gameplay</strong> region (green)';
-  const pvBtn = document.getElementById('nj-url-btn-preview');
-  if (pvBtn) pvBtn.disabled = true;
-  const confirmBtn = document.getElementById('nj-url-btn-confirm');
-  if (confirmBtn) { confirmBtn.classList.remove('visible', 'confirmed'); confirmBtn.textContent = '✓ Confirm Crop Setup'; }
-  const badge = document.getElementById('nj-url-crop-confirmed-badge');
-  if (badge) badge.classList.remove('visible');
+// ── Reset ─────────────────────────────────────────────────────────────────────
+function njUrlResetRegions() {
+  _njUrlCropState = { gameplay: null, facecam: null };
+  _njUrlDrag = null; _njUrlDrawMode = null;
+  _njUrlCropConfirmed = false; _njUrlPreviewValidated = false;
+  document.getElementById('nj-url-btn-gameplay')?.classList.remove('active');
+  document.getElementById('nj-url-btn-facecam')?.classList.remove('active');
+  const canvas = document.getElementById('nj-url-frame-canvas');
+  if (canvas) canvas.style.cursor = 'default';
+  const cb = document.getElementById('nj-url-btn-confirm');
+  if (cb) { cb.classList.remove('visible', 'confirmed'); cb.textContent = '✓ Confirm Crop Setup'; }
+  document.getElementById('nj-url-crop-confirmed-badge')?.classList.remove('visible');
   const pvWrap = document.getElementById('nj-url-preview-wrap');
   if (pvWrap) pvWrap.style.display = 'none';
-  const img = document.getElementById('nj-url-frame-img');
-  if (img) { img.src = ''; img.style.display = 'none'; }
-  const wrap = document.getElementById('nj-url-crop-pregame');
-  if (wrap) wrap.classList.remove('visible');
   njUrlSetStatus('', '');
+  njUrlUpdateStepHint();
+  njUrlUpdateConfirmState();
   njUrlRedrawCanvas();
 }
 
@@ -8309,17 +8483,15 @@ function njUrlSetStatus(type, msg) {
 
 async function njUrlPreviewCrop() {
   if (!_njUrlCropState.gameplay || !_njUrlCropState.facecam) {
-    njUrlSetStatus('warn', 'Draw both regions first'); return;
+    njUrlSetStatus('warn', 'Select both regions first'); return;
   }
-  const url = (document.getElementById('nj-url-input') && document.getElementById('nj-url-input').value || '').trim();
+  const url = document.getElementById('nj-url-input')?.value.trim();
   if (!url) { njUrlSetStatus('err', 'No URL'); return; }
-  njUrlSetStatus('', 'Generating preview…');
+  njUrlSetStatus('', 'Generating 5s preview…');
   const pvBtn = document.getElementById('nj-url-btn-preview');
   if (pvBtn) pvBtn.disabled = true;
-  const slider = document.getElementById('nj-url-frame-slider');
-  const t = slider ? (parseFloat(slider.value) || 10) : 10;
-  const gp = _njUrlCropState.gameplay;
-  const fc = _njUrlCropState.facecam;
+  const t = parseFloat(document.getElementById('nj-url-frame-slider')?.value) || 10;
+  const gp = _njUrlCropState.gameplay, fc = _njUrlCropState.facecam;
   try {
     const resp = await fetch(`${API}/crop-configs/preview-url`, {
       method: 'POST',
@@ -8328,46 +8500,43 @@ async function njUrlPreviewCrop() {
         url,
         gameplay_rect: [gp.x, gp.y, gp.w, gp.h],
         facecam_rect:  [fc.x, fc.y, fc.w, fc.h],
-        src_width: _njUrlFrameSrcW,
-        src_height: _njUrlFrameSrcH,
-        t_start: t,
-        split_fraction: 0.5,
+        src_width: _njUrlFrameSrcW, src_height: _njUrlFrameSrcH,
+        t_start: t, split_fraction: 0.5,
       }),
     });
     if (!resp.ok) {
-      const err = await resp.json().catch(() => ({detail: 'Preview failed'}));
-      njUrlSetStatus('err', err.detail || 'Preview failed');
-      return;
+      const err = await resp.json().catch(() => ({detail:'Preview failed'}));
+      njUrlSetStatus('err', err.detail || 'Preview failed'); return;
     }
     const data = await resp.json();
     const pvWrap = document.getElementById('nj-url-preview-wrap');
     const pvVideo = document.getElementById('nj-url-preview-video');
-    if (pvVideo) pvVideo.src = data.preview_url + '?t=' + Date.now();
-    if (pvWrap) pvWrap.style.display = '';
-    if (pvVideo) pvVideo.load();
+    if (pvVideo && data.preview_url) {
+      pvVideo.src = data.preview_url + '?t=' + Date.now();
+      if (pvWrap) pvWrap.style.display = '';
+      pvVideo.load();
+    }
     _njUrlPreviewValidated = true;
-    njUrlSetStatus('ok', 'Preview ready. Confirm crop to enable Create Job.');
-    const confirmBtn = document.getElementById('nj-url-btn-confirm');
-    if (confirmBtn) confirmBtn.classList.add('visible');
+    njUrlSetStatus('ok', 'Preview ready — confirm crop to enable Create Job.');
+    document.getElementById('nj-url-btn-confirm')?.classList.add('visible');
   } catch(e) {
     njUrlSetStatus('err', 'Network error: ' + e.message);
   } finally {
-    if (pvBtn) pvBtn.disabled = false;
+    if (pvBtn) pvBtn.disabled = !(_njUrlCropState.gameplay && _njUrlCropState.facecam);
   }
 }
 
 function njUrlConfirmCrop() {
   if (!_njUrlCropState.gameplay || !_njUrlCropState.facecam) {
-    njUrlSetStatus('warn', 'Draw both regions first'); return;
+    njUrlSetStatus('warn', 'Select both regions first'); return;
   }
   _njUrlCropConfirmed = true;
   const btn = document.getElementById('nj-url-btn-confirm');
   if (btn) { btn.classList.add('confirmed'); btn.textContent = '✓ Crop Confirmed'; }
-  const badge = document.getElementById('nj-url-crop-confirmed-badge');
-  if (badge) badge.classList.add('visible');
+  document.getElementById('nj-url-crop-confirmed-badge')?.classList.add('visible');
   njUrlSetStatus('ok', _njUrlPreviewValidated
     ? 'Crop confirmed and previewed. Ready to create job.'
-    : 'Crop confirmed (not previewed). Ready to create job.');
+    : 'Crop confirmed. Ready to create job.');
   njUpdateSubmitState();
 }
 
