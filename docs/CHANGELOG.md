@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-20 — fix: KI-015 — cancel 18 orphaned INVALID_FILE upload sessions
+
+18 `yt_upload_sessions` with `status='error'` and `error_code='INVALID_FILE'` (all `title='Test'`, no associated batch items) were permanently stuck since they are in `_FATAL_ERRORS` and never auto-retry. Cancelled all 18 via direct SQL:
+`UPDATE yt_upload_sessions SET status='cancelled', updated_at=datetime('now') WHERE error_code='INVALID_FILE'`
+
+---
+
 ## 2026-10-20 — feat: CANCELLED batch state for upload queue
 
 ### What changed
