@@ -522,6 +522,10 @@ def init_db():
             paused INTEGER DEFAULT 0,
             total_items INTEGER DEFAULT 0,
             approved_privacy TEXT DEFAULT 'private',
+            cancelled INTEGER NOT NULL DEFAULT 0,
+            cancelled_at TEXT,
+            cancel_reason TEXT,
+            archived_at TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
@@ -2082,6 +2086,14 @@ def claim_yt_upload_session(worker_id: str) -> dict | None:
             sid_val = row.get("series_id")
             spart = row.get("series_part") or 0
 
+            # Rule 0: skip sessions from cancelled batches
+            if batch_id_ref:
+                is_cancelled = conn.execute(
+                    "SELECT cancelled FROM upload_batches WHERE id=?", (batch_id_ref,)
+                ).fetchone()
+                if is_cancelled and is_cancelled["cancelled"]:
+                    continue
+
             # Rule 1: batch ordering — skip if an earlier batch still has pending/active sessions.
             # Exceptions:
             #   - QUOTA_EXCEEDED sessions waiting on a time-window retry are not blockers.
@@ -2351,11 +2363,16 @@ def get_upload_batch(batch_id: str) -> dict | None:
     r = dict(row)
     r["items"] = [dict(i) for i in items]
     statuses = {i["status"] for i in r["items"] if i["status"]}
+    _published = frozenset({"public", "unlisted", "private", "needs_check"})
     done_count = sum(1 for i in r["items"] if i.get("status") in _DONE_STATUSES)
     r["done_items"] = done_count
+    r["published_items"] = sum(1 for i in r["items"] if i.get("status") in _published)
+    r["cancelled_items"] = sum(1 for i in r["items"] if i.get("status") == "cancelled")
     r["total_items"] = len(r["items"])
     r["error_items"] = sum(1 for i in r["items"] if i.get("status") == "error")
-    if r.get("paused"):
+    if r.get("cancelled"):
+        r["derived_status"] = "cancelled"
+    elif r.get("paused"):
         r["derived_status"] = "paused"
     elif not statuses:
         r["derived_status"] = "pending"
@@ -2376,6 +2393,8 @@ def list_upload_batches(limit: int = 50) -> list[dict]:
             SELECT b.*,
                    COUNT(i.id) as item_count,
                    SUM(CASE WHEN s.status IN ('public','unlisted','private','needs_check','cancelled') THEN 1 ELSE 0 END) as done_items,
+                   SUM(CASE WHEN s.status IN ('public','unlisted','private','needs_check') THEN 1 ELSE 0 END) as published_items,
+                   SUM(CASE WHEN s.status = 'cancelled' THEN 1 ELSE 0 END) as cancelled_items,
                    SUM(CASE WHEN s.status = 'error' THEN 1 ELSE 0 END) as error_items,
                    SUM(CASE WHEN s.status IN ('pending','uploading','processing','paused') THEN 1 ELSE 0 END) as active_items
             FROM upload_batches b
@@ -2388,7 +2407,9 @@ def list_upload_batches(limit: int = 50) -> list[dict]:
     result = []
     for row in rows:
         r = dict(row)
-        if r.get("paused"):
+        if r.get("cancelled"):
+            r["derived_status"] = "cancelled"
+        elif r.get("paused"):
             r["derived_status"] = "paused"
         elif r.get("active_items", 0) > 0:
             r["derived_status"] = "active"
@@ -2437,6 +2458,50 @@ def retry_batch_errors(batch_id: str):
               AND status='error'
         """, (ts, batch_id))
         conn.execute("UPDATE upload_batches SET updated_at=? WHERE id=?", (ts, batch_id))
+
+
+def cancel_upload_batch(batch_id: str, reason: str | None = None) -> str:
+    """Logically cancel a batch. Returns outcome: CANCELLED, CANCELLATION_PENDING,
+    ALREADY_CANCELLED, or ARCHIVED.
+
+    - Pending sessions in the batch are set to 'cancelled' immediately.
+    - Sessions already uploading/processing are NOT interrupted (they finish naturally);
+      the batch is marked cancelled and the worker will not claim new sessions from it.
+    - PUBLISHED sessions (public/unlisted/private/needs_check) are never touched.
+    """
+    ts = now()
+    with db() as conn:
+        row = conn.execute(
+            "SELECT cancelled, archived_at FROM upload_batches WHERE id=?", (batch_id,)
+        ).fetchone()
+        if not row:
+            return "NOT_FOUND"
+        if row["archived_at"]:
+            return "ARCHIVED"
+        if row["cancelled"]:
+            return "ALREADY_CANCELLED"
+
+        # Cancel pending/paused sessions; leave active (uploading/processing) and terminal alone
+        conn.execute("""
+            UPDATE yt_upload_sessions SET status='cancelled', updated_at=?
+            WHERE id IN (SELECT session_id FROM upload_batch_items WHERE batch_id=?)
+              AND status IN ('pending', 'paused')
+        """, (ts, batch_id))
+
+        # Check if any sessions are still mid-flight
+        still_active = conn.execute("""
+            SELECT COUNT(*) FROM yt_upload_sessions s
+            JOIN upload_batch_items ubi ON ubi.session_id = s.id
+            WHERE ubi.batch_id=? AND s.status IN ('uploading','processing')
+        """, (batch_id,)).fetchone()[0]
+
+        conn.execute("""
+            UPDATE upload_batches
+            SET cancelled=1, cancelled_at=?, cancel_reason=?, paused=0, updated_at=?
+            WHERE id=?
+        """, (ts, reason, ts, batch_id))
+
+    return "CANCELLATION_PENDING" if still_active else "CANCELLED"
 
 
 # ── Smart Reframe Variants ────────────────────────────────────────────────────
@@ -2488,3 +2553,54 @@ def get_reframe_variants_for_clip(clip_id: str) -> list[dict]:
 def latest_reframe_variant(clip_id: str) -> dict | None:
     rows = get_reframe_variants_for_clip(clip_id)
     return rows[0] if rows else None
+
+
+# ── Crop Configs ──────────────────────────────────────────────────────────────
+
+def create_crop_config(job_id, video_type, crop_mode, src_w, src_h,
+                       gameplay_rect=None, facecam_rect=None,
+                       split_fraction=0.65, validation_status='pending',
+                       layout_preset='GAMING_STACKED_FIT', gameplay_bg='black'):
+    """Create or replace crop config for a job. gameplay_rect/facecam_rect = [x,y,w,h] normalized."""
+    import uuid as _uuid, datetime as _dt
+    cfg_id = str(_uuid.uuid4())
+    now = _dt.datetime.utcnow().isoformat()
+    gx = gy = gw = gh = fx = fy = fw = fh = None
+    if gameplay_rect:
+        gx, gy, gw, gh = gameplay_rect
+    if facecam_rect:
+        fx, fy, fw, fh = facecam_rect
+    with db() as conn:
+        conn.execute("DELETE FROM crop_configs WHERE job_id=?", (job_id,))
+        conn.execute("""
+            INSERT INTO crop_configs
+            (id, job_id, video_type, crop_mode, src_width, src_height,
+             gameplay_x, gameplay_y, gameplay_w, gameplay_h,
+             facecam_x, facecam_y, facecam_w, facecam_h,
+             split_fraction, validation_status, created_at, updated_at,
+             layout_preset, gameplay_bg)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (cfg_id, job_id, video_type, crop_mode, src_w, src_h,
+              gx, gy, gw, gh, fx, fy, fw, fh,
+              split_fraction, validation_status, now, now,
+              layout_preset, gameplay_bg))
+    return cfg_id
+
+
+def get_crop_config(job_id):
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM crop_configs WHERE job_id=? ORDER BY created_at DESC LIMIT 1",
+        (job_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_crop_config_validation(cfg_id, status):
+    import datetime as _dt
+    with db() as conn:
+        conn.execute(
+            "UPDATE crop_configs SET validation_status=?, updated_at=? WHERE id=?",
+            (status, _dt.datetime.utcnow().isoformat(), cfg_id)
+        )

@@ -2626,7 +2626,15 @@ async def publish_video_package(video_id: str, body: dict = Body(...)):
 
     pkg = dbmod.get_video_package(video_id)
     tokens = yt_auth.load_tokens()
-    channel_id = (tokens or {}).get("channel_id", "")
+    channel_id = (tokens or {}).get("channel_id") or ""
+    if not channel_id:
+        try:
+            with dbmod.db() as _c:
+                _row = _c.execute("SELECT channel_id FROM yt_sync_state LIMIT 1").fetchone()
+                if _row:
+                    channel_id = _row[0] or ""
+        except Exception:
+            pass
     name = (body.get("name") or f"Package: {(pkg['source_title'] or video_id[:8])[:50]}").strip()
 
     # Collect ready youtube_shorts publications ordered by position
@@ -4033,6 +4041,27 @@ async def retry_batch_errors(batch_id: str):
     return {"status": "retrying"}
 
 
+@app.delete("/upload-batches/{batch_id}")
+async def cancel_upload_batch(batch_id: str, body: dict = Body({})):
+    """Logically cancel a batch (no physical delete).
+    Pending/paused sessions are set to cancelled.
+    Active sessions (uploading/processing) finish naturally but no new ones are claimed.
+    Published sessions and the batch history row are never deleted.
+    """
+    batch = dbmod.get_upload_batch(batch_id)
+    if not batch:
+        raise HTTPException(404, "Batch not found")
+    if batch.get("derived_status") == "cancelled":
+        return {"outcome": "ALREADY_CANCELLED"}
+    reason = (body.get("reason") or "").strip() or None
+    outcome = dbmod.cancel_upload_batch(batch_id, reason=reason)
+    if outcome == "NOT_FOUND":
+        raise HTTPException(404, "Batch not found")
+    if outcome == "ARCHIVED":
+        raise HTTPException(409, "Batch is archived and cannot be cancelled")
+    return {"outcome": outcome}
+
+
 @app.post("/yt-upload-sessions/{session_id}/update-privacy")
 async def update_session_privacy(session_id: str, body: dict = Body({})):
     """
@@ -4697,8 +4726,10 @@ async def save_crop_config(body: dict = Body(...)):
     src_h = body.get("src_height")
     gameplay_rect = body.get("gameplay_rect")
     facecam_rect = body.get("facecam_rect")
-    split_fraction = float(body.get("split_fraction", 0.5))
+    split_fraction = float(body.get("split_fraction", 0.65))
     validation_status = body.get("validation_status", "pending")
+    layout_preset = body.get("layout_preset", "GAMING_STACKED_FIT")
+    gameplay_bg = body.get("gameplay_bg", "black")
 
     if crop_mode == "manual":
         if not gameplay_rect or len(gameplay_rect) != 4:
@@ -4716,6 +4747,7 @@ async def save_crop_config(body: dict = Body(...)):
         job_id, video_type, crop_mode, src_w, src_h,
         gameplay_rect=gameplay_rect, facecam_rect=facecam_rect,
         split_fraction=split_fraction, validation_status=validation_status,
+        layout_preset=layout_preset, gameplay_bg=gameplay_bg,
     )
     return {"id": cfg_id}
 
@@ -4744,7 +4776,8 @@ async def preview_crop_file(
     src_width: int = Form(...),
     src_height: int = Form(...),
     t_start: float = Form(10.0),
-    split_fraction: float = Form(0.5),
+    split_fraction: float = Form(0.65),
+    gameplay_bg: str = Form("black"),
 ):
     """Generate a 5-second preview render from an uploaded file + manual crop regions."""
     import json as _json
@@ -4762,10 +4795,10 @@ async def preview_crop_file(
         f.write(content)
 
     try:
-        from engine.renderers.render_clip import _compute_split_layout_filter_manual as _csf
+        from engine.renderers.render_clip import _compute_stacked_fit_filter as _csf
         main_region = [gp[0] * src_width, gp[1] * src_height, gp[2] * src_width, gp[3] * src_height]
         sec_region = [fc[0] * src_width, fc[1] * src_height, fc[2] * src_width, fc[3] * src_height]
-        filt = _csf(main_region, sec_region, src_width, src_height, top_fraction=split_fraction)
+        filt = _csf(main_region, sec_region, src_width, src_height, top_fraction=split_fraction, bg=gameplay_bg)
 
         # split_layout filters use filter_complex + map, not -vf
         cmd = [
@@ -4789,6 +4822,86 @@ async def preview_crop_file(
             pass
 
     return {"preview_url": f"/static/previews/{preview_id}.mp4", "preview_id": preview_id}
+
+
+@app.post("/crop-configs/debug-pure-file")
+async def debug_pure_crop_file(
+    file: UploadFile = File(...),
+    gameplay_rect: str = Form(...),
+    src_width: int = Form(...),
+    src_height: int = Form(...),
+    t_start: float = Form(5.0),
+):
+    """DEV — pure crop only (no FIT, no layout, no captions). Returns gameplay region raw crop.
+    Used by the 'Ver recorte real' debug button.
+    """
+    import json as _json
+    gp = _json.loads(gameplay_rect)
+    if len(gp) != 4:
+        raise HTTPException(400, "gameplay_rect must be [x,y,w,h]")
+
+    px = int(gp[0] * src_width)
+    py = int(gp[1] * src_height)
+    pw = max(2, int(gp[2] * src_width))
+    ph = max(2, int(gp[3] * src_height))
+    pw -= pw % 2
+    ph -= ph % 2
+
+    preview_id = str(uuid.uuid4())
+    tmp_dir = Path(CONFIG.output_dir) / "previews"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    tmp_src = tmp_dir / f"{preview_id}_src_tmp"
+    out_mp4 = tmp_dir / f"{preview_id}_pure.mp4"
+    ann_jpg = tmp_dir / f"{preview_id}_ann.jpg"
+
+    content = await file.read()
+    with open(tmp_src, "wb") as fh:
+        fh.write(content)
+
+    try:
+        # Pure crop — gameplay only
+        r1 = subprocess.run(
+            [CONFIG.ffmpeg_path, "-y", "-ss", str(t_start), "-t", "5",
+             "-i", str(tmp_src),
+             "-vf", f"crop={pw}:{ph}:{px}:{py}",
+             "-c:v", "libx264", "-crf", "20", "-preset", "veryfast", "-an",
+             str(out_mp4)],
+            capture_output=True, timeout=120
+        )
+        if r1.returncode != 0:
+            raise HTTPException(500, f"FFmpeg crop failed: {r1.stderr.decode()[-400:]}")
+
+        # Annotated source frame
+        subprocess.run(
+            [CONFIG.ffmpeg_path, "-y", "-ss", str(t_start), "-i", str(tmp_src),
+             "-frames:v", "1", "-q:v", "2",
+             "-vf", f"drawbox=x={px}:y={py}:w={pw}:h={ph}:color=yellow@0.9:t=5",
+             str(ann_jpg)],
+            capture_output=True, timeout=30
+        )
+    finally:
+        try:
+            tmp_src.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    warnings = []
+    if src_width and src_width != src_width:
+        warnings.append("src_width mismatch (check that you passed the actual video dims)")
+
+    return {
+        "pure_crop_url": f"/static/previews/{preview_id}_pure.mp4",
+        "annotated_url": f"/static/previews/{preview_id}_ann.jpg",
+        "coords": {
+            "src_dims": {"w": src_width, "h": src_height},
+            "norm_gameplay": {"x": round(gp[0], 4), "y": round(gp[1], 4),
+                              "w": round(gp[2], 4), "h": round(gp[3], 4)},
+            "pixel_gameplay": {"x": px, "y": py, "w": pw, "h": ph},
+        },
+        "filter": f"crop={pw}:{ph}:{px}:{py}",
+        "fit_fill": "NONE — pure crop only",
+        "warnings": warnings,
+    }
 
 
 @app.post("/crop-configs/preview-url")
@@ -4818,7 +4931,8 @@ async def preview_crop_url(body: dict = Body(...)):
     src_w = int(body.get("src_width", 1920))
     src_h = int(body.get("src_height", 1080))
     t_start = float(body.get("t_start", 10))
-    split_fraction = float(body.get("split_fraction", 0.5))
+    split_fraction = float(body.get("split_fraction", 0.65))
+    gameplay_bg = body.get("gameplay_bg", "black")
 
     # Get direct stream URL — use cache if available
     import time as _pt
@@ -4863,10 +4977,10 @@ async def preview_crop_url(body: dict = Body(...)):
     preview_dir.mkdir(parents=True, exist_ok=True)
     out_path = preview_dir / f"{preview_id}.mp4"
 
-    from engine.renderers.render_clip import _compute_split_layout_filter_manual as _csf_url
+    from engine.renderers.render_clip import _compute_stacked_fit_filter as _csf_url
     main_region = [gp[0] * src_w, gp[1] * src_h, gp[2] * src_w, gp[3] * src_h]
     sec_region = [fc[0] * src_w, fc[1] * src_h, fc[2] * src_w, fc[3] * src_h]
-    filt = _csf_url(main_region, sec_region, src_w, src_h, top_fraction=split_fraction)
+    filt = _csf_url(main_region, sec_region, src_w, src_h, top_fraction=split_fraction, bg=gameplay_bg)
 
     cmd = [
         CONFIG.ffmpeg_path, "-y",
@@ -4887,6 +5001,125 @@ async def preview_crop_url(body: dict = Body(...)):
 
 
 app.mount("/static", StaticFiles(directory=CONFIG.output_dir), name="static")
+
+
+@app.post("/crop-configs/debug-render")
+async def debug_render_crop(body: dict = Body(...)):
+    """DEV ONLY — render a pure crop (no FIT, no captions) from a crop_config and a file upload.
+    Body: {job_id, t_start (optional float, default 5.0)}
+    Returns: {pure_crop_url, annotated_url, coords, filter, warnings}
+
+    Used by the "Ver recorte real" debug button in New Job.
+    Only available when CONFIG.crop_debug_mode is True.
+    """
+    if not CONFIG.crop_debug_mode:
+        raise HTTPException(403, "Crop debug mode is disabled. Set CONFIG.crop_debug_mode=True to enable.")
+
+    job_id = (body.get("job_id") or "").strip()
+    if not job_id:
+        raise HTTPException(400, "job_id required")
+    t_start = float(body.get("t_start", 5.0))
+
+    with dbmod.db() as conn:
+        cc = conn.execute(
+            "SELECT * FROM crop_configs WHERE job_id=?", (job_id,)
+        ).fetchone()
+        if not cc:
+            raise HTTPException(404, f"No crop_config for job {job_id}")
+        vid = conn.execute(
+            "SELECT path, width, height FROM videos WHERE job_id=?", (job_id,)
+        ).fetchone()
+
+    if not vid or not vid["path"] or not Path(vid["path"]).exists():
+        raise HTTPException(404, "Video file not found")
+
+    src_w = vid["width"] or 1920
+    src_h = vid["height"] or 1080
+
+    gx_n = cc["gameplay_x"]
+    gy_n = cc["gameplay_y"]
+    gw_n = cc["gameplay_w"]
+    gh_n = cc["gameplay_h"]
+    fx_n = cc["facecam_x"]
+    fy_n = cc["facecam_y"]
+    fw_n = cc["facecam_w"]
+    fh_n = cc["facecam_h"]
+
+    if gx_n is None:
+        raise HTTPException(422, "No gameplay region in crop_config")
+
+    # Pixel coords (correct — uses actual video dims)
+    gx = int(gx_n * src_w)
+    gy = int(gy_n * src_h)
+    gw = max(2, int(gw_n * src_w))
+    gh = max(2, int(gh_n * src_h))
+    gw -= gw % 2
+    gh -= gh % 2
+
+    warnings = []
+    if cc["src_width"] and cc["src_width"] != src_w:
+        warnings.append(
+            f"stored src_width={cc['src_width']} != actual video width={src_w}. "
+            f"RC1 bug would have shifted x by {gx - int(gx_n * cc['src_width']):+d}px."
+        )
+
+    debug_dir = Path(CONFIG.output_dir) / "previews"
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    tag = str(uuid.uuid4())[:8]
+
+    # 1. Pure crop — gameplay only, no scale
+    pure_mp4 = debug_dir / f"debug_{tag}_pure.mp4"
+    r1 = subprocess.run(
+        [CONFIG.ffmpeg_path, "-y", "-ss", str(t_start), "-t", "5",
+         "-i", vid["path"],
+         "-vf", f"crop={gw}:{gh}:{gx}:{gy}",
+         "-c:v", "libx264", "-crf", "20", "-preset", "veryfast", "-an",
+         str(pure_mp4)],
+        capture_output=True, timeout=60
+    )
+    if r1.returncode != 0:
+        raise HTTPException(500, f"Pure crop failed: {r1.stderr.decode()[-300:]}")
+
+    # 2. Annotated source frame with drawbox
+    ann_jpg = debug_dir / f"debug_{tag}_ann.jpg"
+    draw_filters = [f"drawbox=x={gx}:y={gy}:w={gw}:h={gh}:color=yellow@0.8:t=4"]
+    if fx_n is not None:
+        fx = int(fx_n * src_w); fy = int(fy_n * src_h)
+        fw = max(2, int(fw_n * src_w)); fh = max(2, int(fh_n * src_h))
+        draw_filters.append(f"drawbox=x={fx}:y={fy}:w={fw}:h={fh}:color=green@0.8:t=4")
+    subprocess.run(
+        [CONFIG.ffmpeg_path, "-y", "-ss", str(t_start), "-i", vid["path"],
+         "-frames:v", "1", "-q:v", "2",
+         "-vf", ",".join(draw_filters),
+         str(ann_jpg)],
+        capture_output=True, timeout=30
+    )
+
+    from engine.renderers.render_clip import _compute_stacked_fit_filter as _csf_dbg
+    sf = cc.get("split_fraction") or 0.65
+    gp_px = [gx_n*src_w, gy_n*src_h, gw_n*src_w, gh_n*src_h]
+    fc_px = ([fx_n*src_w, fy_n*src_h, fw_n*src_w, fh_n*src_h]
+             if fx_n is not None else gp_px)
+    full_filter = _csf_dbg(gp_px, fc_px, src_w, src_h, top_fraction=sf, bg="black")
+
+    return {
+        "pure_crop_url": f"/static/previews/debug_{tag}_pure.mp4",
+        "annotated_url": f"/static/previews/debug_{tag}_ann.jpg",
+        "coords": {
+            "stored_src_dims": {"w": cc["src_width"], "h": cc["src_height"]},
+            "actual_video_dims": {"w": src_w, "h": src_h},
+            "norm_gameplay": {"x": round(gx_n, 4), "y": round(gy_n, 4),
+                              "w": round(gw_n, 4), "h": round(gh_n, 4)},
+            "norm_facecam": ({"x": round(fx_n, 4), "y": round(fy_n, 4),
+                               "w": round(fw_n, 4), "h": round(fh_n, 4)}
+                              if fx_n is not None else None),
+            "pixel_gameplay": {"x": gx, "y": gy, "w": gw, "h": gh},
+        },
+        "filter": full_filter,
+        "fit_fill": "FIT (force_original_aspect_ratio=decrease + pad)",
+        "validation_status": cc["validation_status"],
+        "warnings": warnings,
+    }
 
 
 # ── DASHBOARD ────────────────────────────────────────────────────────────────

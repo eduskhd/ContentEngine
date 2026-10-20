@@ -182,16 +182,18 @@ def get_valid_token() -> str | None:
     if not tokens:
         return None
     expires_at_str = tokens.get("expires_at")
+    needs_refresh = False
     if expires_at_str:
         try:
             expires_at = datetime.fromisoformat(expires_at_str)
             if expires_at.tzinfo is None:
                 expires_at = expires_at.replace(tzinfo=timezone.utc)
             now = datetime.now(tz=timezone.utc)
-            if (expires_at - now).total_seconds() < 60:
-                return refresh_access_token()
+            needs_refresh = (expires_at - now).total_seconds() < 60
         except Exception:
             pass
+    if needs_refresh:
+        return refresh_access_token()  # let refresh errors propagate — don't mask with expired token
     access_token = tokens.get("access_token")
     if not access_token:
         return refresh_access_token()

@@ -456,8 +456,19 @@ def decide_v12(
     scene_lower = scene_type.lower()
     is_face_dominant = scene_lower in ("face_reaction", "conversation")
 
+    # V1.2.1 fix F2: when we have a reliable facecam overlay AND the scene
+    # classifier says FACE_REACTION/CONVERSATION, the dominance almost certainly
+    # came from the facecam face itself (not in-game content). Keep SPLIT_LAYOUT.
+    # Only suppress SPLIT_LAYOUT when there is NO separate facecam region.
+    _FACECAM_PROTECT_THRESHOLD = 0.60  # facecam confidence required to override
+    if (is_face_dominant
+            and analysis.has_facecam
+            and analysis.facecam_confidence >= _FACECAM_PROTECT_THRESHOLD):
+        is_face_dominant = False  # reliable facecam → stay in SPLIT_LAYOUT path
+
     if is_face_dominant:
-        # Face-dominated scenes: suppress facecam so SPLIT_LAYOUT is never chosen
+        # Face-dominated scenes WITHOUT a facecam overlay: suppress SPLIT_LAYOUT,
+        # fall through to FACE_FOCUS (e.g., IRL, talking-head, no gameplay).
         override = ContentAnalysis(
             face_count_avg=analysis.face_count_avg,
             face_area_ratio=analysis.face_area_ratio,

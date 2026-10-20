@@ -1,0 +1,58 @@
+{
+  "experiment": "gaming_stacked_layout",
+  "date": "2026-10-20",
+  "status": "COMPLETE",
+  "source_clip": "illowanillo_8zup_jkbdwa.mp4",
+  "t_start_s": 30,
+  "duration_s": 8,
+  "src_resolution": "1280x720",
+  "gameplay_norm": [0.198, 0.003, 0.807, 0.997],
+  "facecam_norm": [0.002, 0.405, 0.193, 0.305],
+  "variants": [
+    {
+      "file": "00_current_fill_65_35.mp4",
+      "mode": "v11_fill",
+      "split": "65/35",
+      "bg": "fill+crop",
+      "notes": "Current auto behavior — gameplay edges are cropped to fill panel"
+    },
+    {
+      "file": "01_stacked_fit_50_50.mp4",
+      "mode": "GAMING_STACKED_FIT",
+      "split": "50/50",
+      "bg": "black",
+      "notes": "Equal split, FIT mode — gameplay fully visible, black bars"
+    },
+    {
+      "file": "02_stacked_fit_60_40.mp4",
+      "mode": "GAMING_STACKED_FIT",
+      "split": "60/40",
+      "bg": "black",
+      "notes": "60% gameplay, FIT — more game, smaller webcam"
+    },
+    {
+      "file": "03_stacked_fit_65_35.mp4",
+      "mode": "GAMING_STACKED_FIT",
+      "split": "65/35",
+      "bg": "black",
+      "notes": "DEFAULT preset — gameplay 65%, webcam 35%, FIT"
+    },
+    {
+      "file": "04_stacked_fit_70_30.mp4",
+      "mode": "GAMING_STACKED_FIT",
+      "split": "70/30",
+      "bg": "black",
+      "notes": "70% gameplay, webcam minimal — max game visibility"
+    },
+    {
+      "file": "05_stacked_fit_65_35_blurred.mp4",
+      "mode": "GAMING_STACKED_FIT",
+      "split": "65/35",
+      "bg": "blurred",
+      "notes": "65/35 with blurred fill background instead of black bars"
+    }
+  ],
+  "tests_passing": 21,
+  "filter_function": "_compute_stacked_fit_filter",
+  "caption_safe_zone": "margin_v = TARGET_H - top_h + 100 (keeps subs in gameplay panel)"
+}

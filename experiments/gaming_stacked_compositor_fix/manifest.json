@@ -1,0 +1,33 @@
+{
+  "experiment": "gaming_stacked_compositor_fix",
+  "date": "2026-10-20",
+  "status": "COMPLETE",
+  "summary": {
+    "root_causes": ["RC1 coordinate denorm 720p vs 1080p", "RC2 FILL vs FIT mode", "RC3 validation_status pending blocked"],
+    "fix_function": "_compute_stacked_fit_filter",
+    "ratios_tested": ["50/50", "60/40", "65/35", "70/30"],
+    "avg_plan_s": 0,
+    "avg_render_s": 0
+  },
+  "clips": {
+    "illojuan_gta6": {"before": "renders/illojuan_gta6_BEFORE.mp4", "after": "renders/illojuan_gta6_AFTER.mp4"},
+    "illojuan_unban": {"before": "renders/illojuan_unban_BEFORE.mp4", "after": "renders/illojuan_unban_AFTER.mp4"},
+    "illojuan_velada": {"before": "renders/illojuan_velada_BEFORE.mp4", "after": "renders/illojuan_velada_AFTER.mp4"}
+  },
+  "tests": {
+    "passed": 41,
+    "count": 41,
+    "suites": ["test_gaming_stacked_layout (21/21)", "test_crop_precision (20/20)"]
+  },
+  "files": [
+    "ROOT_CAUSE.md",
+    "FILTERGRAPH_AUDIT.md",
+    "LAYOUT_RATIO_TESTS.md",
+    "PREVIEW_RENDER_PARITY.md",
+    "TEST_RESULTS.md",
+    "FINAL_REPORT.md",
+    "contact_sheets/illojuan_gta6_SBS.jpg",
+    "contact_sheets/illojuan_unban_SBS.jpg",
+    "contact_sheets/illojuan_velada_SBS.jpg"
+  ]
+}

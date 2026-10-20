@@ -1,5 +1,73 @@
 # Changelog
 
+## 2026-10-20 — feat: CANCELLED batch state for upload queue
+
+### What changed
+- **Alembic migration** `fdfd12d4d75e`: adds `cancelled INTEGER NOT NULL DEFAULT 0`, `cancelled_at TEXT`, `cancel_reason TEXT`, `archived_at TEXT` to `upload_batches`
+- **`engine/database.py`**: `cancel_upload_batch(batch_id, reason)` — sets pending/paused sessions to `cancelled`, marks batch `cancelled=1`. Returns outcome: CANCELLED, CANCELLATION_PENDING, ALREADY_CANCELLED, NOT_FOUND, ARCHIVED. Worker `claim_yt_upload_session` now skips sessions from cancelled batches (Rule 0). `get_upload_batch()` and `list_upload_batches()` compute `derived_status = "cancelled"` when batch is cancelled (priority over paused). `init_db()` CREATE TABLE updated with new columns.
+- **`api/main.py`**: `DELETE /upload-batches/{batch_id}` — logical cancel (no physical delete). Returns `{outcome}`. Optional `reason` in body.
+- **`dashboard/index.html`**: "🗑 Eliminar" button on each batch row (active, paused, error batches); confirmation modal with exact spec text; "Cancelados" filter tab (cola activa / cancelados). Cancelled badge in neutral gray. `confirmCancelBatch()`, `cancelBatch()`, `_setBatchFilter()` functions.
+- **New tests**: `tests/test_cancelled_batch.py` — 25/25 pass (schema, DB functions, derived_status, API endpoint, worker safety, data integrity)
+
+### Safety guarantees
+- Library clips: NOT deleted
+- Original MP4 files: NOT deleted  
+- Jobs history: NOT deleted
+- Publications table rows: NOT deleted
+- YouTube videos already uploaded: NOT touched
+- Session history: preserved as `cancelled` terminal status
+- Batch row: preserved (logical delete only, visible in Cancelados tab)
+
+## 2026-10-20 — feat: crop accuracy debug system (CROP_DEBUG_MODE, pure crop test, "Ver recorte real")
+
+### What changed
+- `engine/config.py`: `crop_debug_mode: bool = False` flag (dev only, zero prod impact)
+- `engine/renderers/render_clip.py`: `_debug_capture()` — saves 5 artefacts per clip when debug mode enabled (source frame, annotated frame, pure crop, composition, coord trace JSON)
+- `api/main.py`: `POST /crop-configs/debug-pure-file` — pure crop (no FIT) from uploaded file; `POST /crop-configs/debug-render` — job-based debug render
+- `dashboard/index.html`: "Ver recorte real [DEV]" button in file-mode crop editor + debug panel (annotated frame + pure crop video + coord JSON)
+- New tests: `experiments/crop_accuracy_debug/` — `pure_crop_test.py` (9/9), `composition_test.py` (4/4), `integration_test.py` (3/3)
+- Reports: `ROOT_CAUSE.md`, `COORDINATES_TRACE.json`, `PURE_CROP_TEST.md`, `COMPOSITION_TEST.md`, `INTEGRATION_TEST.md`, `REGRESSION_REPORT.md`, `FINAL_REPORT.md`
+
+### What the pure crop test proves
+Given norm coords `[x,y,w,h]`, FFmpeg `crop=pw:ph:px:py` with `px=int(x*src_w)` produces exactly the correct pixel region. 9/9 cases pass including IlloJuan-style coords.
+
+### Restrictions maintained
+- `crop_debug_mode = False` by default — no performance impact in production
+- No changes to Scoring, Whisper, Smart Reframing, Publishing, historical clips
+
+## 2026-10-20 — fix: crop precision repair complete (RC1 + RC4, Phase 1+2)
+
+### What changed
+- `engine/renderers/render_clip.py:143–144`: renderer now uses `src_w`/`src_h` (actual video dims from ffprobe) for denormalization, not `crop_config.src_width` (720p preview dims). RC1 — critical.
+- `engine/renderers/render_clip.py:140`: `validation_status = "pending"` now accepted for manual crop rendering alongside `"validated"` and `"confirmed_no_preview"`. RC4 — medium.
+- New tests: `tests/test_crop_precision.py` — 20 tests (RC1 regression detector, filter geometry, normalization edge cases, region clamping, parity).
+- Experiment docs: `experiments/crop_precision_repair/` — ROOT_CAUSE_ANALYSIS, GEOMETRY_CONTRACT, CROP_ACCURACY_TESTS, REGRESSION_REPORT, PREVIEW_RENDER_PARITY, FINAL_REPORT, LAYOUT_COMPARISON. Status: COMPLETE.
+- Synthetic test: `experiments/crop_precision_repair/synthetic/grid_1920x1080.mp4` — 4/4 FFmpeg crop accuracy tests pass.
+- Phase 2 real video validation: 3 IlloJuan gaming jobs. Confirmed shift +106–127px x, +493–517px w at 1920×1080. 6/6 renders OK, 3/3 SBS contact sheets generated.
+
+### Restrictions maintained
+- No changes to Scoring, Whisper, Smart Boundary Repair, Publishing, YouTube, historical jobs, published clips
+- Historical clips rendered with buggy coords are not touched — user decides if re-render is needed
+
+## 2026-10-20 — feat: GAMING_STACKED_FIT layout — configurable ratio, FIT mode, blurred bg, caption safe zone
+
+### What changed
+- New `_compute_stacked_fit_filter()` in render_clip.py: gameplay top, webcam bottom, FIT for BOTH — no gameplay cropping
+- Configurable split ratios: 50/50, 60/40, **65/35 (default)**, 70/30 via `split_fraction` column
+- `bg='blurred'` variant: blurred-fill background behind FIT-scaled gameplay via FFmpeg boxblur+overlay
+- Caption safe zone: `margin_v` auto-adjusted so subtitles never overlap the webcam panel
+- Alembic migration `ab18ecd35fe4`: adds `layout_preset TEXT DEFAULT 'GAMING_STACKED_FIT'` and `gameplay_bg TEXT DEFAULT 'black'` to crop_configs
+- New Job UI: "Gaming Layout" section with ratio buttons (50/50 / 60/40 / 65/35★ / 70/30) and Background toggle (Neutral / Blurred)
+- Routing: `GAMING_STACKED_FIT` preset in framing_plan builder + renderer dispatch (old `GAMING_MANUAL_SPLIT_50` preserved for backward compat)
+- All preview endpoints updated to accept `split_fraction` (default 0.65) and `gameplay_bg`
+- Experiment: `experiments/gaming_stacked_layout/` — 6 rendered variants including current FILL comparison
+- 21 new tests in `tests/test_gaming_stacked_layout.py` (all passing)
+
+### Restrictions maintained
+- No changes to Scoring, Whisper, Smart Boundary Repair, Publishing, YouTube, historical Jobs, published clips
+- `GAMING_MANUAL_SPLIT_50` preset still routes correctly (backward compat)
+- Existing clips/jobs unaffected — new preset only activates for jobs created after this change
+
 ## 2026-10-20 — feat: Real video frame gallery + manual crop selector (Gaming mode)
 
 ### What changed

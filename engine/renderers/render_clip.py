@@ -1,5 +1,13 @@
 """One-pass clip renderer: trim + reframe + caption burn in a single FFmpeg call.
 
+CROP_DEBUG_MODE (CONFIG.crop_debug_mode):
+  When True, saves to experiments/crop_accuracy_debug/debug_frames/ for each clip:
+    {job_id}_{clip_n}_00_source_frame.jpg    — raw source frame at clip midpoint
+    {job_id}_{clip_n}_01_frame_annotated.jpg — frame with crop rect drawn
+    {job_id}_{clip_n}_02_pure_crop.mp4       — raw crop=w:h:x:y, no scale
+    {job_id}_{clip_n}_03_composition.mp4     — full FIT composition output
+    {job_id}_{clip_n}_04_trace.json          — all coordinate values at each step
+
 Replaces the three-step pipeline (clip_generator → reframer → caption_burner)
 with a single FFmpeg filter graph, eliminating two intermediate re-encodes.
 
@@ -135,18 +143,29 @@ def _render_one(
 
     # ── Manual crop config takes priority over planner ───────────────────────
     framing_plan = None
-    if (crop_config
-            and crop_config.get("crop_mode") == "manual"
-            and crop_config.get("validation_status") in ("validated", "confirmed_no_preview")
-            and crop_config.get("gameplay_x") is not None
-            and crop_config.get("facecam_x") is not None):
-        cw = crop_config.get("src_width") or src_w
-        ch = crop_config.get("src_height") or src_h
+    _manual_eligible = (
+        crop_config
+        and crop_config.get("crop_mode") == "manual"
+        and crop_config.get("gameplay_x") is not None
+        and crop_config.get("facecam_x") is not None
+        and crop_config.get("validation_status") in (
+            "validated", "confirmed_no_preview", "pending",
+        )
+    )
+    if _manual_eligible:
+        # Always denormalize against the actual video dimensions (src_w/src_h),
+        # NOT crop_config.src_width. The preview frame may have been extracted at
+        # a lower resolution (720p) while the pipeline processes the full file
+        # (1080p). Normalized coords [0-1] are resolution-independent — multiplying
+        # by the actual video dims always yields the correct pixel location.
+        cw = src_w
+        ch = src_h
+        _layout = crop_config.get("layout_preset", "GAMING_STACKED_FIT")
         framing_plan = {
             "composition_mode": "split_layout",
             "filter_version": "v12",
             "version": 3.4,
-            "preset": "GAMING_MANUAL_SPLIT_50",
+            "preset": _layout,
             "main_region": [
                 crop_config["gameplay_x"] * cw,
                 crop_config["gameplay_y"] * ch,
@@ -160,7 +179,8 @@ def _render_one(
                 crop_config["facecam_h"] * ch,
             ],
             "v12": {
-                "split_fraction": crop_config.get("split_fraction", 0.5),
+                "split_fraction": crop_config.get("split_fraction", 0.65),
+                "gameplay_bg": crop_config.get("gameplay_bg", "black"),
             },
         }
 
@@ -196,6 +216,7 @@ def _render_one(
 
     # Build crop filter — use composition mode when available (v3/v3.1), else keypoints (v2/v1)
     split_layout_filter: str | None = None
+    stacked_fit_top_frac: float | None = None  # set when GAMING_STACKED_FIT for caption safe zone
     plan_version = framing_plan.get("version", 1) if framing_plan else 1
     filter_ver = framing_plan.get("filter_version", "") if framing_plan else ""
     is_v12 = filter_ver == "v12"
@@ -205,7 +226,20 @@ def _render_one(
         if (comp_mode == "split_layout"
                 and framing_plan.get("main_region")
                 and framing_plan.get("secondary_region")):
-            if framing_plan.get("preset") == "GAMING_MANUAL_SPLIT_50":
+            preset = framing_plan.get("preset", "")
+            if preset == "GAMING_STACKED_FIT":
+                v12_data = framing_plan.get("v12", {})
+                top_frac = v12_data.get("split_fraction", 0.65)
+                gbg = v12_data.get("gameplay_bg", "black")
+                split_layout_filter = _compute_stacked_fit_filter(
+                    framing_plan["main_region"],
+                    framing_plan["secondary_region"],
+                    src_w, src_h,
+                    top_fraction=top_frac,
+                    bg=gbg,
+                )
+                stacked_fit_top_frac = top_frac
+            elif preset == "GAMING_MANUAL_SPLIT_50":
                 v12_data = framing_plan.get("v12", {})
                 top_frac = v12_data.get("split_fraction", 0.50)
                 split_layout_filter = _compute_split_layout_filter_manual(
@@ -256,6 +290,17 @@ def _render_one(
     else:
         crop_filter = _compute_crop_filter(src_w, src_h)
 
+    # Caption safe zone: push subtitles into gameplay panel when using GAMING_STACKED_FIT
+    # so they never overlap the webcam face in the bottom panel.
+    if stacked_fit_top_frac is not None:
+        caption_settings = dict(caption_settings)
+        top_h_px = int(TARGET_H * stacked_fit_top_frac)
+        # Place captions 100px above the webcam panel boundary
+        caption_settings["margin_v"] = max(
+            int(caption_settings.get("margin_v", 200)),
+            TARGET_H - top_h_px + 100,
+        )
+
     # Extract + normalize words for this clip window
     clip_words = extract_clip_words(words, start_s, end_s)
 
@@ -278,6 +323,21 @@ def _render_one(
 
     if not success:
         return None
+
+    # Debug capture — only when crop_debug_mode is enabled
+    if CONFIG.crop_debug_mode:
+        try:
+            _clip_idx = int(Path(out_path).stem.replace("clip", "").split("_")[0])
+        except Exception:
+            _clip_idx = 0
+        try:
+            _debug_capture(
+                job_id, _clip_idx, source, start_s,
+                src_w, src_h, crop_config, framing_plan,
+                crop_filter, out_path,
+            )
+        except Exception as _dbg_err:
+            print(f"  [crop_debug] capture failed (non-fatal): {_dbg_err}")
 
     # Probe output metadata
     meta = _probe(out_path)
@@ -682,6 +742,209 @@ def _compute_split_layout_filter_manual(
         f"[face]{facecam_filter}[v1];"
         f"[v0][v1]vstack=inputs=2[out]"
     )
+
+
+def _compute_stacked_fit_filter(
+    main_region: list,
+    secondary_region: list,
+    src_w: int,
+    src_h: int,
+    top_fraction: float = 0.65,
+    bg: str = "black",
+) -> str:
+    """GAMING_STACKED_FIT: gameplay top, webcam bottom, FIT for both regions.
+
+    Gameplay is NEVER cropped — scaled to fit its panel with padding (black or blurred).
+    top_fraction controls the split (0.65 = gameplay 65%, webcam 35%).
+    bg='blurred' overlays the FIT-scaled gameplay over a blurred fill background.
+    """
+    gx, gy, gw, gh = (int(v) for v in main_region)
+    fx, fy, fw, fh = (int(v) for v in secondary_region)
+
+    gx = max(0, min(gx, src_w - 1))
+    gy = max(0, min(gy, src_h - 1))
+    gw = max(1, min(gw, src_w - gx))
+    gh = max(1, min(gh, src_h - gy))
+    fx = max(0, min(fx, src_w - 1))
+    fy = max(0, min(fy, src_h - 1))
+    fw = max(1, min(fw, src_w - fx))
+    fh = max(1, min(fh, src_h - fy))
+
+    top_h = int(TARGET_H * top_fraction)
+    top_h = top_h - (top_h % 2)
+    bot_h = TARGET_H - top_h
+    bot_h = bot_h - (bot_h % 2)
+
+    facecam_filter = (
+        f"crop={fw}:{fh}:{fx}:{fy},"
+        f"scale={TARGET_W}:{bot_h}:force_original_aspect_ratio=decrease,"
+        f"pad={TARGET_W}:{bot_h}:(ow-iw)/2:(oh-ih)/2:black"
+    )
+
+    if bg == "blurred":
+        # Blurred background: fill + heavy blur behind the FIT-scaled gameplay
+        gameplay_filter = (
+            f"crop={gw}:{gh}:{gx}:{gy},"
+            f"split=2[gblu][gfit];"
+            f"[gblu]scale={TARGET_W}:{top_h}:force_original_aspect_ratio=increase,"
+            f"crop={TARGET_W}:{top_h},"
+            f"boxblur=luma_radius=20:luma_power=3:chroma_radius=20:chroma_power=3[gbg];"
+            f"[gfit]scale={TARGET_W}:{top_h}:force_original_aspect_ratio=decrease[gfg];"
+            f"[gbg][gfg]overlay=(W-w)/2:(H-h)/2"
+        )
+        return (
+            f"[0:v]split=2[main][face];"
+            f"[main]{gameplay_filter}[v0];"
+            f"[face]{facecam_filter}[v1];"
+            f"[v0][v1]vstack=inputs=2[out]"
+        )
+    else:
+        # Black padding (default)
+        gameplay_filter = (
+            f"crop={gw}:{gh}:{gx}:{gy},"
+            f"scale={TARGET_W}:{top_h}:force_original_aspect_ratio=decrease,"
+            f"pad={TARGET_W}:{top_h}:(ow-iw)/2:(oh-ih)/2:black"
+        )
+        return (
+            f"[0:v]split=2[main][face];"
+            f"[main]{gameplay_filter}[v0];"
+            f"[face]{facecam_filter}[v1];"
+            f"[v0][v1]vstack=inputs=2[out]"
+        )
+
+
+def _debug_capture(
+    job_id: str,
+    clip_idx: int,
+    source: str,
+    start_s: float,
+    src_w: int,
+    src_h: int,
+    crop_config: dict | None,
+    framing_plan: dict | None,
+    crop_filter: str,
+    out_path: str,
+) -> None:
+    """Save debug artefacts when CONFIG.crop_debug_mode is True.
+
+    Artefacts:
+      _00_source_frame.jpg   — raw frame at clip midpoint
+      _01_annotated.jpg      — frame with gameplay + facecam rects drawn
+      _02_pure_crop.mp4      — crop only (no scale, no FIT, no captions)
+      _03_composition.mp4    — symlink/copy of final clip output
+      _04_trace.json         — full coordinate trace
+    """
+    import shutil as _sh
+    from pathlib import Path as _P
+
+    debug_dir = _P(r"C:\Users\edupo\Desktop\ContentEngine\experiments\crop_accuracy_debug\debug_frames")
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    prefix = f"{job_id[:8]}_{clip_idx:02d}"
+
+    mid_s = start_s + 2.0  # extract frame 2s into clip
+
+    # ── 00: source frame ──────────────────────────────────────────────────────
+    frame_jpg = debug_dir / f"{prefix}_00_source_frame.jpg"
+    subprocess.run(
+        [CONFIG.ffmpeg_path, "-y", "-ss", f"{mid_s:.2f}", "-i", source,
+         "-frames:v", "1", "-q:v", "2", str(frame_jpg)],
+        capture_output=True, timeout=30
+    )
+
+    # ── 01: annotated frame (gameplay + facecam rects) ────────────────────────
+    ann_jpg = debug_dir / f"{prefix}_01_annotated.jpg"
+    draw_cmds = []
+    if crop_config and crop_config.get("gameplay_x") is not None:
+        gx = int(crop_config["gameplay_x"] * src_w)
+        gy = int(crop_config["gameplay_y"] * src_h)
+        gw = int(crop_config["gameplay_w"] * src_w)
+        gh = int(crop_config["gameplay_h"] * src_h)
+        draw_cmds.append(
+            f"drawbox=x={gx}:y={gy}:w={gw}:h={gh}:color=yellow@0.8:t=4"
+        )
+    if crop_config and crop_config.get("facecam_x") is not None:
+        fx = int(crop_config["facecam_x"] * src_w)
+        fy = int(crop_config["facecam_y"] * src_h)
+        fw = int(crop_config["facecam_w"] * src_w)
+        fh = int(crop_config["facecam_h"] * src_h)
+        draw_cmds.append(
+            f"drawbox=x={fx}:y={fy}:w={fw}:h={fh}:color=green@0.8:t=4"
+        )
+    if draw_cmds and frame_jpg.exists():
+        subprocess.run(
+            [CONFIG.ffmpeg_path, "-y", "-i", str(frame_jpg),
+             "-vf", ",".join(draw_cmds), str(ann_jpg)],
+            capture_output=True, timeout=30
+        )
+
+    # ── 02: pure crop — gameplay region only, no scale ───────────────────────
+    pure_mp4 = debug_dir / f"{prefix}_02_pure_crop.mp4"
+    if crop_config and crop_config.get("gameplay_x") is not None:
+        gx = int(crop_config["gameplay_x"] * src_w)
+        gy = int(crop_config["gameplay_y"] * src_h)
+        gw = max(2, int(crop_config["gameplay_w"] * src_w))
+        gh = max(2, int(crop_config["gameplay_h"] * src_h))
+        gw -= gw % 2  # ensure even for codec
+        gh -= gh % 2
+        subprocess.run(
+            [CONFIG.ffmpeg_path, "-y",
+             "-ss", f"{start_s:.2f}", "-t", "5",
+             "-i", source,
+             "-vf", f"crop={gw}:{gh}:{gx}:{gy}",
+             "-c:v", "libx264", "-crf", "18", "-preset", "fast", "-an",
+             str(pure_mp4)],
+            capture_output=True, timeout=120
+        )
+
+    # ── 03: composition — copy of the actual rendered clip ───────────────────
+    comp_mp4 = debug_dir / f"{prefix}_03_composition.mp4"
+    if _P(out_path).exists():
+        try:
+            _sh.copy2(out_path, comp_mp4)
+        except Exception:
+            pass
+
+    # ── 04: coordinate trace ─────────────────────────────────────────────────
+    trace = {
+        "job_id": job_id,
+        "clip_idx": clip_idx,
+        "source": source,
+        "actual_video_dims": {"w": src_w, "h": src_h},
+        "crop_config_stored": {
+            "src_width": crop_config.get("src_width") if crop_config else None,
+            "src_height": crop_config.get("src_height") if crop_config else None,
+            "validation_status": crop_config.get("validation_status") if crop_config else None,
+        } if crop_config else None,
+        "normalized_coords": {
+            "gameplay": {
+                "x": crop_config.get("gameplay_x"), "y": crop_config.get("gameplay_y"),
+                "w": crop_config.get("gameplay_w"), "h": crop_config.get("gameplay_h"),
+            } if crop_config else None,
+            "facecam": {
+                "x": crop_config.get("facecam_x"), "y": crop_config.get("facecam_y"),
+                "w": crop_config.get("facecam_w"), "h": crop_config.get("facecam_h"),
+            } if crop_config else None,
+        },
+        "denormalized_pixel_coords": {
+            "using": "src_w/src_h (actual video)",
+            "gameplay_px": {
+                "x": int(crop_config["gameplay_x"] * src_w) if crop_config and crop_config.get("gameplay_x") is not None else None,
+                "y": int(crop_config["gameplay_y"] * src_h) if crop_config and crop_config.get("gameplay_y") is not None else None,
+                "w": int(crop_config["gameplay_w"] * src_w) if crop_config and crop_config.get("gameplay_w") is not None else None,
+                "h": int(crop_config["gameplay_h"] * src_h) if crop_config and crop_config.get("gameplay_h") is not None else None,
+            } if crop_config else None,
+        },
+        "crop_config_src_dims_ignored": {
+            "stored_src_width": crop_config.get("src_width") if crop_config else None,
+            "note": "renderer uses src_w/src_h from ffprobe, not crop_config.src_width",
+        },
+        "ffmpeg_filter": crop_filter,
+    }
+    import json as _json
+    (debug_dir / f"{prefix}_04_trace.json").write_text(
+        _json.dumps(trace, indent=2), encoding="utf-8"
+    )
+    print(f"  [crop_debug] {prefix} → {debug_dir}")
 
 
 def _probe(path: str) -> dict:

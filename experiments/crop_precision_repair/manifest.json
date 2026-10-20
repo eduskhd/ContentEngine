@@ -1,0 +1,64 @@
+{
+  "experiment": "crop_precision_repair",
+  "date": "2026-10-20",
+  "status": "COMPLETE",
+  "phases": [
+    {"id": "research", "status": "done", "note": "OPEN_SOURCE_RESEARCH.md — Konva.js recommended if canvas replacement needed; no libs needed for RC1 fix"},
+    {"id": "root_cause", "status": "done", "note": "RC1 confirmed: preview 720p vs render 1080p. Fix: render_clip.py line 143-144"},
+    {"id": "synthetic_test", "status": "done", "note": "grid_1920x1080.mp4 generated; 4/4 crop accuracy tests pass"},
+    {"id": "fix", "status": "done", "note": "RC1 fixed in render_clip.py. RC4 (validation_status gate) also fixed to accept pending"},
+    {"id": "tests", "status": "done", "note": "41/41 tests pass: 20 new crop precision + 21 existing stacked layout"},
+    {"id": "real_video_validation", "status": "done", "note": "3 IlloJuan jobs — 6 renders OK, 3 SBS contact sheets OK. Shifts: +106–127px x, +493–517px w confirmed."}
+  ],
+  "root_causes_confirmed": [
+    {
+      "id": "RC1",
+      "severity": "critical",
+      "status": "FIXED",
+      "description": "Frame preview uses bestvideo[height<=720] (1280x720), actual download uses bestvideo[height<=1080] (1920x1080). Renderer denormalized using crop_config.src_width (720p dims) instead of actual video dims.",
+      "file": "engine/renderers/render_clip.py",
+      "fix": "Lines 143-144: now use src_w/src_h (actual video) unconditionally"
+    },
+    {
+      "id": "RC4",
+      "severity": "medium",
+      "status": "FIXED",
+      "description": "validation_status gate blocked manual crops with status=pending from rendering",
+      "file": "engine/renderers/render_clip.py",
+      "fix": "Added 'pending' to accepted statuses alongside 'validated' and 'confirmed_no_preview'"
+    },
+    {
+      "id": "RC2",
+      "severity": "low",
+      "status": "RESOLVED_BY_RC1",
+      "description": "Preview/render parity: after RC1 fix, normalized coords are applied to correct dims. Same proportional region shown in both."
+    }
+  ],
+  "tests": {
+    "pytest_new": "tests/test_crop_precision.py — 20 tests",
+    "pytest_existing": "tests/test_gaming_stacked_layout.py — 21 tests",
+    "synthetic": "experiments/crop_precision_repair/synthetic/verify_crop_accuracy.py — 4/4 pass",
+    "total": "41/41 passed"
+  },
+  "docs": [
+    "ROOT_CAUSE_ANALYSIS.md",
+    "GEOMETRY_CONTRACT.md",
+    "CROP_ACCURACY_TESTS.md",
+    "OPEN_SOURCE_RESEARCH.md",
+    "LAYOUT_COMPARISON.md",
+    "REGRESSION_REPORT.md",
+    "PREVIEW_RENDER_PARITY.md",
+    "FINAL_REPORT.md"
+  ],
+  "phase2_results": {
+    "jobs_tested": ["illojuan_unban", "illojuan_velada", "illojuan_gta6"],
+    "all_renders_ok": true,
+    "all_contact_sheets_ok": true,
+    "measured_x_shifts_px": [106.2, 126.7, 126.1],
+    "measured_w_shifts_px": [493.4, 516.5, 513.3]
+  },
+  "open_issues": [
+    "Preview stream quality (720p vs 1080p WYSIWYG) — cosmetic only, does not affect accuracy",
+    "Canvas DPR correction (RC3) — cosmetic, HiDPI displays only"
+  ]
+}

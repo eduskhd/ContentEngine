@@ -935,8 +935,127 @@ def plan_clip_v3_2(
         except Exception as _seg_exc:
             plan["v12"]["segment_decisions_error"] = str(_seg_exc)
 
+        # ── Step 10c: compute segment-weighted split_fraction for renderer (F4) ──
+        # render_clip.py reads v12.split_fraction as a SINGLE value for the whole
+        # clip. Here we compute the duration-weighted average from segment decisions
+        # so clips with mixed scene types get a better representative fraction.
+        # True per-segment rendering (different crop boxes at different times) would
+        # require a filter_complex with between() time expressions — tracked as F4b.
+        try:
+            sdecs = plan["v12"].get("segment_decisions", [])
+            split_candidates = [
+                (d["split_fraction"], d["end_s"] - d["start_s"])
+                for d in sdecs if d.get("mode") == "split_layout" and d.get("split_fraction")
+            ]
+            if split_candidates:
+                total_w = sum(w for _, w in split_candidates)
+                weighted_frac = sum(f * w for f, w in split_candidates) / max(total_w, 0.001)
+                weighted_frac = round(weighted_frac / 0.05) * 0.05
+                weighted_frac = max(0.55, min(0.72, weighted_frac))
+                plan["v12"]["split_fraction_weighted"] = weighted_frac
+                # Use weighted fraction as the primary value for the renderer
+                plan["v12"]["split_fraction"] = weighted_frac
+                plan["v12"]["split_fraction_source"] = "segment_weighted"
+        except Exception as _f4_exc:
+            plan["v12"]["split_fraction_source"] = f"error: {_f4_exc}"
+
     except Exception as e:
         # Graceful fallback: tag error but keep V1.1 plan data
         plan["v12_error"] = str(e)
 
+    return plan
+
+
+# ── v3.3: Smart Reframing V1.2.1 — GAMING_BALANCED default ──────────────────
+
+def plan_clip_v3_3(
+    proxy_path: str,
+    clip_start: float,
+    clip_end: float,
+    src_w: int,
+    src_h: int,
+    content_hint: str = "auto",
+) -> dict:
+    """Smart Reframing V1.2.1 — GAMING_BALANCED default with F1/F2/F4 fixes.
+
+    Runs plan_clip_v3_2() (which now uses patched scene_analyzer thresholds and
+    the patched decide_v12 SPLIT_LAYOUT protection) and tags the plan.
+
+    Changes vs V1.2:
+      F1: _FACE_REACTION_AREA 0.07→0.15, _FACE_HIT_REACTION 0.50→0.65
+          so small corner facecam does not trigger FACE_REACTION.
+      F2: decide_v12() keeps SPLIT_LAYOUT when has_facecam+confidence>=0.60,
+          even if scene type is face_reaction/conversation.
+      F4: segment-weighted split_fraction propagated to renderer.
+
+    EXPERIMENTAL — not activated in production pipeline. Used only by
+    experiments/visual_framing_quality_repair/run_experiment.py.
+    """
+    plan = plan_clip_v3_2(proxy_path, clip_start, clip_end, src_w, src_h, content_hint)
+    plan["version"] = 3.3
+    plan["filter_version"] = "v12"   # same filter function as v12; planning fixes are in v13_fixes
+    plan["v13_fixes"] = ["F1_face_reaction_threshold", "F2_split_layout_protected", "F4_segment_weighted_fraction"]
+    return plan
+
+
+# ── v3.4: GAMEPLAY_SPLIT_50 — fixed 50/50 split, no adaptive logic ──────────
+
+_GAMEPLAY_SCENE_TYPES = frozenset({"active_gameplay", "static_gameplay"})
+
+
+def _force_gameplay_split_50(plan: dict) -> dict:
+    """Override plan to force 50/50 split when dominant scene is gameplay.
+
+    Mutates and returns the plan. If the clip has no detected facecam
+    (secondary_region is None), the plan is left unchanged so the renderer
+    falls back to the standard composition mode.
+    """
+    v12 = plan.get("v12", {})
+    dom_type = v12.get("dominant_scene_type", "")
+
+    if dom_type not in _GAMEPLAY_SCENE_TYPES:
+        # Not a gameplay clip — don't touch the plan.
+        plan.setdefault("v12", {})["gameplay_split_50_skip"] = f"dom_type={dom_type}"
+        return plan
+
+    if not plan.get("main_region"):
+        plan.setdefault("v12", {})["gameplay_split_50_fallback"] = "no_main_region"
+        return plan
+
+    if not plan.get("secondary_region"):
+        # No facecam detected — split layout is not possible; fall through to
+        # whatever compose mode the planner chose (usually center crop).
+        plan.setdefault("v12", {})["gameplay_split_50_fallback"] = "no_secondary_region"
+        return plan
+
+    plan["composition_mode"] = "split_layout"
+    plan["filter_version"] = "v12"
+    v12_data = plan.setdefault("v12", {})
+    v12_data["split_fraction"] = 0.50
+    v12_data["split_fraction_source"] = "gameplay_split_50_fixed"
+    v12_data["gameplay_split_50"] = True
+    return plan
+
+
+def plan_clip_gameplay_split_50(
+    proxy_path: str,
+    clip_start: float,
+    clip_end: float,
+    src_w: int,
+    src_h: int,
+) -> dict:
+    """Smart Reframing V1.2 + GAMEPLAY_SPLIT_50 preset.
+
+    Runs V1.2 planning (V1.2.1 thresholds + F2 guard), then forces
+    split_fraction=0.50 whenever the dominant scene is active_gameplay or
+    static_gameplay. The result is a fixed 50% gameplay top / 50% facecam
+    bottom layout — no adaptive logic.
+
+    Returns the plan dict with version=3.4 and preset=GAMEPLAY_SPLIT_50.
+    EXPERIMENTAL — not activated in production pipeline.
+    """
+    plan = plan_clip_v3_2(proxy_path, clip_start, clip_end, src_w, src_h)
+    plan = _force_gameplay_split_50(plan)
+    plan["version"] = 3.4
+    plan["preset"] = "GAMEPLAY_SPLIT_50"
     return plan

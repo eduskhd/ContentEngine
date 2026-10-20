@@ -654,6 +654,20 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 .nj-btn-small-outline{padding:4px 10px;background:transparent;border:1px solid #334;color:#888;border-radius:4px;font-size:11px;cursor:pointer}
 .nj-btn-small-outline:hover{border-color:#3b82f6;color:#60a5fa}
 .nj-url-frame-canvas-cursor-draw{cursor:crosshair!important}
+/* ── Gaming Layout Options ─────────────────────────────────────────────── */
+.nj-layout-section{background:#0c1a2e;border:1px solid #1e3a5f;border-radius:8px;padding:14px;margin-top:12px}
+.nj-layout-section-title{font-size:11px;font-weight:600;color:#3b82f6;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+.nj-layout-label{font-size:12px;color:#888;margin-bottom:6px}
+.nj-ratio-row{display:flex;gap:6px;flex-wrap:wrap}
+.nj-ratio-btn{padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #334;background:#1a1a1a;color:#aaa;transition:all .15s}
+.nj-ratio-btn:hover{border-color:#3b82f6;color:#60a5fa}
+.nj-ratio-btn.active{background:#1e3a5f;border-color:#3b82f6;color:#fff}
+.nj-ratio-btn.default-mark::after{content:' ★';font-size:10px;opacity:.7}
+.nj-bg-row{display:flex;gap:6px}
+.nj-bg-btn{padding:7px 14px;border-radius:6px;font-size:12px;cursor:pointer;border:1px solid #334;background:#1a1a1a;color:#aaa;transition:all .15s}
+.nj-bg-btn:hover{border-color:#6366f1;color:#a5b4fc}
+.nj-bg-btn.active{background:#1e1b4b;border-color:#6366f1;color:#c7d2fe}
+.nj-layout-hint{font-size:11px;color:#555;margin-top:10px;line-height:1.5}
 .nj-url-frame-canvas-cursor-move{cursor:move!important}
 .nj-url-frame-canvas-cursor-resize-nw,.nj-url-frame-canvas-cursor-resize-se{cursor:nwse-resize!important}
 .nj-url-frame-canvas-cursor-resize-ne,.nj-url-frame-canvas-cursor-resize-sw{cursor:nesw-resize!important}
@@ -1179,10 +1193,31 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           <div class="nj-crop-actions">
             <button class="nj-btn-preview" onclick="njPreviewCrop()" id="nj-btn-preview" disabled>Preview Crop (5s)</button>
             <button class="nj-btn-reset" onclick="njResetCrop()">Reset</button>
+            <button class="nj-btn-debug-crop" onclick="njDebugPureCrop()" id="nj-btn-debug-crop" disabled
+              style="padding:6px 12px;background:#1e1b4b;border:1px solid #6366f1;color:#a5b4fc;border-radius:6px;font-size:11px;cursor:pointer"
+              title="DEV: Show the exact gameplay region as cropped by FFmpeg (no FIT, no layout)">
+              Ver recorte real [DEV]
+            </button>
           </div>
           <div class="nj-crop-status" id="nj-crop-status"></div>
           <div class="nj-preview-video-wrap" id="nj-preview-video-wrap">
             <video id="nj-preview-video" controls></video>
+          </div>
+          <!-- Debug panel: pure crop result -->
+          <div id="nj-debug-panel" style="display:none;margin-top:10px;background:#0c1a2e;border:1px solid #1e3a5f;border-radius:8px;padding:12px">
+            <div style="font-size:11px;font-weight:600;color:#6366f1;margin-bottom:8px">RECORTE PURO (sin FIT, sin composicion)</div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <div>
+                <div style="font-size:10px;color:#888;margin-bottom:4px">Frame anotado (seleccion)</div>
+                <img id="nj-debug-ann" src="" style="max-width:280px;border-radius:4px;border:1px solid #334">
+              </div>
+              <div>
+                <div style="font-size:10px;color:#888;margin-bottom:4px">Recorte puro FFmpeg</div>
+                <video id="nj-debug-crop-video" controls style="max-width:280px;border-radius:4px;border:1px solid #334"></video>
+              </div>
+            </div>
+            <pre id="nj-debug-coords" style="font-size:10px;color:#60a5fa;background:#0a0a0a;padding:8px;border-radius:4px;margin-top:8px;overflow-x:auto"></pre>
+            <div id="nj-debug-warnings" style="font-size:11px;color:#f59e0b;margin-top:6px"></div>
           </div>
         </div>
 
@@ -1264,8 +1299,47 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 
               <!-- Actions -->
               <div class="nj-crop-actions" style="margin-top:10px">
-                <button class="nj-btn-preview" id="nj-url-btn-preview" onclick="njUrlPreviewCrop()" disabled>Preview 50/50 (5s)</button>
+                <button class="nj-btn-preview" id="nj-url-btn-preview" onclick="njUrlPreviewCrop()" disabled>Preview Layout (5s)</button>
                 <button class="nj-btn-reset" onclick="njUrlResetRegions()">Reset Regions</button>
+              </div>
+              <!-- Debug panel: pure crop (URL mode) -->
+              <div id="nj-url-debug-panel" style="display:none;margin-top:10px;background:#0c1a2e;border:1px solid #1e3a5f;border-radius:8px;padding:12px">
+                <div style="font-size:11px;font-weight:600;color:#6366f1;margin-bottom:8px">RECORTE PURO (sin FIT, sin composicion) [DEV]</div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap">
+                  <div>
+                    <div style="font-size:10px;color:#888;margin-bottom:4px">Frame anotado</div>
+                    <img id="nj-url-debug-ann" src="" style="max-width:280px;border-radius:4px;border:1px solid #334">
+                  </div>
+                  <div>
+                    <div style="font-size:10px;color:#888;margin-bottom:4px">Recorte puro</div>
+                    <video id="nj-url-debug-video" controls style="max-width:280px;border-radius:4px;border:1px solid #334"></video>
+                  </div>
+                </div>
+                <pre id="nj-url-debug-coords" style="font-size:10px;color:#60a5fa;background:#0a0a0a;padding:8px;border-radius:4px;margin-top:8px;overflow-x:auto"></pre>
+                <div id="nj-url-debug-warnings" style="font-size:11px;color:#f59e0b;margin-top:6px"></div>
+              </div>
+            </div>
+
+            <!-- Gaming Layout Options -->
+            <div class="nj-layout-section">
+              <div class="nj-layout-section-title">Gaming Layout</div>
+
+              <div class="nj-layout-label">Split ratio (gameplay / webcam)</div>
+              <div class="nj-ratio-row" id="nj-ratio-row">
+                <button class="nj-ratio-btn" data-frac="0.50" onclick="njSetSplitFraction(0.50)">50/50</button>
+                <button class="nj-ratio-btn" data-frac="0.60" onclick="njSetSplitFraction(0.60)">60/40</button>
+                <button class="nj-ratio-btn active default-mark" data-frac="0.65" onclick="njSetSplitFraction(0.65)">65/35</button>
+                <button class="nj-ratio-btn" data-frac="0.70" onclick="njSetSplitFraction(0.70)">70/30</button>
+              </div>
+
+              <div class="nj-layout-label" style="margin-top:12px">Background (letterbox fill)</div>
+              <div class="nj-bg-row" id="nj-bg-row">
+                <button class="nj-bg-btn active" data-bg="black" onclick="njSetGameplayBg('black')">Neutral</button>
+                <button class="nj-bg-btn" data-bg="blurred" onclick="njSetGameplayBg('blurred')">Blurred</button>
+              </div>
+
+              <div class="nj-layout-hint" id="nj-layout-hint">
+                Gameplay is always shown complete — never cropped to fill the screen.
               </div>
             </div>
 
@@ -6029,7 +6103,9 @@ async function njSubmit() {
                           _njUrlCropState.gameplay.w, _njUrlCropState.gameplay.h],
           facecam_rect:  [_njUrlCropState.facecam.x, _njUrlCropState.facecam.y,
                           _njUrlCropState.facecam.w, _njUrlCropState.facecam.h],
-          split_fraction: 0.5,
+          split_fraction: _njSplitFraction,
+          layout_preset: 'GAMING_STACKED_FIT',
+          gameplay_bg: _njGameplayBg,
           validation_status: _njUrlPreviewValidated ? 'validated' : 'confirmed_no_preview',
         }),
       }).catch(() => {});
@@ -6084,7 +6160,9 @@ async function njSubmit() {
         src_height: cropVideo.videoHeight,
         gameplay_rect: gpNorm,
         facecam_rect: fcNorm,
-        split_fraction: 0.5,
+        split_fraction: _njSplitFraction,
+        layout_preset: 'GAMING_STACKED_FIT',
+        gameplay_bg: _njGameplayBg,
         validation_status: _njPreviewValidated ? 'validated' : 'pending',
       }),
     }).catch(() => {});
@@ -7424,6 +7502,8 @@ async function confirmSavePackage() {
 
 // â"€â"€ Batch list (Lotes view) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
+let _batchFilter = 'active'; // 'active' | 'cancelados'
+
 async function loadBatchList() {
   const el = document.getElementById('pub-content');
   const titleEl = document.getElementById('pub-view-title');
@@ -7431,40 +7511,52 @@ async function loadBatchList() {
   el.innerHTML = '<div class="pub-empty"><p>Loading…</p></div>';
   try {
     const [batches, qs] = await Promise.all([
-      api('/upload-batches?limit=50'),
+      api('/upload-batches?limit=100'),
       api('/yt/queue-status').catch(() => null),
     ]);
-    const retryBanner = _buildBatchRetryBanner(qs);
-    if (!batches.length) {
-      el.innerHTML = retryBanner + `<div class="pub-empty"><p>No batches yet.</p>
-        <p style="font-size:12px;color:#888">Select clips in "All" and click <b>"Upload Selected"</b>.</p></div>`;
+    const retryBanner = _batchFilter === 'active' ? _buildBatchRetryBanner(qs) : '';
+    const filtered = _batchFilter === 'cancelados'
+      ? batches.filter(b => b.derived_status === 'cancelled')
+      : batches.filter(b => b.derived_status !== 'cancelled');
+    const tabs = `<div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="btn btn-sm ${_batchFilter==='active'?'btn-primary':'btn-outline'}" onclick="_setBatchFilter('active')">Cola activa</button>
+      <button class="btn btn-sm ${_batchFilter==='cancelados'?'btn-primary':'btn-outline'}" onclick="_setBatchFilter('cancelados')">Cancelados</button>
+    </div>`;
+    if (!filtered.length) {
+      el.innerHTML = retryBanner + tabs + `<div class="pub-empty"><p>${_batchFilter==='cancelados'?'No hay batches cancelados.':'No batches yet.'}</p>
+        ${_batchFilter==='active'?`<p style="font-size:12px;color:#888">Select clips in "All" and click <b>"Upload Selected"</b>.</p>`:''}</div>`;
       return;
     }
-    el.innerHTML = retryBanner + `<div style="display:flex;flex-direction:column;gap:10px;padding:4px 0">
-      ${batches.map(renderBatchRow).join('')}
+    el.innerHTML = retryBanner + tabs + `<div style="display:flex;flex-direction:column;gap:10px;padding:4px 0">
+      ${filtered.map(renderBatchRow).join('')}
     </div>`;
   } catch(e) {
     el.innerHTML = `<div class="pub-empty"><p>Error: ${_esc(e.message)}</p></div>`;
   }
 }
 
+function _setBatchFilter(f) { _batchFilter = f; loadBatchList(); }
+
 function renderBatchRow(b) {
-  const statusColors = {active:'#3b82f6',done:'#4ade80',error:'#ef4444',paused:'#f59e0b'};
+  const statusColors = {active:'#3b82f6',done:'#4ade80',error:'#ef4444',paused:'#f59e0b',cancelled:'#6b7280'};
+  const statusLabels = {active:'activo',done:'completado',error:'error',paused:'pausado',cancelled:'Cancelado',pending:'pendiente'};
   const col = statusColors[b.derived_status] || '#666';
-  const done = b.done_items || 0;
+  const published = b.published_items != null ? b.published_items : (b.done_items || 0);
   const total = b.total_items || b.item_count || 0;
   const err = b.error_items || 0;
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const pct = total > 0 ? Math.round((published / total) * 100) : 0;
   const isPaused = b.derived_status === 'paused';
   const isActive = b.derived_status === 'active';
+  const isCancelled = b.derived_status === 'cancelled';
   const hasErr = b.derived_status === 'error' || err > 0;
+  const canCancel = !isCancelled && b.derived_status !== 'done';
   return `
   <div class="card" style="padding:12px 16px">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
       <div style="flex:1;font-size:13px;font-weight:600;color:#fff">${_esc(b.name||'Lote sin nombre')}</div>
-      <span style="font-size:11px;color:${col};font-weight:600">${b.derived_status||'?'}</span>
+      <span style="font-size:11px;color:${col};font-weight:600">${statusLabels[b.derived_status]||b.derived_status||'?'}</span>
     </div>
-    <div style="font-size:11px;color:#888;margin-bottom:6px">${b.created_at ? b.created_at.slice(0,16).replace('T',' ') : ''} · ${done}/${total} subidos${err?' · '+err+' error(s)':''}</div>
+    <div style="font-size:11px;color:#888;margin-bottom:6px">${b.created_at ? b.created_at.slice(0,16).replace('T',' ') : ''} · ${published}/${total} subidos${err?' · '+err+' error(s)':''}${isCancelled&&b.cancelled_at?' · cancelado '+b.cancelled_at.slice(0,10):''}</div>
     <div style="background:#1a1a1a;border-radius:3px;height:4px;margin-bottom:8px">
       <div style="background:${col};width:${pct}%;height:4px;border-radius:3px;transition:width .3s"></div>
     </div>
@@ -7473,6 +7565,7 @@ function renderBatchRow(b) {
       ${isActive ? `<button class="btn btn-outline btn-sm" onclick="pauseBatch('${b.id}')">Pausar</button>` : ''}
       ${isPaused ? `<button class="btn btn-primary btn-sm" onclick="resumeBatch('${b.id}')">Reanudar</button>` : ''}
       ${hasErr ? `<button class="btn btn-outline btn-sm" onclick="retryBatchErrors('${b.id}')">Reintentar errores</button>` : ''}
+      ${canCancel ? `<button class="btn btn-sm" onclick="confirmCancelBatch('${b.id}',${JSON.stringify(_esc(b.name||'Lote sin nombre'))})" style="border:1px solid #4b5563;color:#9ca3af;background:transparent;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">🗑 Eliminar</button>` : ''}
     </div>
   </div>`;
 }
@@ -7526,20 +7619,27 @@ function _renderBatchDetailItems(b) {
       ${(!mismatch&&i.error_message&&['error','pending'].includes(i.status)&&!isScheduled)?`<div style="color:#ef4444;font-size:11px;margin-top:2px;margin-left:24px">${_esc(i.error_message)}</div>`:''}
     </div>`;
   }).join('');
-  const done = b.done_items || 0;
+  const published = b.published_items != null ? b.published_items : (b.done_items || 0);
+  const cancelled_items = b.cancelled_items || 0;
   const total = b.total_items || b.item_count || 0;
   const err = b.error_items || 0;
   const isActive = b.derived_status === 'active';
   const isPaused = b.derived_status === 'paused';
+  const isCancelled = b.derived_status === 'cancelled';
   const hasErr = b.derived_status === 'error' || err > 0;
+  const canCancel = !isCancelled && b.derived_status !== 'done';
+  const summaryLine = isCancelled
+    ? `${published}/${total} publicados · ${cancelled_items} cancelados`
+    : `${published}/${total} publicados${err?' · '+err+' error(es)':''}${isActive?' · actualizando…':''}`;
   return `<div style="padding:8px 0" id="batch-detail-view">
     <button class="btn btn-outline btn-sm" style="margin-bottom:12px" onclick="_stopBatchDetailPoll();loadBatchList()">← Volver a lotes</button>
     <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:4px">${_esc(b.name||'Lote')}</div>
-    <div style="font-size:11px;color:#888;margin-bottom:8px">${done}/${total} publicados${err?' · '+err+' error(es)':''}${isActive?' · actualizando…':''}</div>
+    <div style="font-size:11px;color:#888;margin-bottom:8px">${summaryLine}${isCancelled?' · <span style="color:#6b7280">Cancelado</span>':''}</div>
     <div style="display:flex;gap:6px;margin-bottom:10px">
       ${isActive ? `<button class="btn btn-outline btn-sm" onclick="pauseBatch('${b.id}')">Pausar</button>` : ''}
       ${isPaused ? `<button class="btn btn-primary btn-sm" onclick="resumeBatch('${b.id}')">Reanudar</button>` : ''}
       ${hasErr ? `<button class="btn btn-outline btn-sm" onclick="retryBatchErrors('${b.id}')">Reintentar errores</button>` : ''}
+      ${canCancel ? `<button class="btn btn-sm" onclick="confirmCancelBatch('${b.id}',${JSON.stringify(_esc(b.name||'Lote'))})" style="border:1px solid #4b5563;color:#9ca3af;background:transparent;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">🗑 Eliminar</button>` : ''}
     </div>
     <div>${items}</div>
   </div>`;
@@ -7578,6 +7678,44 @@ async function resumeBatch(id) {
 async function retryBatchErrors(id) {
   try { await api('/upload-batches/'+id+'/retry-errors',{method:'POST'}); toast('Retrying errors','success'); loadBatchList(); }
   catch(e) { toast(e.message,'error'); }
+}
+
+function confirmCancelBatch(id, name) {
+  const existing = document.getElementById('nj-cancel-batch-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'nj-cancel-batch-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.5)">
+      <div style="font-size:14px;font-weight:600;color:#fff;margin-bottom:12px">Eliminar batch de publicación</div>
+      <div style="font-size:12px;color:#9ca3af;line-height:1.6;margin-bottom:20px">
+        Se cancelarán todas las publicaciones pendientes de este paquete y desaparecerá de la cola activa. Los clips originales y los vídeos ya publicados no se eliminarán. El batch permanecerá en el historial como Cancelado.
+      </div>
+      <div style="font-size:11px;color:#6b7280;margin-bottom:20px">Batch: <span style="color:#9ca3af">${name}</span></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('nj-cancel-batch-modal').remove()">No, conservar</button>
+        <button class="btn btn-sm" id="nj-cancel-batch-confirm-btn" onclick="cancelBatch('${id}')" style="background:#374151;border:1px solid #4b5563;color:#f9fafb;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px">Sí, eliminar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function cancelBatch(id) {
+  const btn = document.getElementById('nj-cancel-batch-confirm-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Cancelando…'; }
+  try {
+    const res = await api('/upload-batches/'+id, {method:'DELETE', headers:{'Content-Type':'application/json'}, body:'{}'});
+    document.getElementById('nj-cancel-batch-modal')?.remove();
+    if (res.outcome === 'ALREADY_CANCELLED') toast('Este batch ya estaba cancelado','info');
+    else if (res.outcome === 'CANCELLATION_PENDING') toast('Batch marcado como cancelado (sesiones activas finalizarán solas)','success');
+    else toast('Batch eliminado de la cola','success');
+    _batchFilter = 'active';
+    loadBatchList();
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Sí, eliminar'; }
+    toast('Error al cancelar: ' + e.message, 'error');
+  }
 }
 
 // ── Retry-pending banner ────────────────────────────────────────────────────
@@ -7964,6 +8102,9 @@ let _njCropState = { drawing: false, step: 'gameplay', gameplay: null, facecam: 
 let _njPreviewValidated = false;
 let _njCropStart = null;
 let _njSavedCropConfigId = null;
+// Gaming layout options (65/35 default)
+let _njSplitFraction = 0.65;
+let _njGameplayBg = 'black';
 
 function njSetVideoType(vtype) {
   _njVideoType = vtype;
@@ -7979,6 +8120,28 @@ function njSetCropMode(mode) {
   document.querySelectorAll('.nj-crop-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.cmode === mode));
   njUpdateCropAreaVisibility();
   njUrlShowCropIfNeeded();
+  njUpdateSubmitState();
+}
+
+function njSetSplitFraction(frac) {
+  _njSplitFraction = frac;
+  document.querySelectorAll('#nj-ratio-row .nj-ratio-btn').forEach(b => {
+    b.classList.toggle('active', parseFloat(b.dataset.frac) === frac);
+  });
+  // Invalidate any previous preview when ratio changes
+  _njUrlPreviewValidated = false;
+  document.getElementById('nj-url-preview-wrap').style.display = 'none';
+  njUpdateSubmitState();
+}
+
+function njSetGameplayBg(bg) {
+  _njGameplayBg = bg;
+  document.querySelectorAll('#nj-bg-row .nj-bg-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.bg === bg);
+  });
+  // Invalidate preview when bg changes
+  _njUrlPreviewValidated = false;
+  document.getElementById('nj-url-preview-wrap').style.display = 'none';
   njUpdateSubmitState();
 }
 
@@ -8097,6 +8260,7 @@ function njCanvasMouseUp(e) {
     document.getElementById('nj-btn-preview').disabled = false;
     njSetCropStatus('ok', 'Gameplay and facecam regions selected. Click Preview to verify.');
   }
+  njUpdateDebugBtn();
   njRedrawCanvas();
 }
 
@@ -8172,7 +8336,8 @@ async function njPreviewCrop() {
   fd.append('src_width', String(srcW));
   fd.append('src_height', String(srcH));
   fd.append('t_start', String(seekTime));
-  fd.append('split_fraction', '0.5');
+  fd.append('split_fraction', String(_njSplitFraction));
+  fd.append('gameplay_bg', _njGameplayBg);
 
   try {
     const resp = await fetch(`${API}/crop-configs/preview-file`, { method: 'POST', body: fd });
@@ -8195,6 +8360,64 @@ async function njPreviewCrop() {
     njSetCropStatus('err', 'Network error: ' + e.message);
   }
   document.getElementById('nj-btn-preview').disabled = false;
+}
+
+// ── Debug: Ver recorte real ───────────────────────────────────────────────────
+// File upload mode: sends the actual file + gameplay rect → pure crop
+async function njDebugPureCrop() {
+  if (!_njCropState.gameplay || !_njSelectedFile) return;
+  const video = document.getElementById('nj-crop-video');
+  const panel = document.getElementById('nj-debug-panel');
+  const btn   = document.getElementById('nj-btn-debug-crop');
+  if (btn) btn.disabled = true;
+  njSetCropStatus('', 'Generando recorte puro...');
+
+  const gpNorm = njCanvasToNorm(_njCropState.gameplay);
+  const srcW = video.videoWidth;
+  const srcH = video.videoHeight;
+  const seekTime = parseFloat(document.getElementById('nj-seek-slider').value) || 5;
+
+  const fd = new FormData();
+  fd.append('file', _njSelectedFile);
+  fd.append('gameplay_rect', JSON.stringify(gpNorm));
+  fd.append('src_width', String(srcW));
+  fd.append('src_height', String(srcH));
+  fd.append('t_start', String(seekTime));
+
+  try {
+    const resp = await fetch(`${API}/crop-configs/debug-pure-file`, { method: 'POST', body: fd });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: 'Error' }));
+      njSetCropStatus('err', err.detail || 'Debug crop failed');
+      if (btn) btn.disabled = false;
+      return;
+    }
+    const data = await resp.json();
+    panel.style.display = '';
+    document.getElementById('nj-debug-ann').src = `${API}` + data.annotated_url.replace('/static', '') + `?t=${Date.now()}`;
+    const dv = document.getElementById('nj-debug-crop-video');
+    dv.src = `${API}` + data.pure_crop_url.replace('/static', '') + `?t=${Date.now()}`;
+    dv.load();
+    document.getElementById('nj-debug-coords').textContent = JSON.stringify({
+      src: data.coords.src_dims,
+      norm: data.coords.norm_gameplay,
+      px: data.coords.pixel_gameplay,
+      filter: data.filter,
+      fit_fill: data.fit_fill,
+    }, null, 2);
+    const warns = document.getElementById('nj-debug-warnings');
+    warns.textContent = data.warnings && data.warnings.length ? 'Advertencias: ' + data.warnings.join(' | ') : '';
+    njSetCropStatus('ok', 'Recorte puro listo. Compara con la seleccion dibujada.');
+  } catch (e) {
+    njSetCropStatus('err', 'Error: ' + e.message);
+  }
+  if (btn) btn.disabled = false;
+}
+
+// Enable debug button when gameplay region is drawn
+function njUpdateDebugBtn() {
+  const btn = document.getElementById('nj-btn-debug-crop');
+  if (btn) btn.disabled = !(_njCropState.gameplay && _njSelectedFile);
 }
 
 // ── URL-mode Pre-job Crop ─────────────────────────────────────────────────────
@@ -8691,7 +8914,7 @@ async function njUrlPreviewCrop() {
         gameplay_rect: [gp.x, gp.y, gp.w, gp.h],
         facecam_rect:  [fc.x, fc.y, fc.w, fc.h],
         src_width: _njUrlFrameSrcW, src_height: _njUrlFrameSrcH,
-        t_start: t, split_fraction: 0.5,
+        t_start: t, split_fraction: _njSplitFraction, gameplay_bg: _njGameplayBg,
       }),
     });
     if (!resp.ok) {

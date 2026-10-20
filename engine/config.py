@@ -67,6 +67,20 @@ class EngineConfig:
     ffmpeg_path: str = FFMPEG_PATH
     ffprobe_path: str = FFPROBE_PATH
     whisper_model: str = "small"  # upgraded from "base" — better word timestamps
+    # Smart Boundary Repair V2.1 (experimental)
+    smart_boundary_repair_enabled: bool = False
+    # Smart Reframing Engine V1 (experimental — OFF in production)
+    smart_reframing_enabled: bool = False
+    smart_reframing_version: int = 3  # 1=yunet-static, 2=scene-aware, 3=composition-engine, 31=v1.1-ar-safe, 32=v1.2-adaptive
+    # Smart Reframing V1.2 — Adaptive Composition Engine settings
+    smart_reframing_v12_confidence_entry: float = 0.55   # entry threshold for SPLIT_LAYOUT dead zone
+    smart_reframing_v12_confidence_exit: float  = 0.45   # exit threshold for SPLIT_LAYOUT dead zone
+    smart_reframing_v12_min_split_fraction: float = 0.55  # minimum gameplay fraction
+    smart_reframing_v12_max_split_fraction: float = 0.72  # maximum gameplay fraction
+    smart_reframing_v12_scene_window_s: float = 2.0       # scene analysis window (seconds)
+    # Crop debug mode — saves debug frames + coordinate trace to experiments/crop_accuracy_debug/debug_frames/
+    # NEVER enable in production. Each render job creates ~10 files.
+    crop_debug_mode: bool = False
 
 
 CONFIG = EngineConfig()

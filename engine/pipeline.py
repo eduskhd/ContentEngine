@@ -279,6 +279,11 @@ def process_video(
         db.update_job(job_id, status="RENDERING")
         timer.start("render_all_clips")
         output_subdir = f"{creator_slug}/{video_slug}"
+        crop_cfg = None
+        try:
+            crop_cfg = db.get_crop_config(job_id)
+        except Exception as _ce:
+            print(f"  [crop] get_crop_config failed: {_ce}")
         clip_ids = render_clips_onepass(
             job_id=job_id,
             source=source,
@@ -288,6 +293,7 @@ def process_video(
             src_h=src_h,
             output_subdir=output_subdir,
             proxy_path=proxy_path,
+            crop_config=crop_cfg,
         )
         timer.end(clips=len(clip_ids))
         console.print(f"  [green]OK[/] {len(clip_ids)} clips rendered")
