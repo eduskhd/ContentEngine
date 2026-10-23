@@ -1,0 +1,56 @@
+## TASK: Final Report & Google Drive Sync
+
+### Your task
+
+1. READ all progress files:
+   - audits/weekend_stability/PROGRESS.md
+   - audits/weekend_stability/TEST_RESULTS.md
+   - audits/weekend_stability/ISSUES.md
+   - audits/weekend_stability/BLOCKERS.md
+   - audits/weekend_stability/MISSION_STATE.json
+
+2. GENERATE audits/weekend_stability/FINAL_REPORT.md with:
+   - Executive summary (2-3 sentences)
+   - Completed tasks (what was fixed, tested, verified)
+   - Bugs found and fixed (with file:line references)
+   - Bugs found but not fixed (why, what's needed)
+   - Test results summary
+   - Concat render results (does it work? crop quality?)
+   - Gaming compositor status
+   - Pipeline health status
+   - Library status
+   - Data integrity status
+   - Recommendations for next week
+
+   Use these status labels:
+   - ✅ COMPLETADO Y VERIFICADO
+   - ⚠️ IMPLEMENTADO SIN VALIDAR
+   - ❌ PENDIENTE
+   - 🔴 BLOQUEADO
+
+3. RUN final regression check:
+   - curl http://localhost:8000/health
+   - curl http://localhost:8000/jobs?limit=3
+   - curl http://localhost:8000/library/creators
+   - python -c "from integrations.concat.crop_converter import x_offset_to_concat_transform; r=x_offset_to_concat_transform(656); assert abs(r['offsetX']) < 0.01, f'FAIL: {r}'; print('crop_converter: PASS')"
+   - python -m pytest engine/ --tb=short -q 2>&1 | head -30 (if tests exist)
+
+4. COMMIT all changes made this weekend:
+   - git add -A (review what's staged first)
+   - git status (check nothing sensitive is included)
+   - git commit with a comprehensive message summarizing the weekend work
+
+5. SYNC to Google Drive:
+   - Read tools/credentials.json to understand Drive setup
+   - Upload audits/weekend_stability/FINAL_REPORT.md
+   - Upload audits/weekend_stability/PROGRESS.md
+   - Upload audits/weekend_stability/TEST_RESULTS.md
+   - The Drive folder is: 1J6P3WqZnrBPX2TLcvMwc-wi50RxIp162
+   - Use the existing Google Drive API setup (tools/.drive_token.json)
+   - If Drive upload fails, note it but don't block — the report is on disk
+
+### Success criteria
+- FINAL_REPORT.md exists and is comprehensive
+- All weekend changes committed to git
+- Reports available (on disk at minimum, Drive sync attempted)
+- No regressions in final health check

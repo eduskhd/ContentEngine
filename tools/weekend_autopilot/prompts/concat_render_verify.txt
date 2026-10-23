@@ -1,0 +1,52 @@
+## TASK: Concat Integration Verification
+
+### Context
+Concat v0.2.8 is integrated as a second render engine. The binary is at:
+  concat-src/src/target/release/concat-cli.exe
+
+The integration is in integrations/concat/:
+  concat_adapter.py — JSON-RPC 2.0 over stdin/stdout subprocess
+  crop_converter.py — x_offset → offsetX transform (FIXED in prior session)
+
+clip_variants table stores Concat renders without overwriting the original clips.
+
+### Your task
+
+1. VERIFY the binary:
+   - Check concat-src/src/target/release/concat-cli.exe exists and is not 0 bytes
+   - Run: concat-src\src\target\release\concat-cli.exe --version (or --help) to confirm it works
+
+2. CHECK the integration code:
+   - Read integrations/concat/concat_adapter.py
+   - Verify the JSON-RPC flow: start process → send {"jsonrpc":"2.0","method":"initialize"} → get capabilities → create project → render
+   - Check that the adapter handles errors gracefully
+
+3. CHECK clip_variants table:
+   - Query: SELECT cv.id, cv.clip_id, cv.render_engine, cv.render_status, cv.file_size_bytes, cv.created_at FROM clip_variants cv ORDER BY cv.created_at DESC LIMIT 10
+   - Are there existing variants? What status are they?
+   - Is the most recent one DONE or ERROR?
+
+4. TEST a fresh Concat render:
+   - Find a clip with a framing_plan: SELECT cl.id, cl.output_path, ca.framing_plan FROM clips cl JOIN candidates ca ON ca.id=cl.candidate_id WHERE ca.framing_plan IS NOT NULL AND cl.technical_qa='PASS' ORDER BY cl.created_at DESC LIMIT 3
+   - POST http://localhost:8000/clips/{clip_id}/render-concat
+   - Poll GET http://localhost:8000/clips/{clip_id}/variants every 10s
+   - Wait up to 3 minutes for completion
+
+5. VERIFY the output:
+   - Check the variant file exists and size > 500KB
+   - Use ffprobe to check it: ffprobe -v quiet -print_format json -show_streams output/...variant_path...
+   - Confirm: width=1080, height=1920 (or correct 9:16 dimensions), has audio
+
+6. CHECK the crop_converter formula:
+   - Run this Python test:
+     python -c "from integrations.concat.crop_converter import x_offset_to_concat_transform; print('center:', x_offset_to_concat_transform(656)); print('left:', x_offset_to_concat_transform(0)); print('right:', x_offset_to_concat_transform(1312))"
+   - Expected: center → offsetX≈0.0, left → positive, right → negative
+
+7. FIX any issues found in the adapter or endpoint
+
+### Success criteria
+- Binary exists and responds to commands
+- At least one clip_variant with render_status='DONE'
+- ffprobe confirms correct resolution (1080x1920)
+- crop_converter center test = offsetX≈0.0
+- Results documented in PROGRESS.md and TEST_RESULTS.md

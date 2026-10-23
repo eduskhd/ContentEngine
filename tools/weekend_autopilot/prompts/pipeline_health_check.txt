@@ -1,0 +1,53 @@
+## TASK: Pipeline Health & Endpoint Audit
+
+### Your task
+
+1. CHECK server health:
+   - curl http://localhost:8000/health
+   - Check all workers alive (should show 2/2)
+   - Check disk_free_gb > 10
+
+2. CHECK for data integrity issues:
+   - Query orphaned records:
+     SELECT COUNT(*) FROM candidates WHERE job_id NOT IN (SELECT id FROM jobs)
+     SELECT COUNT(*) FROM clips WHERE job_id NOT IN (SELECT id FROM jobs)
+     SELECT COUNT(*) FROM clip_variants WHERE clip_id NOT IN (SELECT id FROM clips)
+   - Query zombie jobs: SELECT id, status, error, created_at FROM jobs WHERE status NOT IN ('COMPLETED','FAILED','QUEUED') AND created_at < datetime('now','-1 hour')
+   - Query clips with missing files: (Python) check that output_path file exists for PASS clips
+
+3. CHECK job queue:
+   - Query: SELECT * FROM job_queue ORDER BY created_at DESC LIMIT 10
+   - Any jobs stuck in 'pending' for > 1 hour?
+   - Any jobs running (status='running' in jobs table) for > 2 hours?
+
+4. TEST key API endpoints:
+   - GET /jobs?limit=5 → check format
+   - GET /clips?limit=5 → check format
+   - GET /library/creators → check format
+   - GET /packages?limit=5 → check format
+   - GET /performance/summary → check format
+   - All should return 200 with valid JSON
+
+5. CHECK pipeline stages work (dry run only — do NOT start new jobs):
+   - Check transcription: from engine.transcription import get_model; m = get_model(); print("Whisper model loaded:", type(m))
+   - Check hardware encoder: from engine.hw_accel import detect_encoder; print(detect_encoder())
+   - Check proxy generation code exists: from engine.proxy import generate_proxy
+
+6. CHECK for common failure patterns:
+   - Any clips with technical_qa='FAIL' that still show in library? (should be hidden)
+   - Any jobs COMPLETED with 0 clips but source file still exists?
+   - Any candidates with virality_score > 80 (potential scoring bug)?
+
+7. FIX any issues found:
+   - Orphaned records → document (do NOT delete without approval)
+   - Zombie jobs → mark FAILED if > 2 hours stale
+   - Broken endpoints → fix
+   - Config issues → fix
+
+### Success criteria
+- All health checks pass
+- No zombie jobs running > 2 hours
+- All tested endpoints return 200
+- Data integrity issues documented
+- Any fixable issues fixed
+- Results in PROGRESS.md and TEST_RESULTS.md

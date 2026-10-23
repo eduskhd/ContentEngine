@@ -1,0 +1,49 @@
+## TASK: Library & Web UI Audit
+
+### Your task
+
+1. CHECK API endpoints that the Library uses:
+   - GET /creators (not /library/creators — that 404s)
+   - GET /clips?limit=20
+   - GET /clips?limit=20 — check format
+   - GET /clips/{any_clip_id} — use a real clip ID from the DB
+   - GET /packages?limit=10
+   - All should return 200 with correct format
+
+2. CHECK clip variant display:
+   - GET /clips/{clip_id}/variants → should list Concat variants if any
+   - The response should include render_engine, render_status, file_size_bytes
+   - Check that the Library can distinguish FFmpeg vs Concat versions
+
+3. CHECK the dashboard JavaScript for broken functions:
+   - Read dashboard/index.html (the SPA)
+   - Search for any TODO/FIXME comments
+   - Search for functions that reference endpoints that might not exist
+   - Look for broken click handlers (ones that reference undefined variables)
+   - Check that the "Render with Concat" button (if present) calls the correct endpoint
+
+4. CHECK filter chips in Library:
+   - Verify the API supports: ?status=approved, ?status=pending, ?creator_slug=X
+   - Check the dashboard JS calls these correctly
+
+5. CHECK packages:
+   - GET /packages → list packages
+   - GET /packages/{id} → get package detail
+   - Check that packages correctly list their clip counts
+
+6. FIX broken UI elements:
+   - Dead buttons that call missing endpoints → fix or remove
+   - Wrong API paths in fetch calls → fix
+   - Missing error handling → add minimal error display
+
+7. CHECK that variant trazability is in the UI:
+   - Can a user see which clips have a Concat variant?
+   - Is the render engine shown somewhere in the clip modal?
+   - If not, add a simple badge or label showing "FFmpeg" vs "Concat" variant
+
+### Success criteria
+- All Library API endpoints return correct data
+- No broken fetch calls in dashboard JS
+- Clip variant trazability visible in UI (even if minimal)
+- Any fixed UI bugs committed
+- Results in PROGRESS.md

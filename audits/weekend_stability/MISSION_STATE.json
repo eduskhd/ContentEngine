@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "status": "running",
+  "cycle": 0,
+  "active_task": null,
+  "last_advance": "2026-10-23T00:00:00Z",
+  "last_checkpoint": null,
+  "rate_limit_wait": 300,
+  "mission_start": "2026-10-23T00:00:00Z",
+  "updated_at": "2026-10-23T00:00:00Z",
+  "tasks": [
+    {
+      "id": "crop_audit_fix",
+      "name": "Crop & Reframing Audit and Fix",
+      "status": "pending",
+      "attempts": 0,
+      "max_attempts": 3,
+      "dependencies": []
+    },
+    {
+      "id": "gaming_compositor_fix",
+      "name": "Gaming Stacked Layout Fix",
+      "status": "pending",
+      "attempts": 0,
+      "max_attempts": 3,
+      "dependencies": [
+        "crop_audit_fix"
+      ]
+    },
+    {
+      "id": "concat_render_verify",
+      "name": "Concat Integration Verification",
+      "status": "pending",
+      "attempts": 0,
+      "max_attempts": 3,
+      "dependencies": []
+    },
+    {
+      "id": "pipeline_health_check",
+      "name": "Pipeline Health & Endpoint Audit",
+      "status": "pending",
+      "attempts": 0,
+      "max_attempts": 3,
+      "dependencies": []
+    },
+    {
+      "id": "library_web_audit",
+      "name": "Library & Web UI Audit",
+      "status": "pending",
+      "attempts": 0,
+      "max_attempts": 3,
+      "dependencies": [
+        "pipeline_health_check"
+      ]
+    },
+    {
+      "id": "final_report",
+      "name": "Final Report & Drive Sync",
+      "status": "pending",
+      "attempts": 0,
+      "max_attempts": 2,
+      "dependencies": [
+        "crop_audit_fix",
+        "gaming_compositor_fix",
+        "concat_render_verify",
+        "pipeline_health_check",
+        "library_web_audit"
+      ]
+    }
+  ]
+}

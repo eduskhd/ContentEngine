@@ -1,0 +1,49 @@
+## TASK: Crop & Reframing Audit and Fix
+
+You are doing an autonomous quality pass on ContentEngine's crop/reframing pipeline.
+
+### What was done in the previous session (context)
+- crop_converter.py: x_offset formula fixed (center-crop reference corrected)
+- render-concat endpoint: reads framing_plan from candidates table (was hardcoded x_offset=0)
+- _MIN_FACE_AREA_FRAC: lowered from 0.01 to 0.003 (catches corner webcam in gaming)
+- generate-top endpoint: fixed sqlite3.Row.get() bug (video = dict(video))
+- GTA4 job 36499131: 15 clips rendered and QA PASS
+
+### Your task
+
+1. AUDIT the clipping-engine (follow .claude/skills/clipping-engine/SKILL.md):
+   - Read the 10 audit areas
+   - Query the DB for recent clip stats: QA rates, score distribution
+   - Check a sample of the 15 GTA4 clips: do the framing_plans look correct?
+
+2. AUDIT crop quality on a sample of clips:
+   - Query: SELECT cl.id, cl.output_path, ca.framing_plan, ca.virality_score FROM clips cl JOIN candidates ca ON ca.id=cl.candidate_id WHERE cl.job_id='36499131-b5c0-4574-a994-43737a9c0f8f' ORDER BY ca.virality_score DESC LIMIT 5
+   - Check framing_plan x_offset values make sense for 1920x1080 source
+   - A center crop should have x_offset around 656 (=(1920-608)//2 where crop_w=int(1080*1080/1920)=607)
+
+3. VERIFY Concat crop transform:
+   - Read integrations/concat/crop_converter.py
+   - Run the test: from integrations.concat.crop_converter import x_offset_to_concat_transform; print(x_offset_to_concat_transform(656)); print(x_offset_to_concat_transform(0)); print(x_offset_to_concat_transform(1312))
+   - Expected: center (656) → offsetX=0.0, far-left (0) → positive, far-right (1312) → negative
+
+4. TEST a real Concat render:
+   - Find the most recent clip with a framing_plan: SELECT cl.id, ca.framing_plan, cl.output_path FROM clips cl JOIN candidates ca ON ca.id=cl.candidate_id WHERE ca.framing_plan IS NOT NULL ORDER BY cl.created_at DESC LIMIT 1
+   - POST /clips/{clip_id}/render-concat to generate a variant
+   - Wait for it to complete (poll GET /clips/{clip_id}/variants)
+   - Check the output file exists and has reasonable size (>500KB)
+
+5. FIX any issues found:
+   - If crop formula has bugs, fix in crop_converter.py
+   - If framing_plan x_offsets look wrong, investigate plan_clip_v2 in engine/reframe/planner.py
+   - If Concat render fails, check the error and fix the API endpoint
+
+6. RUN a quick regression check:
+   - curl http://localhost:8000/health
+   - curl http://localhost:8000/jobs?limit=5
+   - Verify server is healthy
+
+### Success criteria
+- crop_converter center test returns offsetX≈0.0
+- At least one Concat render completes successfully (render_status=DONE)
+- No new regressions in existing endpoints
+- Findings written to audits/weekend_stability/PROGRESS.md

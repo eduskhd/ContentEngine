@@ -2111,6 +2111,7 @@ async def generate_top_clips(
 
     from engine.renderers.render_clip import render_clips_onepass
 
+    video = dict(video)
     source_path = video["path"]
     cand_dicts = [dict(c) for c in candidates]
 
@@ -2124,9 +2125,17 @@ async def generate_top_clips(
     src_w = video.get("width") or 1920
     src_h = video.get("height") or 1080
 
+    # Read crop_config — ensures GAMING_STACKED_FIT and other manual presets are respected
+    crop_cfg = None
+    try:
+        crop_cfg = dbmod.get_crop_config(job_id)
+    except Exception:
+        pass
+
     clip_ids = render_clips_onepass(
         job_id=job_id, source=source_path, finalists=cand_dicts,
         words=words, src_w=src_w, src_h=src_h, output_subdir=output_subdir,
+        crop_config=crop_cfg,
     )
 
     if clip_ids:
@@ -2161,6 +2170,7 @@ async def generate_series_clips(job_id: str, series_id: str):
 
     from engine.renderers.render_clip import render_clips_onepass
 
+    video = dict(video)
     source_path = video["path"]
     part_dicts = [dict(p) for p in parts]
     creator_slug = video.get("creator_slug") or "unknown"
@@ -2170,10 +2180,16 @@ async def generate_series_clips(job_id: str, series_id: str):
     words = dbmod.get_cached_words(video["id"]) or []
     src_w = video.get("width") or 1920
     src_h = video.get("height") or 1080
+    crop_cfg = None
+    try:
+        crop_cfg = dbmod.get_crop_config(job_id)
+    except Exception:
+        pass
 
     clip_ids = render_clips_onepass(
         job_id=job_id, source=source_path, finalists=part_dicts,
         words=words, src_w=src_w, src_h=src_h, output_subdir=output_subdir,
+        crop_config=crop_cfg,
     )
 
     if clip_ids:

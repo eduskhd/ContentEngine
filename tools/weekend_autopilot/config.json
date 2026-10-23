@@ -1,0 +1,66 @@
+{
+  "mission": "ContentEngine Weekend Stability & Crop Fix — 2026-10-23 to 2026-10-25",
+  "deadline": "2026-10-25T21:59:00Z",
+  "tasks": [
+    {
+      "id": "crop_audit_fix",
+      "name": "Crop & Reframing Audit and Fix",
+      "description": "Audit crop quality on recent clips, fix any issues in the crop/reframing pipeline, test Concat render crop",
+      "timeout_s": 2400,
+      "max_attempts": 3,
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "gaming_compositor_fix",
+      "name": "Gaming Stacked Layout Fix",
+      "description": "Verify and fix the GAMING_STACKED_FIT preset: webcam detection, 65/35 split, face centering, blur background",
+      "timeout_s": 2400,
+      "max_attempts": 3,
+      "dependencies": ["crop_audit_fix"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "concat_render_verify",
+      "name": "Concat Integration Verification",
+      "description": "Verify concat-cli binary, run a render on an existing clip, check clip_variants table, document API behavior",
+      "timeout_s": 1800,
+      "max_attempts": 3,
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "pipeline_health_check",
+      "name": "Pipeline Health & Endpoint Audit",
+      "description": "Check all 12 pipeline steps, test all REST endpoints, look for zombie jobs, orphaned records, worker issues",
+      "timeout_s": 2400,
+      "max_attempts": 3,
+      "dependencies": [],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "library_web_audit",
+      "name": "Library & Web UI Audit",
+      "description": "Audit Library filters, clip variants display, packages, thumbnails. Fix broken buttons and navigation",
+      "timeout_s": 2400,
+      "max_attempts": 3,
+      "dependencies": ["pipeline_health_check"],
+      "status": "pending",
+      "attempts": 0
+    },
+    {
+      "id": "final_report",
+      "name": "Final Report & Drive Sync",
+      "description": "Compile all findings into FINAL_REPORT.md, run regression checks, sync reports to Google Drive",
+      "timeout_s": 1800,
+      "max_attempts": 2,
+      "dependencies": ["crop_audit_fix", "gaming_compositor_fix", "concat_render_verify", "pipeline_health_check", "library_web_audit"],
+      "status": "pending",
+      "attempts": 0
+    }
+  ]
+}

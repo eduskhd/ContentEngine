@@ -1,0 +1,49 @@
+## TASK: Gaming Stacked Layout Fix
+
+### Context
+ContentEngine has a GAMING_STACKED_FIT preset for gaming content with:
+- Gameplay video on TOP (65% of frame)
+- Webcam/face on BOTTOM (35% of frame)
+- Both regions scaled to FIT (no crop, letterboxed if needed)
+- Blurred background fill
+- Caption safe zone at bottom
+
+The stacked compositor is in engine/renderers/render_clip.py (search for GAMING_STACKED).
+The preset is defined in engine/config.py or engine/captions/presets.py.
+
+### Your task
+
+1. LOCATE the gaming stacked layout code:
+   - Search for GAMING_STACKED in engine/config.py and engine/renderers/render_clip.py
+   - Read the _build_gaming_stacked_filter() or equivalent function
+   - Find how webcam region is detected vs gameplay region
+
+2. CHECK existing gaming experiment renders:
+   - List files in experiments/gaming_stacked_layout/
+   - These are the reference renders from when the feature was built
+   - Note which ratios were tested (50/50, 60/40, 65/35, 70/30)
+
+3. TEST with a real gaming clip:
+   - Query: SELECT cl.id, cl.output_path, j.id as job_id FROM clips cl JOIN jobs j ON j.id=cl.job_id JOIN candidates ca ON ca.id=cl.candidate_id WHERE (j.source_path LIKE '%gaming%' OR j.source_path LIKE '%illojuan%') AND cl.technical_qa='PASS' ORDER BY cl.created_at DESC LIMIT 5
+   - If gaming clips exist, check their framing
+   - Look at a recent clip output_path and verify it looks correct (check dimensions, check if it's 1080x1920)
+
+4. CHECK if webcam detection works:
+   - In engine/reframe/planner.py, find the code that detects webcam vs gameplay regions
+   - Check if it correctly identifies small face in corner as webcam
+   - The _MIN_FACE_AREA_FRAC=0.003 fix was made — verify it's in place
+
+5. GENERATE test render if needed:
+   - If you find a gaming clip (identified as gaming by content), try rendering it
+   - Check the output for: gameplay visible, face visible, no distortion, captions at safe zone
+
+6. FIX any issues:
+   - If webcam detection is broken, fix it
+   - If the stacked filter is incorrect, fix it
+   - If captions overlap with webcam, fix the safe zone
+
+### Success criteria
+- Gaming stacked layout logic correctly identified in code
+- At least one gaming clip verified (or created) showing correct layout
+- Webcam detection working (face in corner → bottom panel)
+- Findings documented in PROGRESS.md
