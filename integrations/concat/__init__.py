@@ -38,9 +38,9 @@ def get_adapter():
         raise ConcatNotAvailable("Concat is disabled (concat_enabled=False in config)")
     from integrations.concat.adapter import ConcatAdapter
     return ConcatAdapter(
-        exe_path=CONFIG.concat_exe_path,
+        cli_path=CONFIG.concat_exe_path,
         projects_dir=CONFIG.concat_projects_dir,
-        mcp_timeout_s=CONFIG.concat_mcp_timeout_s,
+        api_timeout_s=CONFIG.concat_mcp_timeout_s,
         export_timeout_s=CONFIG.concat_export_timeout_s,
     )
 
@@ -70,7 +70,7 @@ def get_availability_status() -> dict:
     try:
         from integrations.concat.adapter import ConcatAdapter
         adapter = ConcatAdapter(CONFIG.concat_exe_path, CONFIG.concat_projects_dir,
-                                mcp_timeout_s=10.0)
+                                api_timeout_s=10.0)
         if adapter.is_available():
             status["available"] = True
             status["version"] = "0.2.8"

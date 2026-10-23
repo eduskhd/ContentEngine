@@ -125,6 +125,15 @@ REPORT_FILENAMES = {
     "PAGINATION_TESTS.md",
     "LIBRARY_FUNCTIONAL_AUDIT.md",
     "REGRESSION_REPORT.md",
+    # concat integration audit
+    "CLAUDE_PROGRESS.md",
+    "CONCAT_VERSION_AND_API.md",
+    "DATABASE_MIGRATION.md",
+    "EDITPLAN_SPEC.md",
+    "INTEGRATION_DESIGN.md",
+    "KNOWN_LIMITATIONS.md",
+    "LICENSE_REVIEW.md",
+    "RENDER_COMPARISON.md",
 }
 
 

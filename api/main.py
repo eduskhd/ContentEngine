@@ -5238,6 +5238,146 @@ async def get_clip_variants(clip_id: str):
     return {"clip_id": clip_id, "variants": variants, "count": len(variants)}
 
 
+@app.get("/clip-variants/{variant_id}/video")
+async def serve_clip_variant_video(variant_id: str):
+    """Serve the rendered mp4 for a clip_variants row."""
+    row = dbmod.get_clip_variant(variant_id)
+    if not row:
+        raise HTTPException(404, "Variant not found")
+    vpath = row.get("output_path")
+    if not vpath or not Path(vpath).exists():
+        raise HTTPException(404, "Variant file not found on disk")
+    return FileResponse(vpath, media_type="video/mp4",
+                        headers={"Accept-Ranges": "bytes"})
+
+
+@app.post("/clips/{clip_id}/render-concat")
+async def render_clip_with_concat(
+    clip_id: str,
+    background_tasks: BackgroundTasks,
+):
+    """Re-render an existing clip using the Concat engine.
+
+    Returns immediately with a variant_id; the render runs in a background
+    thread.  Poll GET /clips/{clip_id}/variants to check status.
+    Only available when concat_enabled=True in config.
+    """
+    from engine.config import CONFIG as _cfg
+    if not _cfg.concat_enabled:
+        raise HTTPException(400, "Concat engine is disabled (concat_enabled=False)")
+
+    clip = dbmod.get_clip(clip_id)
+    if not clip:
+        raise HTTPException(404, "Clip not found")
+
+    # Resolve source video path via candidate → video join
+    with dbmod.db() as _conn:
+        row = _conn.execute(
+            """SELECT v.path, v.width, v.height, ca.start_s, ca.end_s
+               FROM candidates ca
+               JOIN videos v ON ca.video_id = v.id
+               WHERE ca.id = ?""",
+            (clip["candidate_id"],)
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(400, "Cannot resolve source video for this clip")
+    src_path, src_w, src_h, start_s, end_s = row
+    if not src_path or not Path(src_path).exists():
+        raise HTTPException(400, f"Source video not found on disk: {src_path}")
+
+    duration_s = float(end_s or 0) - float(start_s or 0)
+    if duration_s <= 0:
+        raise HTTPException(400, "Invalid clip duration")
+
+    # Create a pending clip_variants row
+    out_dir = Path(_cfg.output_dir) / "concat_variants"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    import uuid as _uuid
+    variant_id = str(_uuid.uuid4())
+    variant_path = str(out_dir / f"{variant_id}.mp4")
+    dbmod.create_clip_variant(
+        clip_id=clip_id,
+        render_engine="concat",
+        output_path=variant_path,
+        engine_version="0.2.8",
+        edit_method="concat-cli-api",
+        duration_s=duration_s,
+        width=clip.get("width") or 1080,
+        height=clip.get("height") or 1920,
+        variant_id=variant_id,
+    )
+
+    # Kick off background render
+    _start_s   = float(start_s)
+    _duration  = duration_s
+    _src_w     = int(src_w or 1920)
+    _src_h     = int(src_h or 1080)
+    _canvas_w  = clip.get("width") or 1080
+    _canvas_h  = clip.get("height") or 1920
+    _fps       = clip.get("fps") or 30
+    _src_path  = str(src_path)
+
+    def _do_render():
+        import tempfile as _tf, subprocess as _sp, os as _os
+        tmp_seg = None
+        actual_src = _src_path
+        actual_start = _start_s
+        try:
+            # Pre-trim with FFmpeg so Concat always gets a short file (start_s=0).
+            # This avoids slow seeking in large HD sources with the debug binary.
+            from engine.config import CONFIG as _c2
+            tmp_seg = _tf.mktemp(suffix=".mp4", dir=str(Path(_cfg.output_dir) / "concat_variants"))
+            _sp.run(
+                [_c2.ffmpeg_path, "-y", "-ss", str(_start_s), "-i", _src_path,
+                 "-t", str(_duration), "-c", "copy", "-avoid_negative_ts", "1", tmp_seg],
+                capture_output=True, timeout=120,
+            )
+            if _os.path.exists(tmp_seg) and _os.path.getsize(tmp_seg) > 0:
+                actual_src = tmp_seg
+                actual_start = 0.0
+        except Exception as _pre_err:
+            print(f"[concat] pre-trim failed ({_pre_err}), using original source")
+
+        try:
+            from integrations.concat import get_adapter
+            from integrations.concat.adapter import ConcatRenderRequest
+            adapter = get_adapter()
+            req = ConcatRenderRequest(
+                source_path=actual_src,
+                output_path=variant_path,
+                start_s=actual_start,
+                duration_s=_duration,
+                x_offset=0,
+                src_w=_src_w,
+                src_h=_src_h,
+                canvas_w=_canvas_w,
+                canvas_h=_canvas_h,
+                fps=30,
+            )
+            result = adapter.render(req)
+            dbmod.update_clip_variant(
+                variant_id,
+                render_status="DONE",
+                file_size_bytes=result.file_size_bytes,
+                duration_s=result.duration_s,
+            )
+        except Exception as exc:
+            dbmod.update_clip_variant(
+                variant_id,
+                render_status="FAILED",
+                qa_status="FAIL",
+            )
+            print(f"[concat] render failed for clip {clip_id}: {exc}")
+        finally:
+            if tmp_seg and _os.path.exists(tmp_seg):
+                try: _os.unlink(tmp_seg)
+                except Exception: pass
+
+    background_tasks.add_task(_do_render)
+    return {"variant_id": variant_id, "clip_id": clip_id, "status": "rendering"}
+
+
 # ── DASHBOARD ────────────────────────────────────────────────────────────────
 
 _dashboard_path = Path(__file__).parent.parent / "dashboard"

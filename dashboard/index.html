@@ -1975,7 +1975,11 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 
     <!-- LEFT: video + actions -->
     <div class="modal-left">
-      <div id="modal-clip-context" style="font-size:11px;color:#555;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;min-height:16px">
+        <div id="modal-clip-context" style="font-size:11px;color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"></div>
+        <div id="modal-engine-badge" style="flex-shrink:0"></div>
+      </div>
+      <div id="modal-variant-bar" style="display:none;margin-bottom:8px;font-size:11px;color:#888;gap:6px;align-items:center;flex-wrap:wrap"></div>
       <div class="modal-video-wrap">
         <video id="modal-video" controls playsinline></video>
         <canvas id="caption-canvas"></canvas>
@@ -1997,6 +2001,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
           <button class="btn btn-primary btn-sm" onclick="prepareClipForPublishing(_currentClipId)">Add to Publishing</button>
           <button class="btn btn-outline btn-sm" id="modal-change-creator-btn" onclick="changeClipCreator()" style="display:none">Change Creator</button>
+          <button class="btn btn-outline btn-sm" id="modal-concat-btn" style="display:none;color:#f59e0b;border-color:#4a3800" onclick="renderClipWithConcat()">&#x2699; Render with Concat</button>
         </div>
       </div>
     </div>
@@ -2008,6 +2013,7 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
         <button class="cap-tab" onclick="capTab('words',this)" role="tab" aria-selected="false" aria-controls="cap-words">Words</button>
         <button class="cap-tab" onclick="capTab('position',this)" role="tab" aria-selected="false" aria-controls="cap-position">Position</button>
         <button class="cap-tab" onclick="capTab('reframe',this)" role="tab" aria-selected="false" aria-controls="cap-reframe">Reframe</button>
+        <button class="cap-tab" id="cap-compare-tab" onclick="capTab('compare',this);loadCompareTab(_currentClipId)" role="tab" aria-selected="false" aria-controls="cap-compare" style="display:none">Compare</button>
         <button class="cap-tab" onclick="capTab('eval',this)" role="tab" aria-selected="false" aria-controls="cap-eval">Eval</button>
       </div>
 
@@ -2191,6 +2197,43 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           Reframe accepted as active render
         </div>
         <div id="rf-error" style="display:none;font-size:11px;color:#f87171;margin-top:6px"></div>
+      </div>
+
+      <!-- COMPARE panel: FFmpeg vs Concat side-by-side -->
+      <div class="cap-panel" id="cap-compare" role="tabpanel" aria-label="Compare" style="overflow-y:auto;padding-bottom:8px">
+        <div id="cmp-loading" style="font-size:12px;color:#666;padding:12px 0">Loading variants...</div>
+        <div id="cmp-empty" style="display:none;font-size:12px;color:#555;padding:12px 0">
+          No Concat variants yet.<br>
+          <span style="color:#888;font-size:11px">Use the "Render with Concat" button to create one.</span>
+        </div>
+        <div id="cmp-content" style="display:none">
+          <!-- Engine info row -->
+          <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap" id="cmp-variant-btns"></div>
+          <!-- Side-by-side videos -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+            <div>
+              <div style="font-size:10px;color:#666;text-align:center;margin-bottom:3px">FFmpeg (original)</div>
+              <video id="cmp-ffmpeg-video" src="" controls muted playsinline
+                     style="width:100%;border-radius:4px;background:#111;border:1px solid #2a2a2a"
+                     onplay="cmpSync(this,'cmp-concat-video')"></video>
+            </div>
+            <div>
+              <div style="font-size:10px;color:#f59e0b;text-align:center;margin-bottom:3px" id="cmp-concat-label">Concat v0.2.8</div>
+              <video id="cmp-concat-video" src="" controls muted playsinline
+                     style="width:100%;border-radius:4px;background:#111;border:1px solid #4a3800"
+                     onplay="cmpSync(this,'cmp-ffmpeg-video')"></video>
+            </div>
+          </div>
+          <!-- Stats -->
+          <div id="cmp-stats" style="font-size:11px;color:#666;background:#111;border-radius:5px;padding:8px;border:1px solid #222">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+              <div>FFmpeg size: <span id="cmp-ffmpeg-size" style="color:#ccc">—</span></div>
+              <div>Concat size: <span id="cmp-concat-size" style="color:#ccc">—</span></div>
+              <div>FFmpeg dur: <span id="cmp-ffmpeg-dur" style="color:#ccc">—</span></div>
+              <div>Concat dur: <span id="cmp-concat-dur" style="color:#ccc">—</span></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="cap-panel" id="cap-eval" role="tabpanel" aria-label="Eval" style="overflow-y:auto;padding-bottom:8px">
@@ -2397,7 +2440,13 @@ async function openPlayer(clipId, showReviewBtns) {
   capTab(_defaultTab, document.querySelector(`.cap-tab[onclick="capTab('${_defaultTab}',this)"]`));
   document.getElementById('video-modal').classList.add('open');
 
-  // Fetch clip details: source title, video_id, creator_id
+  // Reset engine badge + variant bar
+  const _eb = document.getElementById('modal-engine-badge');
+  const _vbar = document.getElementById('modal-variant-bar');
+  if (_eb) _eb.innerHTML = '';
+  if (_vbar) { _vbar.style.display = 'none'; _vbar.innerHTML = ''; }
+
+  // Fetch clip details: source title, video_id, creator_id, render_engine
   api(`/clips/${clipId}`).then(clip => {
     _currentClipVideoId = clip.video_id || null;
     _currentClipCreatorId = clip.creator_id || null;
@@ -2405,6 +2454,36 @@ async function openPlayer(clipId, showReviewBtns) {
     if (btn) btn.style.display = _currentClipVideoId ? '' : 'none';
     const ctx = document.getElementById('modal-clip-context');
     if (ctx) ctx.textContent = clip.source_title || '';
+    if (_eb) _eb.innerHTML = _engineBadge(clip.render_engine);
+    // Show Concat re-render button if concat is available
+    const concatBtn = document.getElementById('modal-concat-btn');
+    if (concatBtn) {
+      fetch(`${API}/engines/concat/status`).then(r => r.json()).then(d => {
+        concatBtn.style.display = d.available ? '' : 'none';
+      }).catch(() => { concatBtn.style.display = 'none'; });
+    }
+  }).catch(() => {});
+
+  // Load clip_variants for variant selector + Compare tab visibility
+  const _origSrc = `${API}/clips/${clipId}/preview`;
+  api(`/clips/${clipId}/variants`).then(data => {
+    const variants = (data.variants || []).filter(v => v.render_status === 'DONE');
+    const compareTab = document.getElementById('cap-compare-tab');
+    if (compareTab) compareTab.style.display = variants.length ? '' : 'none';
+    if (!variants.length || !_vbar) return;
+    const origBtn = `<button class="btn btn-outline btn-sm" style="font-size:10px;color:#888;padding:2px 7px"
+      onclick="document.getElementById('modal-video').src='${_origSrc}';document.getElementById('modal-engine-badge').innerHTML=''"
+      title="Original FFmpeg render">FFmpeg</button>`;
+    const varBtns = variants.map(v => {
+      const eng = v.render_engine || 'ffmpeg';
+      const color = eng === 'concat' ? '#f59e0b' : '#888';
+      const label = eng === 'concat' ? 'Concat' : eng.toUpperCase();
+      return `<button class="btn btn-outline btn-sm" style="font-size:10px;color:${color};border-color:${color};padding:2px 7px"
+        onclick="_loadVariantVideo('${v.id}','${eng}')" title="Variant: ${eng}">
+        ${label}</button>`;
+    }).join('');
+    _vbar.innerHTML = `<span style="color:#555;font-size:10px">Switch:</span> ${origBtn} ${varBtns}`;
+    _vbar.style.display = 'flex';
   }).catch(() => {});
 
   // Bind timeupdate for caption canvas
@@ -2443,10 +2522,155 @@ function closePlayer() {
   v.src = '';
   _clearCanvas();
   document.getElementById('video-modal').classList.remove('open');
-  // Stop any running reframe poll without clearing the variant state
-  // so it resumes if the user reopens the same clip
   clearInterval(_rfPollTimer);
   _rfPollTimer = null;
+  // Reset compare videos
+  const cv = document.getElementById('cmp-ffmpeg-video');
+  const cc = document.getElementById('cmp-concat-video');
+  if (cv) { cv.pause(); cv.src = ''; }
+  if (cc) { cc.pause(); cc.src = ''; }
+  _cmpActiveVariantId = null;
+}
+
+function _loadVariantVideo(variantId, engine) {
+  const v = document.getElementById('modal-video');
+  if (!v) return;
+  v.src = `${API}/clip-variants/${variantId}/video`;
+  v.load();
+  v.play().catch(() => {});
+  const eb = document.getElementById('modal-engine-badge');
+  if (eb) eb.innerHTML = _engineBadge(engine || 'concat');
+}
+
+// ── Phase 8: Comparator ──────────────────────────────────────────────────────
+
+function cmpSync(src, targetId) {
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  if (!target.paused && Math.abs(target.currentTime - src.currentTime) < 0.2) return;
+  target.currentTime = src.currentTime;
+  target.play().catch(() => {});
+}
+
+let _cmpActiveVariantId = null;
+
+async function loadCompareTab(clipId) {
+  if (!clipId) return;
+  const loading = document.getElementById('cmp-loading');
+  const empty   = document.getElementById('cmp-empty');
+  const content = document.getElementById('cmp-content');
+  const btns    = document.getElementById('cmp-variant-btns');
+  if (loading) loading.style.display = '';
+  if (empty)   empty.style.display   = 'none';
+  if (content) content.style.display = 'none';
+
+  try {
+    const [clipData, varData] = await Promise.all([
+      api(`/clips/${clipId}`),
+      api(`/clips/${clipId}/variants`),
+    ]);
+    const doneVariants = (varData.variants || []).filter(v => v.render_status === 'DONE');
+
+    if (loading) loading.style.display = 'none';
+
+    if (!doneVariants.length) {
+      if (empty) empty.style.display = '';
+      return;
+    }
+
+    if (content) content.style.display = '';
+
+    // Build variant selector buttons
+    if (btns) {
+      btns.innerHTML = doneVariants.map(v => {
+        const eng = v.render_engine || 'concat';
+        const color = eng === 'concat' ? '#f59e0b' : '#888';
+        const sizeKb = v.file_size_bytes ? Math.round(v.file_size_bytes / 1024) + 'KB' : '?';
+        const dur = v.duration_s ? v.duration_s.toFixed(1) + 's' : '?';
+        return `<button class="btn btn-outline btn-sm" style="font-size:10px;color:${color};border-color:${color};padding:2px 8px"
+          onclick="cmpLoadVariant('${v.id}','${eng}',${v.file_size_bytes||0},${v.duration_s||0})"
+          title="${eng} — ${sizeKb} — ${dur}">${eng.toUpperCase()} ${sizeKb}</button>`;
+      }).join('');
+    }
+
+    // Load FFmpeg original
+    const ffmpegVid = document.getElementById('cmp-ffmpeg-video');
+    if (ffmpegVid) ffmpegVid.src = `${API}/clips/${clipId}/preview`;
+
+    // FFmpeg stats from clip
+    const ffSize = document.getElementById('cmp-ffmpeg-size');
+    const ffDur  = document.getElementById('cmp-ffmpeg-dur');
+    if (ffSize) ffSize.textContent = clipData.file_size ? Math.round(clipData.file_size/1024) + 'KB' : '—';
+    if (ffDur)  ffDur.textContent  = clipData.duration_s ? clipData.duration_s.toFixed(1) + 's' : '—';
+
+    // Auto-load first variant
+    const first = doneVariants[0];
+    cmpLoadVariant(first.id, first.render_engine || 'concat', first.file_size_bytes || 0, first.duration_s || 0);
+
+  } catch(e) {
+    if (loading) { loading.style.display = ''; loading.textContent = 'Error: ' + e.message; }
+  }
+}
+
+function cmpLoadVariant(variantId, engine, sizeBytes, durationS) {
+  _cmpActiveVariantId = variantId;
+  const concatVid = document.getElementById('cmp-concat-video');
+  const label     = document.getElementById('cmp-concat-label');
+  const sizeEl    = document.getElementById('cmp-concat-size');
+  const durEl     = document.getElementById('cmp-concat-dur');
+  if (concatVid) { concatVid.src = `${API}/clip-variants/${variantId}/video`; concatVid.load(); }
+  if (label)  label.textContent = `${(engine||'concat').toUpperCase()} v0.2.8`;
+  if (sizeEl) sizeEl.textContent = sizeBytes ? Math.round(sizeBytes/1024) + 'KB' : '—';
+  if (durEl)  durEl.textContent  = durationS ? durationS.toFixed(1) + 's' : '—';
+}
+
+async function renderClipWithConcat() {
+  if (!_currentClipId) return;
+  const btn = document.getElementById('modal-concat-btn');
+  const clipId = _currentClipId;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Rendering…'; }
+  let variantId = null;
+  try {
+    const r = await api(`/clips/${clipId}/render-concat`, {method:'POST'});
+    variantId = r.variant_id;
+    toast('Concat render iniciado…', 'success');
+  } catch(e) {
+    toast('Concat render failed: ' + (e.message || 'unknown error'), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '⚙ Render with Concat'; }
+    return;
+  }
+  // Poll every 6s for the specific variant until DONE or FAILED (max 3 min)
+  let elapsed = 0;
+  const poll = setInterval(async () => {
+    elapsed += 6;
+    try {
+      const data = await api(`/clips/${clipId}/variants`);
+      const v = (data.variants || []).find(x => x.id === variantId);
+      if (!v) return;
+      if (v.render_status === 'DONE') {
+        clearInterval(poll);
+        const kb = v.file_size_bytes ? Math.round(v.file_size_bytes/1024) + 'KB' : '';
+        toast(`Concat listo ${kb} (${elapsed}s)`, 'success');
+        if (btn) { btn.disabled = false; btn.textContent = '⚙ Render with Concat'; }
+        // Refresh variant bar without full page reload
+        if (typeof loadCompareTab === 'function' && clipId === _currentClipId) {
+          loadCompareTab(clipId);
+          const compareTab = document.getElementById('cap-compare-tab');
+          if (compareTab) { compareTab.style.display = ''; capTab('compare', compareTab); }
+        }
+      } else if (v.render_status === 'FAILED') {
+        clearInterval(poll);
+        toast('Concat render falló', 'error');
+        if (btn) { btn.disabled = false; btn.textContent = '⚙ Render with Concat'; }
+      } else if (elapsed >= 180) {
+        clearInterval(poll);
+        toast('Concat render: timeout de espera (sigue corriendo en background)', 'warn');
+        if (btn) { btn.disabled = false; btn.textContent = '⚙ Render with Concat'; }
+      } else {
+        if (btn) btn.textContent = `⏳ Rendering… ${elapsed}s`;
+      }
+    } catch(_) {}
+  }, 6000);
 }
 
 async function modalAction(action) {
@@ -4278,6 +4502,12 @@ function switchCreatorTab(tab, btn) {
   else if (tab === 'packages') showCreatorPackages(_libCurrentCreatorId);
 }
 
+function _engineBadge(engine) {
+  if (!engine || engine === 'ffmpeg') return '';
+  if (engine === 'concat') return `<span style="font-size:10px;font-weight:700;color:#f59e0b;background:#2a1f00;border:1px solid #4a3800;border-radius:4px;padding:1px 5px;letter-spacing:.4px" title="Rendered with Concat v0.2.8">CONCAT</span>`;
+  return `<span style="font-size:10px;color:#888;background:#1a1a1a;border:1px solid #333;border-radius:4px;padding:1px 5px">${engine.toUpperCase()}</span>`;
+}
+
 function _renderCreatorClipCard(c, partLabel) {
   const vs = Math.round(c.virality_score || c.prepublish_score || 0);
   const vsColor = vs >= 80 ? '#ff6b35' : vs >= 60 ? '#ffa502' : '#747d8c';
@@ -4291,6 +4521,7 @@ function _renderCreatorClipCard(c, partLabel) {
         <span class="mono" style="${c.series_part>0?'color:#f59e0b':''}">${partLabel}</span>
         ${chip(c.prepublish_decision || 'PENDING')}
         <span style="font-size:11px;font-weight:700;color:${vsColor}">▲ ${vs}</span>
+        ${_engineBadge(c.render_engine)}
       </div>
       <div style="font-size:12px;color:#444;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(videoTitle)}">${_esc(videoTitle)}</div>
       <div style="font-size:11px;color:#333;margin-bottom:2px">${_fmtClipDate(c.created_at)}</div>
@@ -4919,6 +5150,7 @@ async function showVideoClips(jobId, videoTitle) {
           ${chip(c.prepublish_decision || 'PENDING')}
           <span style="font-size:11px;font-weight:700;color:${vsColor}">▲ ${vs}</span>
           ${c.duration_s ? `<span style="font-size:11px;color:#888">${c.duration_s.toFixed(0)}s</span>` : ''}
+          ${_engineBadge(c.render_engine)}
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-outline btn-sm" onclick="openPlayer('${c.id}',true)">Play</button>
@@ -5880,6 +6112,7 @@ async function loadReview() {
             <span class="mono">Clip ${String(i+1).padStart(2,'0')}</span>
             ${decChip}
             <span style="color:#888;font-size:11px">${(c.start_s||0).toFixed(0)}s – ${(c.end_s||0).toFixed(0)}s</span>
+            ${_engineBadge(c.render_engine)}
           </div>
           ${c.source_title ? `<div style="font-size:12px;color:#666;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(c.source_title)}">${_esc(c.source_title)}</div>` : ''}
           <div style="font-size:12px;color:#888;display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px">

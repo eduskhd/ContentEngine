@@ -84,10 +84,11 @@ class EngineConfig:
     # ── Concat experimental engine ────────────────────────────────────────────
     # DISABLED by default. Enable only after verifying Concat installation and
     # Smart App Control compatibility. FFmpeg is always used when this is False.
-    concat_enabled: bool = False
-    concat_exe_path: str = r"C:\Users\edupo\AppData\Local\Programs\Concat\concat.exe"
+    concat_enabled: bool = True
+    # concat-cli.exe (compiled from source; headless JSON-RPC API)
+    concat_exe_path: str = r"C:\Users\edupo\Desktop\concat-src\src\target\release\concat-cli.exe"
     concat_projects_dir: str = r"C:\Users\edupo\Desktop\ContentEngine\output\concat_projects"
-    concat_mcp_timeout_s: float = 120.0   # per-operation MCP timeout
+    concat_mcp_timeout_s: float = 120.0   # per-batch API timeout
     concat_export_timeout_s: float = 600.0  # export can take up to 10 min
 
 

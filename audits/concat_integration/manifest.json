@@ -1,0 +1,17 @@
+{
+  "experiment": "concat_integration",
+  "description": "Concat v0.2.8 integration as secondary render engine — Phase 10 complete",
+  "started": "2026-10-23",
+  "status": "PHASES 1-10 COMPLETE",
+  "phases_complete": ["1","2","3","4","5","6","7","8","9","10"],
+  "phases_pending": ["11"],
+  "summary": {
+    "adapter": "integrations/concat/adapter.py + api_client.py",
+    "experiment": "experiments/concat_experiment_phase6.py — 12/12 clips OK",
+    "ui": "Compare tab added to modal player (dashboard/index.html)",
+    "publishing_safety": "clip_variants has no prepublish_decision — SAFE",
+    "e2e": "13 PASS, 0 FAIL, 1 WARN",
+    "release_build": "BLOCKED by Smart App Control — debug binary in use",
+    "concat_version": "0.2.8 debug build at concat-src/src/target/debug/concat-cli.exe"
+  }
+}

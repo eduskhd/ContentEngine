@@ -790,6 +790,7 @@ _CLIP_COLS = frozenset({
     "technical_qa", "visual_qa", "qa_notes", "platform_fit_scores",
     "prepublish_decision", "prepublish_score",
     "caption_data", "caption_settings", "review_notes", "framing_plan",
+    "render_engine",
 })
 
 
@@ -2296,8 +2297,10 @@ def create_clip_variant(
     height: int = 0,
     file_size_bytes: int = 0,
     source_variant_id: str | None = None,
+    variant_id: str | None = None,
+    render_status: str = "PENDING",
 ) -> str:
-    vid = new_id()
+    vid = variant_id or new_id()
     ts = now()
     with db() as conn:
         conn.execute(
@@ -2309,7 +2312,7 @@ def create_clip_variant(
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (vid, clip_id, source_variant_id, render_engine, engine_version,
              edit_method, project_path, output_path, edit_plan_json,
-             "PENDING", "DONE", duration_s, width, height,
+             "PENDING", render_status, duration_s, width, height,
              file_size_bytes, ts, ts),
         )
     return vid
@@ -2322,6 +2325,14 @@ def get_clip_variants(clip_id: str) -> list[dict]:
             (clip_id,),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def get_clip_variant(variant_id: str) -> dict | None:
+    with db() as conn:
+        row = conn.execute(
+            "SELECT * FROM clip_variants WHERE id=?", (variant_id,)
+        ).fetchone()
+    return dict(row) if row else None
 
 
 def update_clip_variant(variant_id: str, **kwargs) -> None:
