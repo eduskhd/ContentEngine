@@ -39,6 +39,48 @@
 | PENDING QA clips | 8 | old pre-QA clips, not blocking |
 | Missing output files (200 PASS sampled) | 0 | all files present |
 
+## Gaming Stacked Layout Tests (2026-10-23) ✅
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| Jobs with crop_config (GAMING_STACKED_FIT) | 8 | All 8 have gameplay_x + facecam_x set |
+| Jobs with clips created AFTER crop_config | 4 | Stacked layout applied during pipeline |
+| Test frame extraction (job 179734c2) | PASS | Two-panel 1080x1920 confirmed visually |
+| FFmpeg filter `_compute_stacked_fit_filter()` | PASS | vstack: gameplay top + facecam bottom |
+| Caption position | PASS | In bottom panel safe zone |
+| generate-top passes crop_config | FIXED | Was ignored before 2026-10-23 fix |
+
+## Library & Web UI Audit (2026-10-23) ✅
+
+| Endpoint | Status | Notes |
+|----------|--------|-------|
+| GET /creators | OK | 25 creators |
+| GET /creators/{id} | OK | Full creator detail |
+| GET /clips?limit=5 | OK | Paginated |
+| GET /clips?limit=5&page=2 | OK | Offset pagination works |
+| GET /clips/{id} | OK | has render_engine field |
+| GET /clips/{id}/variants | OK | count returned correctly |
+| GET /packages?limit=5 | OK | 99 packages total |
+| GET /packages/{id} | OK | Package detail |
+| GET /performance/summary | OK | Benchmarks returned |
+| GET /health | OK | 2/2 workers |
+| GET /jobs?limit=3 | OK | Job list |
+
+## DB Final State (2026-10-23) ✅
+
+| Metric | Value |
+|--------|-------|
+| clips PASS | 734 |
+| clips FAIL | 0 |
+| clips PENDING | 8 (pre-QA, no files) |
+| clip_variants DONE | 32 |
+| jobs COMPLETED | 74 |
+| jobs FAILED | 14 |
+| candidates total | 1984 |
+| videos total | 76 |
+| clip_packages | 99 |
+| creators | 25 |
+
 ## Regression Tests (2026-10-23)
 
 | Area | Status | Notes |
@@ -47,6 +89,8 @@
 | Worker threads alive | PASS | 2/2 |
 | Disk space | PASS | 248.9 GB free |
 | DB integrity | PASS | no orphans, no zombies |
+| Library API (11 endpoints) | PASS | all 200 OK |
+| Gaming layout (visual) | PASS | two-panel frame confirmed |
+| Concat render | PASS | 1080x1920 h264 AAC DONE |
 
 ---
-<!-- Tests will be updated as the supervisor runs tasks -->

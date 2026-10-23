@@ -1,63 +1,68 @@
 {
   "schema_version": 1,
-  "status": "running",
-  "cycle": 0,
+  "status": "done",
+  "cycle": 5,
   "active_task": null,
-  "last_advance": "2026-10-23T00:00:00Z",
-  "last_checkpoint": null,
+  "last_advance": "2026-10-23T17:30:00+00:00",
+  "last_checkpoint": "final_report",
   "rate_limit_wait": 300,
   "mission_start": "2026-10-23T00:00:00Z",
-  "updated_at": "2026-10-23T00:00:00Z",
+  "updated_at": "2026-10-23T17:30:00+00:00",
   "tasks": [
     {
       "id": "crop_audit_fix",
       "name": "Crop & Reframing Audit and Fix",
-      "status": "pending",
-      "attempts": 0,
+      "status": "done",
+      "attempts": 1,
       "max_attempts": 3,
-      "dependencies": []
+      "dependencies": [],
+      "completed_at": "2026-10-23T15:47:51+00:00"
     },
     {
       "id": "gaming_compositor_fix",
       "name": "Gaming Stacked Layout Fix",
-      "status": "pending",
-      "attempts": 0,
+      "status": "done",
+      "attempts": 1,
       "max_attempts": 3,
       "dependencies": [
         "crop_audit_fix"
-      ]
+      ],
+      "completed_at": "2026-10-23T17:00:00+00:00"
     },
     {
       "id": "concat_render_verify",
       "name": "Concat Integration Verification",
-      "status": "pending",
-      "attempts": 0,
+      "status": "done",
+      "attempts": 1,
       "max_attempts": 3,
-      "dependencies": []
+      "dependencies": [],
+      "completed_at": "2026-10-23T15:47:51+00:00"
     },
     {
       "id": "pipeline_health_check",
       "name": "Pipeline Health & Endpoint Audit",
-      "status": "pending",
-      "attempts": 0,
+      "status": "done",
+      "attempts": 1,
       "max_attempts": 3,
-      "dependencies": []
+      "dependencies": [],
+      "completed_at": "2026-10-23T15:47:51+00:00"
     },
     {
       "id": "library_web_audit",
       "name": "Library & Web UI Audit",
-      "status": "pending",
-      "attempts": 0,
+      "status": "done",
+      "attempts": 1,
       "max_attempts": 3,
       "dependencies": [
         "pipeline_health_check"
-      ]
+      ],
+      "completed_at": "2026-10-23T17:20:00+00:00"
     },
     {
       "id": "final_report",
       "name": "Final Report & Drive Sync",
-      "status": "pending",
-      "attempts": 0,
+      "status": "done",
+      "attempts": 1,
       "max_attempts": 2,
       "dependencies": [
         "crop_audit_fix",
@@ -65,7 +70,8 @@
         "concat_render_verify",
         "pipeline_health_check",
         "library_web_audit"
-      ]
+      ],
+      "completed_at": "2026-10-23T17:30:00+00:00"
     }
   ]
 }

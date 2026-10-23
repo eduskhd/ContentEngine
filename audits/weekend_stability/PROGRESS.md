@@ -87,4 +87,49 @@ Fixes already applied before the weekend mission started:
 3. Previously (same day): SSE banner enrichment, reprocess deleted video fix
 4. Previously (same day): crop_converter formula, render-concat x_offset fix, face threshold
 
-<!-- Supervisor will append new entries below this line -->
+### Gaming Compositor Verification (task: gaming_compositor_fix) ✅
+
+**GAMING_STACKED_FIT: VISUALLY CONFIRMED WORKING**
+
+- 8 jobs have GAMING_STACKED_FIT crop configs in DB
+- All 8 have `gameplay_x` + `facecam_x` fields set correctly
+- Jobs 179734c2, c6fa6cf9, 8dd96768, abf14566: clips created AFTER crop_config → stacked layout applied
+- Job d1834ea0: clips created BEFORE crop_config → center crop (expected — crop_config added after)
+- Test frame extracted from job 179734c2 at t=10s → `experiments/gaming_stacked_layout/VERIFY_stacked_frame.jpg`
+- **Visual confirmation:** 1080x1920 frame, clear horizontal split (top content + bottom content), captions "Y DE YOUTUBE Y" in bottom panel safe zone
+- `_compute_stacked_fit_filter()` builds valid FFmpeg filter: split→gameplay panel→facecam panel→vstack
+- Stored `framing_plan` in candidates shows version=2 (expected — crop_config overrides at render time, not stored back to DB)
+
+**BUG-002 discovered and fixed** (see ISSUES.md ISS-005):
+- generate-top and generate-series didn't pass crop_config → gaming layout lost on those re-render paths
+- Fixed: both endpoints now read and pass crop_config
+
+### Library & Web API Audit (task: library_web_audit) ✅
+
+**11/11 Library API endpoints: ALL OK**
+
+| Endpoint | Result |
+|----------|--------|
+| GET /creators | OK — 25 creators |
+| GET /creators/{id} | OK |
+| GET /clips?limit=5 | OK |
+| GET /clips?limit=5&page=2 | OK (pagination works) |
+| GET /clips/{id} | OK — has render_engine field |
+| GET /clips/{id}/variants | OK — count returned |
+| GET /packages?limit=5 | OK — 99 packages |
+| GET /packages/{id} | OK |
+| GET /performance/summary | OK |
+| GET /health | OK — 2/2 workers |
+| GET /jobs?limit=3 | OK |
+
+**DB final state:**
+- 734 PASS clips, 0 FAIL, 8 PENDING (pre-QA era, no files)
+- 32 Concat variants DONE
+- 74 COMPLETED jobs, 14 FAILED jobs (historical)
+- 25 creators, 76 videos, 1984 candidates
+
+### Final Report Generated ✅
+
+All 6 mission tasks complete. Final report at `audits/weekend_stability/FINAL_REPORT.md`.
+
+**Verdict: PLATFORM HEALTHY — SAFE TO USE**
