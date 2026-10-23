@@ -604,14 +604,19 @@ async def create_job_from_url(
     if not eval_mode:
         with dbmod.db() as conn:
             existing = conn.execute("""
-                SELECT j.id, j.status FROM jobs j
+                SELECT j.id, j.status, v.path FROM jobs j
                 LEFT JOIN videos v ON v.job_id = j.id
                 WHERE (v.source_url = ? OR j.source_path = ?)
                   AND LOWER(j.status) NOT IN ('failed')
                 ORDER BY j.created_at DESC LIMIT 1
             """, (url, url)).fetchone()
         if existing:
-            return {"job_id": existing["id"], "status": existing["status"].lower(), "duplicate": True}
+            # Only treat as duplicate if the source file still exists on disk.
+            # If the file was deleted, allow reprocessing from scratch.
+            video_path = existing["path"] if existing else None
+            file_still_exists = bool(video_path and Path(video_path).exists())
+            if file_still_exists:
+                return {"job_id": existing["id"], "status": existing["status"].lower(), "duplicate": True}
 
     job_id = str(uuid.uuid4())
     resolved_creator = creator or "unknown"
@@ -721,11 +726,28 @@ async def job_events(job_id: str):
             if job is None:
                 # Job not in memory — look it up in DB (completed in a prior session)
                 conn = dbmod.get_db()
-                row = conn.execute("SELECT status, error FROM jobs WHERE id=?", [job_id]).fetchone()
+                row = conn.execute(
+                    "SELECT j.status, j.error, v.source_title, v.video_slug, "
+                    "(SELECT COUNT(*) FROM clips WHERE job_id=j.id) as clip_count "
+                    "FROM jobs j LEFT JOIN videos v ON v.job_id=j.id "
+                    "WHERE j.id=?", [job_id]
+                ).fetchone()
                 conn.close()
                 if row:
                     db_status = (row[0] or "").lower()
-                    payload = {"job_id": job_id, "status": db_status, "stage": row[0], "result": None, "error": row[1]}
+                    clip_count = row[4] or 0
+                    payload = {
+                        "job_id": job_id,
+                        "status": db_status,
+                        "stage": row[0],
+                        "result": {
+                            "source_title": row[2],
+                            "video_slug": row[3],
+                            "stats": {"clips_generated": clip_count},
+                        },
+                        "error": row[1],
+                        "already_done": True,
+                    }
                     yield f"data: {json.dumps(payload)}\n\n"
                 else:
                     yield f"data: {json.dumps({'error': 'job not found'})}\n\n"

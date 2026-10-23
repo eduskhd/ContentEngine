@@ -3450,13 +3450,14 @@ function watchJob(jobId, cardEl) {
     const data = JSON.parse(e.data);
     updateJobCard(cardEl, data);
     if (data.status === 'completed') {
-      const title = data.result?.source_title || data.result?.video_slug || jobId.substring(0,8);
-      const creator = data.result?.creator || '';
-      const count = data.result?.stats?.clips_generated || '?';
-      showBanner(`"${title}" — ${count} clips ready for review`);
       es.close();
       loadReview();
       loadOverview();
+      if (!data.already_done) {
+        const title = data.result?.source_title || data.result?.video_slug || jobId.substring(0,8);
+        const count = data.result?.stats?.clips_generated || '?';
+        showBanner(`"${title}" — ${count} clips ready for review`);
+      }
     }
     if (data.status === 'failed') {
       toast('Job failed: ' + (data.error || 'unknown error'), 'error');
