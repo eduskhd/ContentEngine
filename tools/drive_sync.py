@@ -99,8 +99,32 @@ REPORT_FILENAMES = {
     "GEOMETRY_CONTRACT.md",
     "CROP_ACCURACY_TESTS.md",
     "LAYOUT_COMPARISON.md",
-    "PREVIEW_RENDER_PARITY.md",
     "OPEN_SOURCE_RESEARCH.md",
+    # platform stability audit
+    "DATABASE_AUDIT.md",
+    "FRONTEND_AUDIT.md",
+    "BACKEND_AUDIT.md",
+    "DATA_MODEL.md",
+    "WORKER_ISOLATION.md",
+    "STORAGE_ARCHITECTURE.md",
+    "BASELINE_PERFORMANCE.md",
+    "MIGRATION_ROADMAP.md",
+    "STORAGE_INVENTORY.md",
+    "LIBRARY_REPAIR.md",
+    "BENCHMARK_RESULTS.md",
+    "PROGRESS.md",
+    "E2E_TEST_RESULTS.md",
+    # library & media architecture audit
+    "CURRENT_SCHEMA_MAP.md",
+    "TARGET_DATA_MODEL.md",
+    "SCHEMA_MIGRATION_PLAN.md",
+    "PACKAGE_INTEGRITY.md",
+    "MEDIA_STORAGE_DESIGN.md",
+    "CLEANUP_PROPOSAL.md",
+    "FILTERS_AND_SORTING.md",
+    "PAGINATION_TESTS.md",
+    "LIBRARY_FUNCTIONAL_AUDIT.md",
+    "REGRESSION_REPORT.md",
 }
 
 

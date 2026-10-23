@@ -288,6 +288,14 @@ input[type=file]{font-size:13px;color:#888}
 .lib-content{flex:1;overflow-y:auto;padding:20px}
 .lib-filters{display:flex;gap:8px;padding:0 20px 12px;flex-wrap:wrap;flex-shrink:0}
 .lib-filter-sel{background:#111;border:1px solid #2a2a2a;color:#888;padding:5px 10px;border-radius:6px;font-size:12px}
+/* Pagination */
+.lib-pagination{display:flex;align-items:center;justify-content:center;gap:4px;padding:16px 0;flex-wrap:wrap}
+.pag-btn{background:#111;border:1px solid #2a2a2a;color:#888;padding:4px 10px;border-radius:5px;cursor:pointer;font-size:12px;transition:all .15s}
+.pag-btn:hover:not([disabled]){border-color:#f97316;color:#f97316}
+.pag-btn.active{background:#f97316;color:#000;border-color:#f97316;font-weight:600}
+.pag-btn[disabled]{opacity:.3;cursor:not-allowed}
+.pag-ellipsis{color:#444;padding:4px 2px;font-size:12px}
+.pag-info{color:#444;font-size:11px;margin-left:8px}
 /* Filter chips */
 .fc-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:0 20px 10px}
 .fc-chip{display:inline-flex;align-items:center;gap:5px;background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;border-radius:99px;padding:4px 10px;font-size:11px;cursor:default}
@@ -296,6 +304,9 @@ input[type=file]{font-size:13px;color:#888}
 .fc-chip.fc-sort{border-color:#3b82f640;color:#3b82f6;background:#0f172a}
 .fc-add-btn{background:none;border:1px dashed #2a2a2a;color:#888;border-radius:99px;padding:4px 10px;font-size:11px;cursor:pointer;transition:all .15s}
 .fc-add-btn:hover{border-color:#555;color:#aaa}
+.lib-ctype-btn{padding:4px 14px;border-radius:16px;border:1px solid #2a2a2a;background:#111;color:#666;font-size:12px;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:inherit}
+.lib-ctype-btn.active{background:#1a2a4a;border-color:#3b82f6;color:#60a5fa;font-weight:500}
+.lib-ctype-btn:hover:not(.active){border-color:#444;color:#aaa}
 .fc-panel{position:absolute;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:12px;z-index:100;min-width:240px;box-shadow:0 8px 24px #000a}
 .fc-panel label{display:block;font-size:11px;color:#888;margin-bottom:4px;margin-top:8px}
 .fc-panel label:first-child{margin-top:0}
@@ -626,6 +637,11 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
 .nj-draw-mode-btn.gameplay.active{background:#facc15;color:#000;border-color:#facc15}
 .nj-draw-mode-btn.facecam{background:#14532d;color:#4ade80;border-color:#22c55e}
 .nj-draw-mode-btn.facecam.active{background:#22c55e;color:#000;border-color:#22c55e}
+.nj-zone-order-panel{display:flex;align-items:center;gap:10px;background:#111;border:1px solid #222;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:12px}
+.nj-zone-slot{display:flex;flex-direction:column;gap:2px;min-width:90px}
+.nj-zone-slot-label{font-size:10px;color:#555;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.nj-swap-btn{margin-left:auto;padding:5px 12px;border-radius:6px;border:1px solid #334;background:#1a1a2e;color:#818cf8;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+.nj-swap-btn:hover{border-color:#6366f1;color:#a5b4fc}
 .nj-frame-placeholder{text-align:center;padding:40px 20px;color:#555;font-size:12px;line-height:1.6;min-height:120px;display:flex;align-items:center;justify-content:center}
 .nj-frame-placeholder.hidden{display:none}
 /* ── Prepare Preview + Gallery ─────────────────────────────────────────── */
@@ -736,13 +752,10 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
   <!-- Sidebar -->
   <aside class="lib-sidebar">
     <div class="lib-search-wrap">
-      <input class="lib-search" id="lib-search-input" aria-label="Search creators or videos" placeholder="Search creators or videos…" oninput="libSearchChanged(this.value)">
+      <input class="lib-search" id="lib-search-input" aria-label="Search creators or videos" placeholder="Search creators or videos…" oninput="libSearchDebounced(this.value)">
     </div>
     <div class="lib-sidebar-inner">
       <div class="lib-nav-sep">Library</div>
-      <button type="button" class="lib-nav-item" id="lnav-latest-pkgs" onclick="libNavPackages(this)">
-        <span class="lib-nav-label">&#128230; Últimos Paquetes</span>
-      </button>
       <button type="button" class="lib-nav-item" id="lnav-creators" onclick="libNav('creators',this)">
         <span class="lib-nav-label">All Creators</span>
       </button>
@@ -814,6 +827,10 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
     </div>
     <!-- Filter chip bar (shown in video views) -->
     <div id="lib-filters-row" style="display:none;flex-direction:column;position:relative">
+      <div id="lib-ctype-tabs" style="display:none;align-items:center;gap:4px;padding:8px 20px 2px">
+        <button id="lib-ctype-videos" class="lib-ctype-btn" onclick="libNav('all-videos',null)">&#127902; Videos</button>
+        <button id="lib-ctype-packages" class="lib-ctype-btn" onclick="libNavPackages(null)">&#128230; Paquetes</button>
+      </div>
       <div id="lib-pkg-sort-wrap" style="display:none;align-items:center;gap:8px;padding:0 20px 8px;flex-wrap:wrap">
         <span style="font-size:11px;color:#555;white-space:nowrap">Ordenar por:</span>
         <select id="lib-pkg-sort-sel" class="lib-filter-sel" onchange="setPkgSort(this.value)">
@@ -839,7 +856,10 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
           <option value="last_clipped">Últimos clips creados</option>
           <option value="newest">Últimos vídeos añadidos</option>
           <option value="oldest">Más antiguos primero</option>
+          <option value="virality">Mayor viralidad</option>
           <option value="clips">Más clips generados</option>
+          <option value="name_asc">Nombre A–Z</option>
+          <option value="name_desc">Nombre Z–A</option>
           <option value="virality">Mayor viralidad</option>
           <option value="creator">Por creador</option>
         </select>
@@ -1272,14 +1292,27 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
               <!-- Mode buttons -->
               <div class="nj-draw-mode-row">
                 <button id="nj-url-btn-gameplay" class="nj-draw-mode-btn gameplay"
-                  onclick="njUrlSetDrawMode('gameplay')">▣ Select Gameplay Region</button>
+                  onclick="njUrlSetDrawMode('gameplay')">▣ Zona Gameplay</button>
                 <button id="nj-url-btn-facecam" class="nj-draw-mode-btn facecam"
-                  onclick="njUrlSetDrawMode('facecam')">▣ Select Camera Region</button>
+                  onclick="njUrlSetDrawMode('facecam')">▣ Zona Cámara</button>
+              </div>
+
+              <!-- Zone order panel -->
+              <div class="nj-zone-order-panel" id="nj-zone-order-panel">
+                <div class="nj-zone-slot">
+                  <span class="nj-zone-slot-label">▲ Arriba</span>
+                  <span id="nj-zone-top-name" style="color:#22c55e;font-weight:600">Cámara</span>
+                </div>
+                <div class="nj-zone-slot">
+                  <span class="nj-zone-slot-label">▼ Abajo</span>
+                  <span id="nj-zone-bot-name" style="color:#facc15;font-weight:600">Gameplay</span>
+                </div>
+                <button class="nj-swap-btn" onclick="njSwapZones()">⇅ Intercambiar</button>
               </div>
 
               <!-- Step hint -->
               <div id="nj-url-crop-step" style="font-size:12px;color:#60a5fa;margin:6px 0 10px">
-                Click a button above, then drag on the frame to draw a region
+                Haz clic en un botón y dibuja la región en el frame
               </div>
 
               <!-- Main canvas -->
@@ -1324,12 +1357,13 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
             <div class="nj-layout-section">
               <div class="nj-layout-section-title">Gaming Layout</div>
 
-              <div class="nj-layout-label">Split ratio (gameplay / webcam)</div>
+              <div class="nj-layout-label" id="nj-ratio-label">Altura zona arriba / abajo</div>
               <div class="nj-ratio-row" id="nj-ratio-row">
+                <button class="nj-ratio-btn" data-frac="0.25" onclick="njSetSplitFraction(0.25)">25/75</button>
+                <button class="nj-ratio-btn active default-mark" data-frac="0.33" onclick="njSetSplitFraction(0.33)">33/67</button>
+                <button class="nj-ratio-btn" data-frac="0.40" onclick="njSetSplitFraction(0.40)">40/60</button>
                 <button class="nj-ratio-btn" data-frac="0.50" onclick="njSetSplitFraction(0.50)">50/50</button>
-                <button class="nj-ratio-btn" data-frac="0.60" onclick="njSetSplitFraction(0.60)">60/40</button>
-                <button class="nj-ratio-btn active default-mark" data-frac="0.65" onclick="njSetSplitFraction(0.65)">65/35</button>
-                <button class="nj-ratio-btn" data-frac="0.70" onclick="njSetSplitFraction(0.70)">70/30</button>
+                <button class="nj-ratio-btn" data-frac="0.65" onclick="njSetSplitFraction(0.65)">65/35</button>
               </div>
 
               <div class="nj-layout-label" style="margin-top:12px">Background (letterbox fill)</div>
@@ -3109,9 +3143,18 @@ function undoReviewAction() {
 }
 
 async function api(path, opts={}) {
-  const r = await fetch(API + path, opts);
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), 30000);
+  try {
+    const r = await fetch(API + path, {...opts, signal: controller.signal});
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+  } catch(e) {
+    if (e.name === 'AbortError') throw new Error('Request timed out: ' + path);
+    throw e;
+  } finally {
+    clearTimeout(tid);
+  }
 }
 
 function initials(name) {
@@ -3248,13 +3291,14 @@ async function loadOverview() {
 let _libView = 'grid';          // 'grid' | 'list'
 let _libSelectMode = false;
 let _libSelected = new Set();   // video_ids selected
-let _libCurrentView = 'packages';
+let _libCurrentView = 'all-videos';
 let _libCurrentCreatorId = null;
 let _libPkgSort = localStorage.getItem('lib_pkg_sort') || 'newest';
 let _libPkgCreatorId = null;
 let _libPkgCreatorName = null;
 let _libPkgPage = 1;
 let _libPkgEpoch = 0;   // incremented on every showLatestPackages call; stale fetches are discarded
+let _libNavToken = 0;   // incremented on every top-level nav call; stale responses discarded
 let _libCreatorDropdownOpen = false;
 let _libCreators_loaded = false;
 let _libPackageVideoId = null;   // non-null while user is viewing a package panel
@@ -3270,7 +3314,8 @@ let _editingCreatorId = null;
 let _creatorModalFromNewJob = false;
 let _editingCollId = null;
 let _fcPanelOpen = false;
-let _libFilters = { status: '', platform: '', sort: 'last_clipped', virality_min: null, virality_max: null, date_range: '', date_from: '', date_to: '' };
+let _libFilters = { status: '', platform: '', sort: 'last_clipped', virality_min: null, virality_max: null, date_range: '', date_from: '', date_to: '', pub_status: '' };
+let _libPage = 1;   // current page in All Videos / creator video tab
 let _libClipSort = localStorage.getItem('lib_clip_sort') || 'newest';
 
 function setLibClipSort(val) {
@@ -3332,18 +3377,47 @@ function _fmtClipDate(created_at) {
   } catch { return 'Fecha desconocida'; }
 }
 
+let _lastActiveJobCount = -1;
 async function loadLibrary() {
   // Snapshot view before async sidebar refresh — router may change it mid-flight.
   const _viewSnapshot = _libCurrentView;
-  // During background polls, refresh sidebar at most every 30s (it makes 5 API calls).
-  if (!_pollIsBackground || Date.now() - _sidebarRefreshedAt > 30000) {
+  // Sync filter row and content-type tabs on every library load
+  _syncLibFilterRow(_libCurrentView);
+
+  if (_pollIsBackground) {
+    // Background poll: use lightweight active-count check first.
+    // Only do a full sidebar + content reload if the active count changed.
+    try {
+      const ac = await api('/jobs/active-count');
+      const newCount = ac.count || 0;
+      const changed = newCount !== _lastActiveJobCount;
+      _lastActiveJobCount = newCount;
+      if (!changed && Date.now() - _sidebarRefreshedAt < 30000) return;
+    } catch(e) { /* network hiccup — skip tick */ return; }
+    // Active count changed or 30s elapsed: do full sidebar + content refresh
+    await refreshSidebarCounts();
+    _sidebarRefreshedAt = Date.now();
+    _syncSidebarActive(_libCurrentView);
+  } else {
+    // Foreground load: always refresh sidebar
     await refreshSidebarCounts();
     _sidebarRefreshedAt = Date.now();
     _syncSidebarActive(_libCurrentView);
   }
+
   // Skip reloadCurrentView if navigation already changed the view while sidebar was refreshing.
   if (_libCurrentView !== _viewSnapshot) return;
   await reloadCurrentView();
+}
+
+function _syncLibFilterRow(view) {
+  const showFilters = view === 'all-videos' || view === 'packages' || view.startsWith('creator:') || view.startsWith('collection:');
+  const fr = document.getElementById('lib-filters-row');
+  if (fr) fr.style.display = showFilters ? 'flex' : 'none';
+  if (showFilters) {
+    renderFilterChips();
+    _syncClipSortVisibility();
+  }
 }
 
 function _syncSidebarActive(view) {
@@ -3359,18 +3433,26 @@ function _syncSidebarActive(view) {
 
 async function refreshSidebarCounts() {
   try {
-    _libCreators = await api('/creators');
-    _libCollections = await api('/collections').catch(()=>[]);
-    const jobs = await api('/jobs').catch(()=>[]);
+    // Fire all requests in parallel — previous version was 5 sequential awaits
+    const [creators, collections, jobs, unassignedCount, totalCount] = await Promise.all([
+      api('/creators'),
+      api('/collections').catch(()=>[]),
+      api('/jobs?limit=200').catch(()=>[]),
+      api('/videos/count?creator_id=__unassigned__').catch(()=>({count:0})),
+      api('/videos/count').catch(()=>({count:0})),
+    ]);
+    _libCreators = creators;
+    _libCollections = collections;
+
     const proc = jobs.filter(j=>!['COMPLETED','FAILED','completed','failed'].includes(j.status||'')).length;
     const fail = jobs.filter(j=>['FAILED','failed'].includes(j.status||'')).length;
-    const unassigned = await api('/videos?creator_id=__unassigned__&limit=200').catch(()=>[]);
-    const allVideos = await api('/videos?limit=200').catch(()=>[]);
 
-    document.getElementById('lnc-videos').textContent = allVideos.length || '';
+    document.getElementById('lnc-videos').textContent = totalCount.count || '';
     document.getElementById('lnc-processing').textContent = proc || '';
     document.getElementById('lnc-failed').textContent = fail || '';
-    document.getElementById('lnc-unassigned').textContent = unassigned.length || '';
+    document.getElementById('lnc-unassigned').textContent = unassignedCount.count || '';
+    const _ss = document.getElementById('server-status');
+    if (_ss && _ss.textContent !== '● online') { _ss.textContent = '● online'; _ss.style.color = '#4ade80'; }
 
     // Sidebar creators list
     const creatorContainer = document.getElementById('lib-sidebar-creators');
@@ -3436,16 +3518,10 @@ function libNav(view, el, _opts) {
     const x = document.getElementById('lnav-coll-' + view.slice(11));
     if (x) x.classList.add('active');
   }
-  // Filters: show only in video views
-  const showFilters = view === 'all-videos' || view === 'packages' || view.startsWith('creator:') || view.startsWith('collection:');
-  const fr = document.getElementById('lib-filters-row');
-  if (fr) fr.style.display = showFilters ? 'flex' : 'none';
-  if (showFilters) {
-    const sortSel = document.getElementById('lib-clip-sort-sel');
-    if (sortSel) sortSel.value = _libClipSort;
-    renderFilterChips();
-    _syncClipSortVisibility();
-  }
+  // Sync sort selector and filter row visibility
+  const sortSel = document.getElementById('lib-clip-sort-sel');
+  if (sortSel) sortSel.value = _libClipSort;
+  _syncLibFilterRow(view);
   reloadCurrentView();
   // Push URL when navigating within Library
   if ((!_opts || _opts.push !== false) && _currentTab === 'library') {
@@ -3454,11 +3530,21 @@ function libNav(view, el, _opts) {
   }
 }
 
+let _libSearchTimer = null;
+function libSearchDebounced(val) {
+  clearTimeout(_libSearchTimer);
+  _libSearchTimer = setTimeout(() => libSearchChanged(val), 300);
+}
+
 function libSearchChanged(q) {
   _libSearchQ = q;
+  _libPage = 1;
   refreshSidebarCounts();
-  if (_libCurrentView === 'creators') showCreatorsGrid();
-  else if (_libCurrentView.startsWith('creator:')) showCreatorDetail(_libCurrentCreatorId);
+  const v = _libCurrentView;
+  if (v === 'creators') showCreatorsGrid();
+  else if (v.startsWith('creator:')) showCreatorDetail(_libCurrentCreatorId);
+  else if (v === 'packages') showLatestPackages();
+  else if (v.startsWith('collection:')) showCollectionView(v.slice(11));
   else showAllVideos();
 }
 
@@ -3799,14 +3885,15 @@ async function showLatestPackages() {
   const creatorLabel = _libPkgCreatorName || 'Todos los creadores';
   const breadLabel = _libPkgCreatorId
     ? `Paquetes de ${_esc(creatorLabel)}`
-    : 'Últimos Paquetes';
+    : 'Paquetes';
   setBreadcrumb(
-    `<span onclick="libNavPackages(document.getElementById('lnav-latest-pkgs'))">Library</span>` +
+    `<span onclick="libNav('all-videos',null)">Library</span>` +
     `<span class="sep">›</span><span class="cur">${breadLabel}</span>`
   );
 
   const params = new URLSearchParams({ sort: _libPkgSort, page: String(_libPkgPage), limit: '24' });
   if (_libPkgCreatorId) params.set('creator_id', _libPkgCreatorId);
+  if (_libSearchQ) params.set('search', _libSearchQ);
 
   let data;
   try {
@@ -3987,7 +4074,7 @@ function selectPkgCreator(id, name) {
   if (sl) sl.textContent = label;
   const ml = document.getElementById('lib-mobile-creator-label');
   if (ml) ml.textContent = label;
-  libNav('packages', document.getElementById('lnav-latest-pkgs'));
+  libNav('packages', null);
 }
 
 document.addEventListener('click', function(e) {
@@ -4004,6 +4091,7 @@ document.addEventListener('click', function(e) {
 
 // ── Creator detail ────────────────────────────────────────────────────────────
 async function showCreatorDetail(creatorId) {
+  const _myToken = ++_libNavToken;
   _libPackageVideoId = null;
 
   // Background-poll shortcut: same creator already shown → refresh tab content only, skip full DOM rebuild.
@@ -4034,6 +4122,7 @@ async function showCreatorDetail(creatorId) {
   let creator = null;
   if (!isUnassigned) {
     creator = await api(`/creators/${creatorId}`).catch(()=>null);
+    if (_myToken !== _libNavToken) return;  // user navigated away — discard
     if (!creator) { el.innerHTML = '<div class="empty">Creator not found</div>'; return; }
   }
 
@@ -4047,7 +4136,15 @@ async function showCreatorDetail(creatorId) {
   _applyFilterParams(params);
   params.set('limit', '100');
 
-  const videos = await api('/videos?' + params.toString()).catch(()=>[]);
+  let videos;
+  try {
+    videos = await api('/videos?' + params.toString());
+  } catch(e) {
+    if (_myToken !== _libNavToken) return;
+    el.innerHTML = `<div class="lib-empty"><p style="color:#f87171">Error loading videos</p><p style="font-size:12px;color:#666">${_esc(e.message)}</p><button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="showCreatorDetail('${creatorId}')">Retry</button></div>`;
+    return;
+  }
+  if (_myToken !== _libNavToken) return;  // user navigated away — discard stale result
 
   // Header
   let headerHtml = `<div class="creator-header">
@@ -4094,6 +4191,7 @@ function _syncClipSortVisibility() {
   const isCreatorClips = isCreatorView && _libCreatorTab === 'clips';
   const isCreatorPackages = isCreatorView && _libCreatorTab === 'packages';
   const isPkgView = _libCurrentView === 'packages';
+  const isAllVideos = _libCurrentView === 'all-videos';
   const clipWrap = document.getElementById('lib-clip-sort-wrap');
   if (clipWrap) clipWrap.style.display = isCreatorClips ? 'flex' : 'none';
   const videoWrap = document.getElementById('lib-video-sort-wrap');
@@ -4107,6 +4205,12 @@ function _syncClipSortVisibility() {
     pkgWrap.style.display = isPkgView ? 'flex' : 'none';
     const sel = document.getElementById('lib-pkg-sort-sel');
     if (sel) sel.value = _libPkgSort;
+  }
+  const ctypeTabs = document.getElementById('lib-ctype-tabs');
+  if (ctypeTabs) {
+    ctypeTabs.style.display = (isAllVideos || isPkgView) ? 'flex' : 'none';
+    document.getElementById('lib-ctype-videos')?.classList.toggle('active', isAllVideos);
+    document.getElementById('lib-ctype-packages')?.classList.toggle('active', isPkgView);
   }
   const chips = document.getElementById('fc-chips');
   if (chips) chips.style.display = (isCreatorClips || isPkgView) ? 'none' : 'block';
@@ -4168,10 +4272,12 @@ function _renderCreatorClipCard(c, partLabel) {
 }
 
 async function showCreatorClips(creatorId) {
+  const _myToken = ++_libNavToken;
   const el = document.getElementById('creator-tab-content');
   if (!el) return;
-  if (!_pollIsBackground) el.innerHTML = '<div class="empty">Loading clips…</div>';
-  const clips = await api(`/clips?creator_id=${encodeURIComponent(creatorId)}&limit=500`).catch(()=>[]);
+  if (!_pollIsBackground) { el.innerHTML = '<div class="empty">Loading clips…</div>'; delete _renderCache['creator-tab-content']; }
+  const clips = await api(`/clips?creator_id=${encodeURIComponent(creatorId)}&limit=500&sort=${encodeURIComponent(_libClipSort)}`).catch(()=>[]);
+  if (_myToken !== _libNavToken) return;
   if (!clips.length) {
     smartRender('creator-tab-content', '<div class="empty">No clips yet for this creator</div>'); return;
   }
@@ -4194,9 +4300,9 @@ async function showCreatorClips(creatorId) {
     g.clips.sort((a, b) => (a.series_part || 0) - (b.series_part || 0));
   }
 
-  // Sort groups themselves and ungrouped clips according to user preference
-  const sortedGroups = _sortGroups([...groups.values()]);
-  const sortedUngrouped = _sortClips(ungrouped);
+  // Groups are already in API sort order (first clip of each group determines position)
+  const sortedGroups = [...groups.values()];
+  const sortedUngrouped = ungrouped;
 
   let html = '';
 
@@ -4354,16 +4460,79 @@ async function publishAllCreatorClips(clipIds) {
   }
 }
 
-// â"€â"€ All Videos view â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// ── Pagination helper ────────────────────────────────────────────────────────
+function renderPagination(containerId, page, totalPages, onPageFn) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  const MAX_BTNS = 7;
+  let pages = [];
+  if (totalPages <= MAX_BTNS) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+  } else {
+    pages = [1];
+    const start = Math.max(2, page - 2);
+    const end   = Math.min(totalPages - 1, page + 2);
+    if (start > 2) pages.push('…');
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (end < totalPages - 1) pages.push('…');
+    pages.push(totalPages);
+  }
+  let html = `<div class="lib-pagination">`;
+  html += `<button class="pag-btn" ${page===1?'disabled':''} onclick="${onPageFn}(${page-1})">‹</button>`;
+  pages.forEach(p => {
+    if (p === '…') html += `<span class="pag-ellipsis">…</span>`;
+    else html += `<button class="pag-btn${p===page?' active':''}" ${p===page?'disabled':''} onclick="${onPageFn}(${p})">${p}</button>`;
+  });
+  html += `<button class="pag-btn" ${page===totalPages?'disabled':''} onclick="${onPageFn}(${page+1})">›</button>`;
+  html += `<span class="pag-info">${totalPages} páginas</span>`;
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+// ── All Videos view ──────────────────────────────────────────────────────────
+const _LIB_PAGE_SIZE = 50;
+
+function goToLibPage(page) {
+  _libPage = page;
+  showAllVideos();
+}
+
 async function showAllVideos() {
+  const _myToken = ++_libNavToken;
   setBreadcrumb(`<span onclick="libNav('creators',document.getElementById('lnav-creators'))">Library</span><span class="sep">›</span><span class="cur">All Videos</span>`);
   const el = document.getElementById('lib-content');
-  if (!_pollIsBackground) el.innerHTML = '<div class="empty">Loading…</div>';
-  const params = new URLSearchParams({limit:'100'});
+  if (!_pollIsBackground) { el.innerHTML = '<div class="empty">Loading…</div>'; delete _renderCache['lib-content']; }
+  const offset = (_libPage - 1) * _LIB_PAGE_SIZE;
+  const params = new URLSearchParams({limit: String(_LIB_PAGE_SIZE), offset: String(offset)});
   _applyFilterParams(params);
   if (_libSearchQ) params.set('search', _libSearchQ);
-  const videos = await api('/videos?' + params).catch(()=>[]);
-  renderVideoCards(videos, el, null, 'lib-content');
+  const countParams = new URLSearchParams(params);
+  countParams.delete('limit'); countParams.delete('offset');
+  let videos, totalCount;
+  try {
+    [videos, totalCount] = await Promise.all([
+      api('/videos?' + params),
+      api('/videos/count?' + countParams).then(r => (typeof r === 'object' && r !== null) ? (r.count ?? r) : r)
+    ]);
+  } catch(e) {
+    if (_myToken !== _libNavToken) return;
+    if (!_pollIsBackground) {
+      el.innerHTML = `<div class="lib-empty"><p style="color:#f87171">Error loading videos</p><p style="font-size:12px;color:#666">${_esc(e.message)}</p><button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="showAllVideos()">Retry</button></div>`;
+      delete _renderCache['lib-content'];
+    }
+    return;
+  }
+  if (_myToken !== _libNavToken) return;
+  const total = parseInt(totalCount) || 0;
+  const totalPages = Math.max(1, Math.ceil(total / _LIB_PAGE_SIZE));
+  // Clamp page if filter changed and current page is out of range
+  if (_libPage > totalPages) { _libPage = totalPages; return showAllVideos(); }
+  const paginationHtml = `<div id="lib-pagination-top"></div>`;
+  const paginationBottomId = 'lib-pagination-bot';
+  const suffix = `<div id="${paginationBottomId}"></div>`;
+  renderVideoCards(videos, el, null, 'lib-content', suffix);
+  renderPagination('lib-pagination-bot', _libPage, totalPages, 'goToLibPage');
 }
 
 // â"€â"€ Processing view â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -4415,7 +4584,7 @@ async function retryJob(jobId) {
 }
 
 // â"€â"€ Video cards rendering â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-function renderVideoCards(videos, container, creatorId, _renderId) {
+function renderVideoCards(videos, container, creatorId, _renderId, suffix) {
   if (!videos.length) {
     const emptyMsg = creatorId === '__unassigned__'
       ? '<div class="lib-empty"><div class="lib-empty-icon">📁</div><p>No unassigned videos — all videos have creators.</p></div>'
@@ -4464,7 +4633,6 @@ function renderVideoCards(videos, container, creatorId, _renderId) {
           ${status==='COMPLETED' && !clips ? `<button class="btn btn-primary btn-sm" onclick="openVideoJobs('${v.job_id||v.id}')">Generate</button>` : ''}
           ${status!=='COMPLETED' ? `<button class="btn btn-outline btn-sm" onclick="openVideoJobs('${v.job_id||v.id}')">Open</button>` : ''}
           ${vs ? `<span class="vc-score" style="color:${vsColor};background:#1a1a1a">▲${vs}</span>` : ''}
-          <button class="btn btn-outline btn-sm" style="color:#60a5fa;border-color:#1e3a5f;padding:4px 8px;font-size:11px" onclick="editCropSetup(‘${v.job_id||v.id}’)">Crop Setup</button>
           <button class="btn btn-outline btn-sm" style="margin-left:auto;color:#f87171;border-color:#f87171;padding:4px 8px" onclick="showDeleteConfirm([‘${v.id}’])">Delete</button>
         </div>
         ${creatorId ? `<div style="margin-top:6px">
@@ -4474,6 +4642,7 @@ function renderVideoCards(videos, container, creatorId, _renderId) {
     </div>`;
   }
   html += '</div>';
+  if (suffix) html += suffix;
   if (_renderId) smartRender(_renderId, html); else container.innerHTML = html;
 }
 
@@ -5024,6 +5193,7 @@ async function doAssignCreator(creatorId) {
 function _applyFilterParams(params) {
   if (_libFilters.status) params.set('status', _libFilters.status);
   if (_libFilters.platform) params.set('platform', _libFilters.platform);
+  if (_libFilters.pub_status) params.set('pub_status', _libFilters.pub_status);
   params.set('sort', _libFilters.sort || 'newest');
   if (_libFilters.virality_min != null) params.set('virality_min', _libFilters.virality_min);
   if (_libFilters.virality_max != null) params.set('virality_max', _libFilters.virality_max);
@@ -5063,8 +5233,9 @@ function renderFilterChips() {
     youtube:'YouTube', local:'Upload',
     newest:'Newest first', oldest:'Oldest first', virality:'Highest virality',
     clips:'Most clips', duration:'Longest first', creator:'By creator', retention:'Highest retention',
-    last_clipped:'Últimos clips creados',
+    last_clipped:'Últimos clips creados', name_asc:'Nombre A–Z', name_desc:'Nombre Z–A',
     today:'Today', '7d':'Last 7 days', '30d':'Last 30 days', '90d':'Last 90 days', custom:'Custom range',
+    published:'Publicados', ready:'Listos para publicar', draft:'Borrador', failed:'Fallidos', archived:'Archivados',
   };
   if (f.status) html += `<span class="fc-chip">Status: ${labelMap[f.status]||f.status}
     <span class="fc-x" onclick="clearFilter('status')">×</span></span>`;
@@ -5082,8 +5253,10 @@ function renderFilterChips() {
     html += `<span class="fc-chip">Date: ${dateLabel}
       <span class="fc-x" onclick="clearFilter('date_range')">×</span></span>`;
   }
+  if (f.pub_status) html += `<span class="fc-chip">Pub: ${labelMap[f.pub_status]||f.pub_status}
+    <span class="fc-x" onclick="clearFilter('pub_status')">×</span></span>`;
   // Clear all (if any non-sort filter active)
-  const hasExtra = f.status || f.platform || f.virality_min != null || f.virality_max != null || f.date_range;
+  const hasExtra = f.status || f.platform || f.pub_status || f.virality_min != null || f.virality_max != null || f.date_range;
   if (hasExtra) html += `<span class="fc-chip" style="color:#f87171;border-color:#3a1010;cursor:pointer" onclick="clearAllFilters()">Clear all</span>`;
   html += `<button class="fc-add-btn" onclick="openFcPanel(event,'add')">+ Filter</button>`;
   bar.innerHTML = html;
@@ -5097,23 +5270,32 @@ function openFcPanel(ev, mode) {
   if (mode === 'sort') {
     inner = `<label>Sort by</label>
     <select onchange="setFilter('sort',this.value)">
-      ${['newest','oldest','virality','retention','clips','duration','creator'].map(v=>
-        `<option value="${v}"${f.sort===v?' selected':''}>${{newest:'Newest first',oldest:'Oldest first',virality:'Highest virality',retention:'Highest retention',clips:'Most clips',duration:'Longest first',creator:'By creator'}[v]}</option>`
+      ${['last_clipped','newest','oldest','name_asc','name_desc','virality','retention','clips','duration','creator'].map(v=>
+        `<option value="${v}"${f.sort===v?' selected':''}>${{'last_clipped':'Últimos clips creados',newest:'Newest first',oldest:'Oldest first',name_asc:'Nombre A–Z',name_desc:'Nombre Z–A',virality:'Highest virality',retention:'Highest retention',clips:'Most clips',duration:'Longest first',creator:'By creator'}[v]}</option>`
       ).join('')}
     </select>`;
   } else {
     inner = `
-    <label>Status</label>
+    <label>Estado del job</label>
     <select onchange="setFilter('status',this.value)">
-      <option value="">All</option>
+      <option value="">Todos</option>
       <option value="COMPLETED"${f.status==='COMPLETED'?' selected':''}>Ready</option>
       <option value="ANALYZING"${f.status==='ANALYZING'?' selected':''}>Analyzing</option>
       <option value="QUEUED"${f.status==='QUEUED'?' selected':''}>Queued</option>
       <option value="FAILED"${f.status==='FAILED'?' selected':''}>Failed</option>
     </select>
-    <label>Source</label>
+    <label>Estado de publicación</label>
+    <select onchange="setFilter('pub_status',this.value)">
+      <option value="">Todos</option>
+      <option value="published"${f.pub_status==='published'?' selected':''}>Publicados</option>
+      <option value="ready"${f.pub_status==='ready'?' selected':''}>Listos para publicar</option>
+      <option value="draft"${f.pub_status==='draft'?' selected':''}>Borrador</option>
+      <option value="failed"${f.pub_status==='failed'?' selected':''}>Fallidos</option>
+      <option value="archived"${f.pub_status==='archived'?' selected':''}>Archivados</option>
+    </select>
+    <label>Origen</label>
     <select onchange="setFilter('platform',this.value)">
-      <option value="">All sources</option>
+      <option value="">Todos los orígenes</option>
       <option value="youtube"${f.platform==='youtube'?' selected':''}>YouTube</option>
       <option value="local"${f.platform==='local'?' selected':''}>Upload</option>
     </select>
@@ -5156,6 +5338,7 @@ function closeFcPanel() {
 
 function setFilter(key, value) {
   _libFilters[key] = value;
+  _libPage = 1;
   renderFilterChips();
   reloadCurrentView();
 }
@@ -5188,17 +5371,20 @@ function clearFilter(key) {
 }
 
 function clearAllFilters() {
-  _libFilters = { status:'', platform:'', sort: _libFilters.sort||'last_clipped',
+  _libFilters = { status:'', platform:'', pub_status:'', sort: _libFilters.sort||'last_clipped',
                   virality_min:null, virality_max:null, date_range:'', date_from:'', date_to:'' };
+  _libPage = 1;
   renderFilterChips();
   reloadCurrentView();
 }
 
 // â"€â"€ Collections â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function showCollectionView(collectionId) {
+  const _myToken = ++_libNavToken;
   const el = document.getElementById('lib-content');
   if (!_pollIsBackground) el.innerHTML = '<div class="empty">Loading…</div>';
   const coll = await api(`/collections/${collectionId}`).catch(()=>null);
+  if (_myToken !== _libNavToken) return;
   if (!coll) { el.innerHTML = '<div class="empty">Collection not found</div>'; return; }
   setBreadcrumb(`<span onclick="libNav('creators',document.getElementById('lnav-creators'))">Library</span><span class="sep">›</span><span class="cur">${_esc(coll.name)}</span>`);
   const params = new URLSearchParams({limit:'200', collection_id: collectionId});
@@ -6099,12 +6285,7 @@ async function njSubmit() {
           crop_mode: 'manual',
           src_width: _njUrlFrameSrcW,
           src_height: _njUrlFrameSrcH,
-          gameplay_rect: [_njUrlCropState.gameplay.x, _njUrlCropState.gameplay.y,
-                          _njUrlCropState.gameplay.w, _njUrlCropState.gameplay.h],
-          facecam_rect:  [_njUrlCropState.facecam.x, _njUrlCropState.facecam.y,
-                          _njUrlCropState.facecam.w, _njUrlCropState.facecam.h],
-          split_fraction: _njSplitFraction,
-          layout_preset: 'GAMING_STACKED_FIT',
+          zones: njBuildZonesPayload(_njUrlCropState.gameplay, _njUrlCropState.facecam),
           gameplay_bg: _njGameplayBg,
           validation_status: _njUrlPreviewValidated ? 'validated' : 'confirmed_no_preview',
         }),
@@ -6158,10 +6339,7 @@ async function njSubmit() {
         crop_mode: 'manual',
         src_width: cropVideo.videoWidth,
         src_height: cropVideo.videoHeight,
-        gameplay_rect: gpNorm,
-        facecam_rect: fcNorm,
-        split_fraction: _njSplitFraction,
-        layout_preset: 'GAMING_STACKED_FIT',
+        zones: njBuildZonesPayload(gpNorm, fcNorm),
         gameplay_bg: _njGameplayBg,
         validation_status: _njPreviewValidated ? 'validated' : 'pending',
       }),
@@ -8102,9 +8280,10 @@ let _njCropState = { drawing: false, step: 'gameplay', gameplay: null, facecam: 
 let _njPreviewValidated = false;
 let _njCropStart = null;
 let _njSavedCropConfigId = null;
-// Gaming layout options (65/35 default)
-let _njSplitFraction = 0.65;
+// Gaming layout options — topFrac = fraction of output height for the top zone
+let _njSplitFraction = 0.33;  // default: top zone = 33%
 let _njGameplayBg = 'black';
+let _njZoneSwapped = true;    // true = camera on top, gameplay on bottom (default)
 
 function njSetVideoType(vtype) {
   _njVideoType = vtype;
@@ -8128,10 +8307,45 @@ function njSetSplitFraction(frac) {
   document.querySelectorAll('#nj-ratio-row .nj-ratio-btn').forEach(b => {
     b.classList.toggle('active', parseFloat(b.dataset.frac) === frac);
   });
-  // Invalidate any previous preview when ratio changes
   _njUrlPreviewValidated = false;
   document.getElementById('nj-url-preview-wrap').style.display = 'none';
   njUpdateSubmitState();
+}
+
+function njSwapZones() {
+  _njZoneSwapped = !_njZoneSwapped;
+  const topName = document.getElementById('nj-zone-top-name');
+  const botName = document.getElementById('nj-zone-bot-name');
+  if (_njZoneSwapped) {
+    if (topName) { topName.textContent = 'Cámara'; topName.style.color = '#22c55e'; }
+    if (botName) { botName.textContent = 'Gameplay'; botName.style.color = '#facc15'; }
+  } else {
+    if (topName) { topName.textContent = 'Gameplay'; topName.style.color = '#facc15'; }
+    if (botName) { botName.textContent = 'Cámara'; botName.style.color = '#22c55e'; }
+  }
+  _njUrlPreviewValidated = false;
+  document.getElementById('nj-url-preview-wrap').style.display = 'none';
+  njUpdateSubmitState();
+}
+
+// Build zones array from current crop rects + swap state
+// gpRect / fcRect: normalized {x, y, w, h}
+function njBuildZonesPayload(gpRect, fcRect) {
+  const topFrac = _njSplitFraction;
+  const botFrac = Math.round((1 - topFrac) * 1000) / 1000;
+  if (_njZoneSwapped) {
+    // Camera on top, gameplay on bottom
+    return [
+      { label: 'camera',    x: fcRect.x, y: fcRect.y, w: fcRect.w, h: fcRect.h, fraction: topFrac },
+      { label: 'gameplay',  x: gpRect.x, y: gpRect.y, w: gpRect.w, h: gpRect.h, fraction: botFrac },
+    ];
+  } else {
+    // Gameplay on top, camera on bottom
+    return [
+      { label: 'gameplay',  x: gpRect.x, y: gpRect.y, w: gpRect.w, h: gpRect.h, fraction: topFrac },
+      { label: 'camera',    x: fcRect.x, y: fcRect.y, w: fcRect.w, h: fcRect.h, fraction: botFrac },
+    ];
+  }
 }
 
 function njSetGameplayBg(bg) {
@@ -8911,10 +9125,9 @@ async function njUrlPreviewCrop() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         url,
-        gameplay_rect: [gp.x, gp.y, gp.w, gp.h],
-        facecam_rect:  [fc.x, fc.y, fc.w, fc.h],
+        zones: njBuildZonesPayload(gp, fc),
         src_width: _njUrlFrameSrcW, src_height: _njUrlFrameSrcH,
-        t_start: t, split_fraction: _njSplitFraction, gameplay_bg: _njGameplayBg,
+        t_start: t, gameplay_bg: _njGameplayBg,
       }),
     });
     if (!resp.ok) {

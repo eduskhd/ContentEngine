@@ -289,6 +289,16 @@ async def list_jobs(
     return list(db_map.values())
 
 
+@app.get("/jobs/active-count")
+async def get_active_jobs_count():
+    """Lightweight poll endpoint — returns count of active jobs without full job data."""
+    with dbmod.db() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) as n FROM jobs WHERE status IN ('PROCESSING','RUNNING','QUEUED')"
+        ).fetchone()
+    return {"count": row["n"] if row else 0}
+
+
 @app.get("/jobs/url-info")
 async def url_info(url: str):
     """Fetch video metadata without downloading — used by the New Job preview UI."""
@@ -732,6 +742,7 @@ async def list_clips(
     job_id: str = Query(None),
     video_id: str = Query(None),
     series_id: str = Query(None),
+    sort: str = Query("newest"),
     limit: int = Query(50, le=500),
 ):
     conn = dbmod.get_db()
@@ -757,8 +768,14 @@ async def list_clips(
         params.append(series_id)
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    # When fetching a specific series, return in series_part order
-    order = "ca.series_part ASC, cl.created_at ASC" if series_id else "cl.created_at DESC"
+    _sort_map = {
+        "newest": "cl.created_at DESC",
+        "oldest": "cl.created_at ASC",
+        "name_asc": "COALESCE(v.source_title, v.video_slug) COLLATE NOCASE ASC, cl.created_at DESC",
+        "name_desc": "COALESCE(v.source_title, v.video_slug) COLLATE NOCASE DESC, cl.created_at DESC",
+    }
+    # When fetching a specific series, always return in series_part order
+    order = "ca.series_part ASC, cl.created_at ASC" if series_id else _sort_map.get(sort, "cl.created_at DESC")
     params.append(limit)
 
     rows = conn.execute(f"""
@@ -860,12 +877,14 @@ async def get_clip_thumbnail(clip_id: str):
     thumb_dir.mkdir(parents=True, exist_ok=True)
     cmd = [CONFIG.ffmpeg_path, "-y", "-ss", "1", "-i", clip_file,
            "-frames:v", "1", "-q:v", "5", "-vf", "scale=160:-2", str(thumb_path)]
+    loop = asyncio.get_event_loop()
     try:
-        subprocess.run(cmd, capture_output=True, timeout=15, check=True)
+        await loop.run_in_executor(None, lambda: subprocess.run(cmd, capture_output=True, timeout=15, check=True))
     except Exception:
         raise HTTPException(500, "Thumbnail generation failed")
 
-    return FileResponse(str(thumb_path), media_type="image/jpeg")
+    return FileResponse(str(thumb_path), media_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=86400"})
 
 
 # ── DOWNLOAD ALL ─────────────────────────────────────────────────────────────
@@ -2405,6 +2424,20 @@ async def delete_creator(creator_id: str, action: str = Query("unassign")):
 
 # ── VIDEOS ────────────────────────────────────────────────────────────────────
 
+@app.get("/videos/count")
+async def count_videos_endpoint(
+    creator_id: str = Query(None),
+    status: str = Query(None),
+    search: str = Query(None),
+    platform: str = Query(None),
+    pub_status: str = Query(None),
+):
+    """Lightweight count of videos matching filters — used by sidebar badges and pagination."""
+    return {"count": dbmod.count_videos(creator_id=creator_id, status=status,
+                                        search=search, platform=platform,
+                                        pub_status=pub_status or None)}
+
+
 @app.get("/videos")
 async def list_videos(
     creator_id: str = Query(None),
@@ -2419,12 +2452,14 @@ async def list_videos(
     date_from: str = Query(None),
     date_to: str = Query(None),
     collection_id: str = Query(None),
+    pub_status: str = Query(None),
 ):
     return dbmod.get_all_videos(
         creator_id=creator_id, status=status, search=search,
         platform=platform, sort=sort, limit=limit, offset=offset,
         virality_min=virality_min, virality_max=virality_max,
         date_from=date_from, date_to=date_to, collection_id=collection_id,
+        pub_status=pub_status or None,
     )
 
 
@@ -2507,7 +2542,9 @@ async def bulk_delete_clips(body: dict = Body(...)):
 @app.get("/videos/{video_id}/thumbnail")
 async def get_video_thumbnail(video_id: str):
     conn = dbmod.get_db()
-    row = conn.execute("SELECT * FROM videos WHERE id=?", [video_id]).fetchone()
+    row = conn.execute(
+        "SELECT id, path, thumbnail_path, duration_s FROM videos WHERE id=?", [video_id]
+    ).fetchone()
     conn.close()
     if not row:
         raise HTTPException(404, "Video not found")
@@ -2515,9 +2552,10 @@ async def get_video_thumbnail(video_id: str):
     # Check existing thumbnail
     thumb_path = row["thumbnail_path"] if row["thumbnail_path"] else None
     if thumb_path and Path(thumb_path).exists():
-        return FileResponse(thumb_path, media_type="image/jpeg")
+        return FileResponse(thumb_path, media_type="image/jpeg",
+                            headers={"Cache-Control": "public, max-age=86400"})
 
-    # Generate thumbnail
+    # Generate thumbnail via thread pool to avoid blocking the event loop
     video_path = row["path"]
     if not video_path or not Path(video_path).exists():
         raise HTTPException(404, "Video file not found on disk")
@@ -2531,16 +2569,17 @@ async def get_video_thumbnail(video_id: str):
     cmd = [CONFIG.ffmpeg_path, "-y", "-ss", str(seek_time), "-i", video_path,
            "-frames:v", "1", "-q:v", "5", "-vf", "scale=320:-1", thumb_path]
     try:
-        subprocess.run(cmd, capture_output=True, timeout=30, check=True)
+        await asyncio.get_event_loop().run_in_executor(
+            None, lambda: subprocess.run(cmd, capture_output=True, timeout=30, check=True)
+        )
     except Exception:
         raise HTTPException(500, "Thumbnail generation failed")
 
-    # Save thumbnail path to DB
-    upd_conn = dbmod.get_db()
-    upd_conn.execute("UPDATE videos SET thumbnail_path=? WHERE id=?", [thumb_path, video_id])
-    upd_conn.commit(); upd_conn.close()
+    with dbmod.db() as upd_conn:
+        upd_conn.execute("UPDATE videos SET thumbnail_path=? WHERE id=?", [thumb_path, video_id])
 
-    return FileResponse(thumb_path, media_type="image/jpeg")
+    return FileResponse(thumb_path, media_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.post("/jobs/{job_id}/retry")
@@ -4724,6 +4763,7 @@ async def save_crop_config(body: dict = Body(...)):
     crop_mode = body.get("crop_mode", "auto")
     src_w = body.get("src_width")
     src_h = body.get("src_height")
+    zones = body.get("zones")          # new: [{label, x, y, w, h, fraction}, ...]
     gameplay_rect = body.get("gameplay_rect")
     facecam_rect = body.get("facecam_rect")
     split_fraction = float(body.get("split_fraction", 0.65))
@@ -4732,22 +4772,37 @@ async def save_crop_config(body: dict = Body(...)):
     gameplay_bg = body.get("gameplay_bg", "black")
 
     if crop_mode == "manual":
-        if not gameplay_rect or len(gameplay_rect) != 4:
-            raise HTTPException(400, "gameplay_rect [x,y,w,h] required for manual mode")
-        if not facecam_rect or len(facecam_rect) != 4:
-            raise HTTPException(400, "facecam_rect [x,y,w,h] required for manual mode")
-        for name, rect in [("gameplay_rect", gameplay_rect), ("facecam_rect", facecam_rect)]:
-            for v in rect:
-                if not (0.0 <= v <= 1.0):
-                    raise HTTPException(400, f"{name} values must be 0.0-1.0, got {v}")
-            if rect[2] <= 0 or rect[3] <= 0:
-                raise HTTPException(400, f"{name} w and h must be > 0")
+        if zones:
+            # New multi-zone path
+            if len(zones) < 2:
+                raise HTTPException(400, "zones must have at least 2 entries")
+            for i, z in enumerate(zones):
+                for field in ("x", "y", "w", "h"):
+                    if field not in z:
+                        raise HTTPException(400, f"zones[{i}] missing field '{field}'")
+                    if not (0.0 <= float(z[field]) <= 1.0):
+                        raise HTTPException(400, f"zones[{i}].{field} must be 0.0-1.0")
+                if float(z.get("w", 0)) <= 0 or float(z.get("h", 0)) <= 0:
+                    raise HTTPException(400, f"zones[{i}] w and h must be > 0")
+        else:
+            # Legacy 2-zone path
+            if not gameplay_rect or len(gameplay_rect) != 4:
+                raise HTTPException(400, "gameplay_rect [x,y,w,h] required for manual mode")
+            if not facecam_rect or len(facecam_rect) != 4:
+                raise HTTPException(400, "facecam_rect [x,y,w,h] required for manual mode")
+            for name, rect in [("gameplay_rect", gameplay_rect), ("facecam_rect", facecam_rect)]:
+                for v in rect:
+                    if not (0.0 <= v <= 1.0):
+                        raise HTTPException(400, f"{name} values must be 0.0-1.0, got {v}")
+                if rect[2] <= 0 or rect[3] <= 0:
+                    raise HTTPException(400, f"{name} w and h must be > 0")
 
     cfg_id = dbmod.create_crop_config(
         job_id, video_type, crop_mode, src_w, src_h,
         gameplay_rect=gameplay_rect, facecam_rect=facecam_rect,
         split_fraction=split_fraction, validation_status=validation_status,
         layout_preset=layout_preset, gameplay_bg=gameplay_bg,
+        zones=zones,
     )
     return {"id": cfg_id}
 
@@ -4923,16 +4978,26 @@ async def preview_crop_url(body: dict = Body(...)):
             return [r.get("x", 0), r.get("y", 0), r.get("w", 0), r.get("h", 0)]
         return list(r) if r else []
 
-    gp = _normalise_rect(body.get("gameplay_rect", []))
-    fc = _normalise_rect(body.get("facecam_rect", []))
-    if len(gp) != 4 or len(fc) != 4:
-        raise HTTPException(400, "gameplay_rect and facecam_rect must be [x,y,w,h] normalized")
-
+    zones = body.get("zones")  # new: [{x,y,w,h,fraction}, ...]
     src_w = int(body.get("src_width", 1920))
     src_h = int(body.get("src_height", 1080))
     t_start = float(body.get("t_start", 10))
-    split_fraction = float(body.get("split_fraction", 0.65))
     gameplay_bg = body.get("gameplay_bg", "black")
+
+    if not zones:
+        # Legacy path
+        gp = _normalise_rect(body.get("gameplay_rect", []))
+        fc = _normalise_rect(body.get("facecam_rect", []))
+        if len(gp) != 4 or len(fc) != 4:
+            raise HTTPException(400, "zones or (gameplay_rect + facecam_rect) required")
+        split_fraction = float(body.get("split_fraction", 0.65))
+        zones = [
+            {"x": gp[0], "y": gp[1], "w": gp[2], "h": gp[3], "fraction": split_fraction},
+            {"x": fc[0], "y": fc[1], "w": fc[2], "h": fc[3], "fraction": round(1 - split_fraction, 3)},
+        ]
+
+    if len(zones) < 2:
+        raise HTTPException(400, "Need at least 2 zones")
 
     # Get direct stream URL — use cache if available
     import time as _pt
@@ -4977,10 +5042,8 @@ async def preview_crop_url(body: dict = Body(...)):
     preview_dir.mkdir(parents=True, exist_ok=True)
     out_path = preview_dir / f"{preview_id}.mp4"
 
-    from engine.renderers.render_clip import _compute_stacked_fit_filter as _csf_url
-    main_region = [gp[0] * src_w, gp[1] * src_h, gp[2] * src_w, gp[3] * src_h]
-    sec_region = [fc[0] * src_w, fc[1] * src_h, fc[2] * src_w, fc[3] * src_h]
-    filt = _csf_url(main_region, sec_region, src_w, src_h, top_fraction=split_fraction, bg=gameplay_bg)
+    from engine.renderers.render_clip import _compute_multi_zone_filter as _cmzf_url
+    filt = _cmzf_url(zones, src_w, src_h)
 
     cmd = [
         CONFIG.ffmpeg_path, "-y",
@@ -5132,7 +5195,10 @@ async def dashboard():
     html_file = _dashboard_path / "index.html"
     if not html_file.exists():
         return HTMLResponse("<h1>Dashboard not found</h1>", status_code=404)
-    return HTMLResponse(html_file.read_text(encoding="utf-8"))
+    return HTMLResponse(
+        html_file.read_text(encoding="utf-8"),
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+    )
 
 
 if __name__ == "__main__":

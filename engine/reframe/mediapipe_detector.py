@@ -5,23 +5,52 @@ Uses the MediaPipe Tasks API (1.0+).  Model files are NOT bundled — run
 to fetch them.  All public functions fail gracefully when models are absent.
 """
 from __future__ import annotations
+import sys
 from pathlib import Path
 
 import numpy as np
+
+# On Windows, suppress the modal "Bad Image" / "Imagen incorrecta" dialog that
+# the OS shows when Application Control blocks a native DLL load.  Without this
+# the dialog freezes the server process until manually dismissed.  The OSError
+# is still raised and caught by the callers below — behaviour is unchanged.
+if sys.platform == "win32":
+    try:
+        import ctypes
+        _SEM_FAILCRITICALERRORS = 0x0001
+        _SEM_NOOPENFILEERRORBOX = 0x8000
+        ctypes.windll.kernel32.SetErrorMode(_SEM_FAILCRITICALERRORS | _SEM_NOOPENFILEERRORBOX)
+    except Exception:
+        pass
 
 _MODEL_DIR = Path(__file__).parent.parent.parent / "models"
 _FACE_MODEL = _MODEL_DIR / "blaze_face_full_range.tflite"
 _POSE_MODEL = _MODEL_DIR / "pose_landmarker_lite.task"
 
+# Probe once at import time whether the MediaPipe Tasks native DLL is loadable.
+# On Windows, Windows Application Control can block the DLL with a modal dialog
+# before Python gets the OSError; SetErrorMode above suppresses the dialog, and
+# this ctypes probe checks loadability once so callers never attempt it per-frame.
+_TASKS_AVAILABLE: bool = False
+try:
+    import mediapipe as _mp_probe
+    if sys.platform == "win32":
+        import ctypes as _ctypes
+        _dll_path = str(Path(_mp_probe.__file__).parent / "tasks" / "c" / "libmediapipe.dll")
+        _ctypes.CDLL(_dll_path)
+    _TASKS_AVAILABLE = True
+except Exception:
+    pass
+
 
 # ── Availability checks ───────────────────────────────────────────────────────
 
 def face_model_available() -> bool:
-    return _FACE_MODEL.exists()
+    return _TASKS_AVAILABLE and _FACE_MODEL.exists()
 
 
 def pose_model_available() -> bool:
-    return _POSE_MODEL.exists()
+    return _TASKS_AVAILABLE and _POSE_MODEL.exists()
 
 
 # ── Face detection ─────────────────────────────────────────────────────────────

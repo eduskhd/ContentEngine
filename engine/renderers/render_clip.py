@@ -146,43 +146,51 @@ def _render_one(
     _manual_eligible = (
         crop_config
         and crop_config.get("crop_mode") == "manual"
-        and crop_config.get("gameplay_x") is not None
-        and crop_config.get("facecam_x") is not None
         and crop_config.get("validation_status") in (
             "validated", "confirmed_no_preview", "pending",
         )
     )
     if _manual_eligible:
-        # Always denormalize against the actual video dimensions (src_w/src_h),
-        # NOT crop_config.src_width. The preview frame may have been extracted at
-        # a lower resolution (720p) while the pipeline processes the full file
-        # (1080p). Normalized coords [0-1] are resolution-independent — multiplying
-        # by the actual video dims always yields the correct pixel location.
         cw = src_w
         ch = src_h
-        _layout = crop_config.get("layout_preset", "GAMING_STACKED_FIT")
-        framing_plan = {
-            "composition_mode": "split_layout",
-            "filter_version": "v12",
-            "version": 3.4,
-            "preset": _layout,
-            "main_region": [
-                crop_config["gameplay_x"] * cw,
-                crop_config["gameplay_y"] * ch,
-                crop_config["gameplay_w"] * cw,
-                crop_config["gameplay_h"] * ch,
-            ],
-            "secondary_region": [
-                crop_config["facecam_x"] * cw,
-                crop_config["facecam_y"] * ch,
-                crop_config["facecam_w"] * cw,
-                crop_config["facecam_h"] * ch,
-            ],
-            "v12": {
-                "split_fraction": crop_config.get("split_fraction", 0.65),
-                "gameplay_bg": crop_config.get("gameplay_bg", "black"),
-            },
-        }
+        zones_json = crop_config.get("zones_json")
+        if zones_json:
+            # Multi-zone path: ordered zones list stored as JSON
+            import json as _json
+            zones = _json.loads(zones_json) if isinstance(zones_json, str) else zones_json
+            framing_plan = {
+                "composition_mode": "multi_zone",
+                "version": 3.5,
+                "zones": zones,
+            }
+        elif crop_config.get("gameplay_x") is not None and crop_config.get("facecam_x") is not None:
+            # Legacy 2-zone path (gameplay + facecam columns)
+            _layout = crop_config.get("layout_preset", "GAMING_STACKED_FIT")
+            framing_plan = {
+                "composition_mode": "split_layout",
+                "filter_version": "v12",
+                "version": 3.4,
+                "preset": _layout,
+                "main_region": [
+                    crop_config["gameplay_x"] * cw,
+                    crop_config["gameplay_y"] * ch,
+                    crop_config["gameplay_w"] * cw,
+                    crop_config["gameplay_h"] * ch,
+                ],
+                "secondary_region": [
+                    crop_config["facecam_x"] * cw,
+                    crop_config["facecam_y"] * ch,
+                    crop_config["facecam_w"] * cw,
+                    crop_config["facecam_h"] * ch,
+                ],
+                "v12": {
+                    "split_fraction": crop_config.get("split_fraction", 0.65),
+                    "gameplay_bg": crop_config.get("gameplay_bg", "black"),
+                },
+            }
+        else:
+            # manual mode but no zones defined yet — fall through to auto planner
+            _manual_eligible = False
 
     # ── Framing plan: reuse stored plan or generate a new one ────────────────
     if framing_plan is None:
@@ -216,13 +224,22 @@ def _render_one(
 
     # Build crop filter — use composition mode when available (v3/v3.1), else keypoints (v2/v1)
     split_layout_filter: str | None = None
-    stacked_fit_top_frac: float | None = None  # set when GAMING_STACKED_FIT for caption safe zone
+    stacked_fit_top_frac: float | None = None  # set when top panel is gameplay for caption safe zone
     plan_version = framing_plan.get("version", 1) if framing_plan else 1
     filter_ver = framing_plan.get("filter_version", "") if framing_plan else ""
     is_v12 = filter_ver == "v12"
     is_v11 = filter_ver == "v11"
     if framing_plan and (isinstance(plan_version, (int, float)) and plan_version >= 3):
         comp_mode = framing_plan.get("composition_mode", "center")
+
+        # ── Multi-zone: N ordered zones, stacked vertically ──────────────────
+        if comp_mode == "multi_zone" and framing_plan.get("zones"):
+            zones = framing_plan["zones"]
+            split_layout_filter = _compute_multi_zone_filter(zones, src_w, src_h)
+            # Caption safe zone only when the top slot is large (≥50%) — i.e. gameplay on top
+            top_frac = zones[0].get("fraction", 1.0 / len(zones))
+            if top_frac >= 0.50:
+                stacked_fit_top_frac = top_frac
         if (comp_mode == "split_layout"
                 and framing_plan.get("main_region")
                 and framing_plan.get("secondary_region")):
@@ -578,6 +595,62 @@ def _build_keypoint_expr(
         this_x = clamped[i][1]
         expr = f"if(lt(t\\,{boundary_t:.3f})\\,{this_x}\\,{expr})"
     return expr
+
+
+def _compute_multi_zone_filter(
+    zones: list[dict],
+    src_w: int,
+    src_h: int,
+) -> str:
+    """N-zone stacked layout: each zone cropped from source and scaled into its slot.
+
+    zones — ordered list (top→bottom), each with normalized coords + fraction:
+      {"x": 0.0, "y": 0.0, "w": 1.0, "h": 0.5, "fraction": 0.33, "label": "facecam"}
+
+    x/y/w/h are normalized [0–1] relative to src_w/src_h.
+    fraction controls the output slot height; fractions are re-normalized to sum to 1.
+    Each slot is FIT-scaled (no cropping) with black padding.
+    Output: TARGET_W × TARGET_H (1080×1920).
+    """
+    n = len(zones)
+    if n < 2:
+        raise ValueError(f"_compute_multi_zone_filter needs ≥2 zones, got {n}")
+
+    # Normalize fractions
+    total = sum(z.get("fraction", 1.0 / n) for z in zones)
+    fracs = [z.get("fraction", 1.0 / n) / total for z in zones]
+
+    # Compute even slot heights; last slot absorbs rounding residue
+    slot_heights: list[int] = []
+    used = 0
+    for i, frac in enumerate(fracs):
+        if i == n - 1:
+            sh = TARGET_H - used
+        else:
+            sh = int(TARGET_H * frac)
+        sh = sh - (sh % 2)  # force even
+        slot_heights.append(sh)
+        used += sh
+
+    # Denormalize source coords and clamp
+    px_zones = []
+    for z in zones:
+        x = max(0, min(int(z["x"] * src_w), src_w - 1))
+        y = max(0, min(int(z["y"] * src_h), src_h - 1))
+        w = max(1, min(int(z["w"] * src_w), src_w - x))
+        h = max(1, min(int(z["h"] * src_h), src_h - y))
+        px_zones.append((x, y, w, h))
+
+    split_part = f"[0:v]split={n}" + "".join(f"[s{i}]" for i in range(n))
+    scale_parts = [
+        f"[s{i}]crop={w}:{h}:{x}:{y},"
+        f"scale={TARGET_W}:{sh}:force_original_aspect_ratio=decrease,"
+        f"pad={TARGET_W}:{sh}:(ow-iw)/2:(oh-ih)/2:black[v{i}]"
+        for i, ((x, y, w, h), sh) in enumerate(zip(px_zones, slot_heights))
+    ]
+    vstack = "".join(f"[v{i}]" for i in range(n)) + f"vstack=inputs={n}[out]"
+
+    return ";".join([split_part] + scale_parts + [vstack])
 
 
 def _compute_split_layout_filter(

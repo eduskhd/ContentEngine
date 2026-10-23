@@ -147,14 +147,30 @@ class WorkerPool:
             if cur.rowcount:
                 logger.info("Cleaned up %d zombie job(s) from previous session", cur.rowcount)
 
-            # 2. Reset job_queue rows stuck in 'running' so they can be retried,
-            #    unless the associated jobs entry has error_category='PERMANENT'.
+            # 2. Reset job_queue rows stuck in 'running' so they can be retried.
+            #    Deduplication: if multiple entries exist for the same job_id, only reset
+            #    the most recent one (highest created_at); mark the rest 'failed' to prevent
+            #    duplicate parallel execution on the same job.
             conn.row_factory = __import__("sqlite3").Row
             zombie_rows = conn.execute(
-                "SELECT id, payload FROM job_queue WHERE status='running' AND attempts < max_attempts"
+                "SELECT id, payload, created_at FROM job_queue "
+                "WHERE status='running' AND attempts < max_attempts "
+                "ORDER BY created_at ASC"
             ).fetchall()
+
+            # Group by job_id; keep newest entry per job for retry.
+            seen_job_ids: dict = {}  # job_id -> (queue_id, created_at)
+            for zrow in zombie_rows:
+                try:
+                    job_id_ref = json.loads(zrow["payload"]).get("job_id", "")
+                except Exception:
+                    job_id_ref = ""
+                # Overwrite — since rows are ASC by created_at, last write = newest
+                seen_job_ids[job_id_ref] = zrow["id"]
+
             reset_count = 0
             perm_count = 0
+            dup_count = 0
             for zrow in zombie_rows:
                 try:
                     payload = json.loads(zrow["payload"])
@@ -165,14 +181,20 @@ class WorkerPool:
                     is_permanent = jobs_row and jobs_row["error_category"] == "PERMANENT"
                 except Exception:
                     is_permanent = False
+                    job_id_ref = ""
 
-                if is_permanent:
+                is_duplicate = seen_job_ids.get(job_id_ref) != zrow["id"]
+
+                if is_permanent or is_duplicate:
+                    reason = "Permanent error — not retrying" if is_permanent else "Duplicate queue entry — superseded by newer retry"
                     conn.execute(
-                        "UPDATE job_queue SET status='failed', "
-                        "error='Permanent error — not retrying' WHERE id=?",
-                        [zrow["id"]],
+                        "UPDATE job_queue SET status='failed', error=? WHERE id=?",
+                        [reason, zrow["id"]],
                     )
-                    perm_count += 1
+                    if is_permanent:
+                        perm_count += 1
+                    else:
+                        dup_count += 1
                 else:
                     conn.execute(
                         "UPDATE job_queue SET status='queued', worker_id=NULL WHERE id=?",
@@ -184,6 +206,8 @@ class WorkerPool:
                 logger.info("Reset %d stuck queue entry(s) back to queued", reset_count)
             if perm_count:
                 logger.info("Skipped %d permanent-error job(s) — not re-queuing", perm_count)
+            if dup_count:
+                logger.info("Discarded %d duplicate queue entry(s) for same job_id", dup_count)
 
             cur3 = conn.execute(
                 "UPDATE job_queue SET status='failed', "

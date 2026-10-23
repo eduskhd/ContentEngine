@@ -945,28 +945,35 @@ def create_creator(name: str, display_name: str = None, handle: str = None,
 
 def get_creators() -> list:
     with db() as conn:
-        rows = conn.execute("SELECT * FROM creators ORDER BY is_favorite DESC, name ASC").fetchall()
-        result = []
-        for r in rows:
-            d = dict(r)
-            stats = conn.execute("""
-                SELECT COUNT(DISTINCT v.id) as video_count,
-                       COUNT(DISTINCT cl.id) as clip_count,
-                       MAX(j.updated_at) as last_activity
+        rows = conn.execute("""
+            SELECT c.*,
+                   COALESCE(s.video_count, 0)    AS video_count,
+                   COALESCE(s.clip_count, 0)     AS clip_count,
+                   s.last_activity,
+                   COALESCE(p.processing_count, 0) AS processing_count,
+                   s.best_score
+            FROM creators c
+            LEFT JOIN (
+                SELECT v.creator_id,
+                       COUNT(DISTINCT v.id)   AS video_count,
+                       COUNT(DISTINCT cl.id)  AS clip_count,
+                       MAX(j.updated_at)      AS last_activity,
+                       MAX(ca.virality_score) AS best_score
                 FROM videos v
                 JOIN jobs j ON v.job_id = j.id
                 LEFT JOIN candidates ca ON ca.video_id = v.id
                 LEFT JOIN clips cl ON cl.candidate_id = ca.id
-                WHERE v.creator_id=?
-            """, (d["id"],)).fetchone()
-            d.update(dict(stats) if stats else {})
-            # count processing
-            d["processing_count"] = conn.execute(
-                "SELECT COUNT(*) FROM jobs WHERE creator_id=? AND status NOT IN ('COMPLETED','FAILED')",
-                (d["id"],)
-            ).fetchone()[0]
-            result.append(d)
-        return result
+                GROUP BY v.creator_id
+            ) s ON s.creator_id = c.id
+            LEFT JOIN (
+                SELECT creator_id, COUNT(*) AS processing_count
+                FROM jobs
+                WHERE status NOT IN ('COMPLETED','FAILED')
+                GROUP BY creator_id
+            ) p ON p.creator_id = c.id
+            ORDER BY c.is_favorite DESC, c.name ASC
+        """).fetchall()
+        return [dict(r) for r in rows]
 
 
 def get_creator(creator_id: str) -> dict | None:
@@ -1099,7 +1106,7 @@ def get_all_videos(creator_id: str = None, status: str = None, search: str = Non
                    limit: int = 50, offset: int = 0,
                    virality_min: float = None, virality_max: float = None,
                    date_from: str = None, date_to: str = None,
-                   collection_id: str = None) -> list:
+                   collection_id: str = None, pub_status: str = None) -> list:
     conditions = []
     params = []
     joins = ""
@@ -1122,6 +1129,14 @@ def get_all_videos(creator_id: str = None, status: str = None, search: str = Non
     if collection_id:
         joins = "JOIN collection_items ci ON ci.item_id = v.id AND ci.item_type='video' AND ci.collection_id=?"
         params.insert(0, collection_id)
+    if pub_status:
+        conditions.append("""EXISTS (
+            SELECT 1 FROM candidates ca2
+            JOIN clips cl2 ON cl2.candidate_id = ca2.id
+            JOIN publications pub2 ON pub2.clip_id = cl2.id
+            WHERE ca2.video_id = v.id AND pub2.status = ?
+        )""")
+        params.append(pub_status)
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     order = {
         "newest": "j.created_at DESC",
@@ -1132,6 +1147,8 @@ def get_all_videos(creator_id: str = None, status: str = None, search: str = Non
         "last_clipped": "MAX(cl.created_at) DESC NULLS LAST",
         "duration": "v.duration_s DESC NULLS LAST",
         "creator": "cr.name ASC NULLS LAST",
+        "name_asc": "COALESCE(v.source_title, j.creator) ASC NULLS LAST",
+        "name_desc": "COALESCE(v.source_title, j.creator) DESC NULLS LAST",
     }.get(sort, "j.created_at DESC")
 
     # For HAVING filters (aggregates)
@@ -1144,7 +1161,11 @@ def get_all_videos(creator_id: str = None, status: str = None, search: str = Non
 
     with db() as conn:
         rows = conn.execute(f"""
-            SELECT v.*, j.id as job_id, j.status as job_status, j.creator as job_creator,
+            SELECT v.id, v.path, v.duration_s, v.fps, v.width, v.height, v.size_bytes,
+                   v.rights_verified, v.audio_path, v.created_at, v.creator_slug,
+                   v.video_slug, v.source_url, v.source_platform, v.source_title,
+                   v.creator_id, v.thumbnail_path, v.proxy_path,
+                   j.id as job_id, j.status as job_status, j.creator as job_creator,
                    j.creator_id, j.created_at as job_created_at, j.error as job_error,
                    cr.name as creator_name, cr.avatar_color,
                    COUNT(DISTINCT cl.id) as clip_count,
@@ -1158,10 +1179,44 @@ def get_all_videos(creator_id: str = None, status: str = None, search: str = Non
             {where}
             GROUP BY v.id
             {having}
-            ORDER BY {order}
+            ORDER BY {order}, v.id ASC
             LIMIT ? OFFSET ?
         """, params + [limit, offset]).fetchall()
         return [dict(r) for r in rows]
+
+
+def count_videos(creator_id: str = None, status: str = None, search: str = None,
+                 platform: str = None, pub_status: str = None) -> int:
+    conditions = []
+    params = []
+    if creator_id == "__unassigned__":
+        conditions.append("v.creator_id IS NULL")
+    elif creator_id:
+        conditions.append("v.creator_id=?"); params.append(creator_id)
+    if status:
+        conditions.append("j.status=?"); params.append(status.upper())
+    if platform:
+        conditions.append("v.source_platform=?"); params.append(platform)
+    if search:
+        conditions.append("(v.source_title LIKE ? OR v.creator_slug LIKE ?)")
+        params.extend([f"%{search}%", f"%{search}%"])
+    if pub_status:
+        conditions.append("""EXISTS (
+            SELECT 1 FROM candidates ca2
+            JOIN clips cl2 ON cl2.candidate_id = ca2.id
+            JOIN publications pub2 ON pub2.clip_id = cl2.id
+            WHERE ca2.video_id = v.id AND pub2.status = ?
+        )""")
+        params.append(pub_status)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    with db() as conn:
+        row = conn.execute(f"""
+            SELECT COUNT(DISTINCT v.id) as n
+            FROM videos v
+            JOIN jobs j ON v.job_id = j.id
+            {where}
+        """, params).fetchone()
+    return row["n"] if row else 0
 
 
 def get_bulk_delete_impact(video_ids: list) -> dict:
@@ -2560,16 +2615,31 @@ def latest_reframe_variant(clip_id: str) -> dict | None:
 def create_crop_config(job_id, video_type, crop_mode, src_w, src_h,
                        gameplay_rect=None, facecam_rect=None,
                        split_fraction=0.65, validation_status='pending',
-                       layout_preset='GAMING_STACKED_FIT', gameplay_bg='black'):
-    """Create or replace crop config for a job. gameplay_rect/facecam_rect = [x,y,w,h] normalized."""
-    import uuid as _uuid, datetime as _dt
+                       layout_preset='GAMING_STACKED_FIT', gameplay_bg='black',
+                       zones=None):
+    """Create or replace crop config for a job.
+
+    New path: pass zones=[{label, x, y, w, h, fraction}, ...] (normalized coords).
+    Legacy path: pass gameplay_rect + facecam_rect = [x,y,w,h] normalized.
+    """
+    import uuid as _uuid, datetime as _dt, json as _json
     cfg_id = str(_uuid.uuid4())
     now = _dt.datetime.utcnow().isoformat()
     gx = gy = gw = gh = fx = fy = fw = fh = None
-    if gameplay_rect:
-        gx, gy, gw, gh = gameplay_rect
-    if facecam_rect:
-        fx, fy, fw, fh = facecam_rect
+    zones_json = None
+
+    if zones and len(zones) >= 2:
+        zones_json = _json.dumps(zones)
+        # Also populate legacy columns from first two zones for backward compat display
+        z0, z1 = zones[0], zones[1]
+        gx, gy, gw, gh = z0["x"], z0["y"], z0["w"], z0["h"]
+        fx, fy, fw, fh = z1["x"], z1["y"], z1["w"], z1["h"]
+    else:
+        if gameplay_rect:
+            gx, gy, gw, gh = gameplay_rect
+        if facecam_rect:
+            fx, fy, fw, fh = facecam_rect
+
     with db() as conn:
         conn.execute("DELETE FROM crop_configs WHERE job_id=?", (job_id,))
         conn.execute("""
@@ -2578,12 +2648,12 @@ def create_crop_config(job_id, video_type, crop_mode, src_w, src_h,
              gameplay_x, gameplay_y, gameplay_w, gameplay_h,
              facecam_x, facecam_y, facecam_w, facecam_h,
              split_fraction, validation_status, created_at, updated_at,
-             layout_preset, gameplay_bg)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             layout_preset, gameplay_bg, zones_json)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (cfg_id, job_id, video_type, crop_mode, src_w, src_h,
               gx, gy, gw, gh, fx, fy, fw, fh,
               split_fraction, validation_status, now, now,
-              layout_preset, gameplay_bg))
+              layout_preset, gameplay_bg, zones_json))
     return cfg_id
 
 
