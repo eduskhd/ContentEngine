@@ -81,6 +81,14 @@ class EngineConfig:
     # Crop debug mode — saves debug frames + coordinate trace to experiments/crop_accuracy_debug/debug_frames/
     # NEVER enable in production. Each render job creates ~10 files.
     crop_debug_mode: bool = False
+    # ── Concat experimental engine ────────────────────────────────────────────
+    # DISABLED by default. Enable only after verifying Concat installation and
+    # Smart App Control compatibility. FFmpeg is always used when this is False.
+    concat_enabled: bool = False
+    concat_exe_path: str = r"C:\Users\edupo\AppData\Local\Programs\Concat\concat.exe"
+    concat_projects_dir: str = r"C:\Users\edupo\Desktop\ContentEngine\output\concat_projects"
+    concat_mcp_timeout_s: float = 120.0   # per-operation MCP timeout
+    concat_export_timeout_s: float = 600.0  # export can take up to 10 min
 
 
 CONFIG = EngineConfig()

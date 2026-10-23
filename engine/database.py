@@ -2281,6 +2281,62 @@ def get_clip(clip_id: str) -> dict | None:
     return dict(row) if row else None
 
 
+# ── Clip variant helpers (Phase 3 — Concat integration) ──────────────────────
+
+def create_clip_variant(
+    clip_id: str,
+    render_engine: str,
+    output_path: str,
+    engine_version: str = "",
+    edit_method: str = "",
+    project_path: str = "",
+    edit_plan_json: str = "",
+    duration_s: float = 0.0,
+    width: int = 0,
+    height: int = 0,
+    file_size_bytes: int = 0,
+    source_variant_id: str | None = None,
+) -> str:
+    vid = new_id()
+    ts = now()
+    with db() as conn:
+        conn.execute(
+            """INSERT INTO clip_variants
+               (id, clip_id, source_variant_id, render_engine, engine_version,
+                edit_method, project_path, output_path, edit_plan_json,
+                qa_status, render_status, duration_s, width, height,
+                file_size_bytes, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (vid, clip_id, source_variant_id, render_engine, engine_version,
+             edit_method, project_path, output_path, edit_plan_json,
+             "PENDING", "DONE", duration_s, width, height,
+             file_size_bytes, ts, ts),
+        )
+    return vid
+
+
+def get_clip_variants(clip_id: str) -> list[dict]:
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM clip_variants WHERE clip_id=? ORDER BY created_at",
+            (clip_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_clip_variant(variant_id: str, **kwargs) -> None:
+    if not kwargs:
+        return
+    ts = now()
+    kwargs["updated_at"] = ts
+    cols = ", ".join(f"{k}=?" for k in kwargs)
+    with db() as conn:
+        conn.execute(
+            f"UPDATE clip_variants SET {cols} WHERE id=?",
+            list(kwargs.values()) + [variant_id],
+        )
+
+
 # ── Clip package helpers ──────────────────────────────────────────────────────
 
 def create_package(name: str, description: str = "", creator_slug: str = "") -> str:

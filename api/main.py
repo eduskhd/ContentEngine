@@ -590,6 +590,7 @@ async def create_job_from_url(
     content_type: str = Body("auto"),
     language: str = Body("auto"),
     eval_mode: bool = Body(False),
+    render_engine: str = Body("ffmpeg"),
 ):
     """Submit a job by providing a video URL (YouTube, TikTok, Instagram, etc.)."""
     if not is_url(url):
@@ -622,6 +623,14 @@ async def create_job_from_url(
         else:
             resolved_creator_id = None
 
+    # Guard: only allow concat engine if explicitly enabled in config
+    _render_engine = "ffmpeg"
+    if render_engine == "concat":
+        from engine.config import CONFIG as _cfg
+        if _cfg.concat_enabled:
+            _render_engine = "concat"
+        # Silently fall back to ffmpeg if concat disabled — never error on unknown engine
+
     _jobs[job_id] = {
         "id": job_id,
         "status": "queued",
@@ -635,6 +644,7 @@ async def create_job_from_url(
         "video_name": video_name or "",
         "content_type": content_type or "auto",
         "language": language or "auto",
+        "render_engine": _render_engine,
         "created_at": datetime.datetime.utcnow().isoformat(),
         "result": None,
         "error": None,
@@ -650,11 +660,28 @@ async def create_job_from_url(
         resolved_creator, content_type or "auto",
         preset_id=job_id, pipeline_snapshot=snap,
     )
-    if resolved_creator_id:
-        dbmod.update_job(job_id)  # touch updated_at; creator_id set below
+    if resolved_creator_id or _render_engine != "ffmpeg":
         with dbmod.db() as conn:
-            conn.execute("UPDATE jobs SET creator_id=? WHERE id=?",
-                         [resolved_creator_id, job_id])
+            updates = {}
+            if resolved_creator_id:
+                updates["creator_id"] = resolved_creator_id
+            if _render_engine != "ffmpeg":
+                import json as _json
+                existing_meta = conn.execute(
+                    "SELECT metadata FROM jobs WHERE id=?", [job_id]
+                ).fetchone()
+                meta = {}
+                if existing_meta and existing_meta[0]:
+                    try:
+                        meta = _json.loads(existing_meta[0])
+                    except Exception:
+                        pass
+                meta["render_engine"] = _render_engine
+                updates["metadata"] = _json.dumps(meta)
+            if updates:
+                dbmod.update_job(job_id)
+                for k, v in updates.items():
+                    conn.execute(f"UPDATE jobs SET {k}=? WHERE id=?", [v, job_id])
 
     if pool is not None:
         pool.submit(job_id, url, clips, platforms.split(","), mode, resolved_creator)
@@ -5183,6 +5210,32 @@ async def debug_render_crop(body: dict = Body(...)):
         "validation_status": cc["validation_status"],
         "warnings": warnings,
     }
+
+
+# ── CONCAT ENGINE ────────────────────────────────────────────────────────────
+
+@app.get("/engines/concat/status")
+async def concat_engine_status():
+    """Returns Concat availability status for the New Job engine selector."""
+    try:
+        from integrations.concat import get_availability_status
+        return get_availability_status()
+    except Exception as exc:
+        return {
+            "enabled": False,
+            "available": False,
+            "error": str(exc),
+        }
+
+
+@app.get("/clips/{clip_id}/variants")
+async def get_clip_variants(clip_id: str):
+    """Return all render variants for a clip."""
+    clip = dbmod.get_clip(clip_id)
+    if not clip:
+        raise HTTPException(404, "Clip not found")
+    variants = dbmod.get_clip_variants(clip_id)
+    return {"clip_id": clip_id, "variants": variants, "count": len(variants)}
 
 
 # ── DASHBOARD ────────────────────────────────────────────────────────────────

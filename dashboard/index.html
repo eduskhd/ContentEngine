@@ -1170,6 +1170,20 @@ details[open] .nj-adv-toggle::before{transform:rotate(90deg)}
             <span><strong style="color:#f59e0b">Eval mode</strong> — re-run without dedup (skips duplicate check)</span>
           </label>
         </div>
+        <!-- Render Engine selector — Fase 4 Concat integration -->
+        <div class="nj-field" style="margin-top:12px;padding:10px;background:#0a1525;border:1px solid #1e3050;border-radius:8px">
+          <label class="nj-label" style="margin-bottom:6px">Render Engine</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#7daad4">
+              <input type="radio" name="nj-engine" value="ffmpeg" checked id="nj-engine-ffmpeg">
+              <span><strong style="color:#4ade80">FFmpeg</strong> <span style="color:#666;font-size:11px">(default)</span></span>
+            </label>
+            <label id="nj-engine-concat-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#7daad4">
+              <input type="radio" name="nj-engine" value="concat" id="nj-engine-concat" disabled>
+              <span id="nj-engine-concat-text"><strong style="color:#f59e0b">Concat</strong> <span id="nj-concat-status" style="font-size:11px;color:#666">checking...</span></span>
+            </label>
+          </div>
+        </div>
       </div>
     </details>
 
@@ -2271,6 +2285,29 @@ let _pollIsBackground = false;
 let _sidebarRefreshedAt = 0;
 
 // â"€â"€ Tabs â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+async function _njCheckConcatStatus() {
+  try {
+    const r = await fetch(`${API}/engines/concat/status`);
+    const d = await r.json();
+    const statusEl = document.getElementById('nj-concat-status');
+    const radio = document.getElementById('nj-engine-concat');
+    if (!statusEl || !radio) return;
+    if (d.available) {
+      statusEl.textContent = `(v${d.version || '?'}) experimental`;
+      statusEl.style.color = '#f59e0b';
+      radio.disabled = false;
+    } else if (d.enabled && !d.exe_exists) {
+      statusEl.textContent = '(not installed)';
+      statusEl.style.color = '#ef4444';
+      radio.disabled = true;
+    } else {
+      statusEl.textContent = '(disabled)';
+      statusEl.style.color = '#666';
+      radio.disabled = true;
+    }
+  } catch (_) {}
+}
+
 function showTab(name, btn, _opts) {
   document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('nav > button').forEach(b => b.classList.remove('active'));
@@ -2284,6 +2321,7 @@ function showTab(name, btn, _opts) {
   }
   _currentTab = name;
   clearInterval(_refreshTimer);
+  if (name === 'upload') _njCheckConcatStatus();
   loadTab(name);
   if (['overview','jobs','library','review'].includes(name)) {
     _refreshTimer = setInterval(async () => {
@@ -6261,6 +6299,7 @@ async function njSubmit() {
           video_name: videoName || undefined,
           language: language || undefined,
           eval_mode: evalMode,
+          render_engine: document.querySelector('input[name="nj-engine"]:checked')?.value || 'ffmpeg',
           video_type: _njVideoType !== 'other' ? _njVideoType : undefined,
         }),
       });
