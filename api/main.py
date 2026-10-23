@@ -5292,10 +5292,10 @@ async def render_clip_with_concat(
     if not clip:
         raise HTTPException(404, "Clip not found")
 
-    # Resolve source video path via candidate → video join
+    # Resolve source video path + framing plan via candidate → video join
     with dbmod.db() as _conn:
         row = _conn.execute(
-            """SELECT v.path, v.width, v.height, ca.start_s, ca.end_s
+            """SELECT v.path, v.width, v.height, ca.start_s, ca.end_s, ca.framing_plan
                FROM candidates ca
                JOIN videos v ON ca.video_id = v.id
                WHERE ca.id = ?""",
@@ -5304,13 +5304,34 @@ async def render_clip_with_concat(
 
     if not row:
         raise HTTPException(400, "Cannot resolve source video for this clip")
-    src_path, src_w, src_h, start_s, end_s = row
+    src_path, src_w, src_h, start_s, end_s, framing_plan_json = row
     if not src_path or not Path(src_path).exists():
         raise HTTPException(400, f"Source video not found on disk: {src_path}")
 
     duration_s = float(end_s or 0) - float(start_s or 0)
     if duration_s <= 0:
         raise HTTPException(400, "Invalid clip duration")
+
+    # Resolve x_offset and keypoints from stored framing plan
+    _src_w_val = int(src_w or 1920)
+    _src_h_val = int(src_h or 1080)
+    from engine.renderers.render_clip import _compute_crop_filter as _ccf
+    import json as _json
+    _x_offset = None
+    _keypoints = []
+    if framing_plan_json:
+        try:
+            fp = _json.loads(framing_plan_json)
+            _x_offset = fp.get("x_offset")
+            _keypoints = fp.get("keypoints") or []
+        except Exception:
+            pass
+    if _x_offset is None:
+        # Compute center crop x_offset as fallback
+        _canvas_w_tmp = clip.get("width") or 1080
+        _canvas_h_tmp = clip.get("height") or 1920
+        _crop_w = int(_src_h_val * _canvas_w_tmp / _canvas_h_tmp)
+        _x_offset = (_src_w_val - _crop_w) // 2
 
     # Create a pending clip_variants row
     out_dir = Path(_cfg.output_dir) / "concat_variants"
@@ -5333,12 +5354,14 @@ async def render_clip_with_concat(
     # Kick off background render
     _start_s   = float(start_s)
     _duration  = duration_s
-    _src_w     = int(src_w or 1920)
-    _src_h     = int(src_h or 1080)
+    _src_w     = _src_w_val
+    _src_h     = _src_h_val
     _canvas_w  = clip.get("width") or 1080
     _canvas_h  = clip.get("height") or 1920
     _fps       = clip.get("fps") or 30
     _src_path  = str(src_path)
+    _x_off     = _x_offset
+    _kp        = _keypoints
 
     def _do_render():
         import tempfile as _tf, subprocess as _sp, os as _os
@@ -5370,12 +5393,13 @@ async def render_clip_with_concat(
                 output_path=variant_path,
                 start_s=actual_start,
                 duration_s=_duration,
-                x_offset=0,
+                x_offset=_x_off,
                 src_w=_src_w,
                 src_h=_src_h,
                 canvas_w=_canvas_w,
                 canvas_h=_canvas_h,
                 fps=30,
+                keypoints=_kp,
             )
             result = adapter.render(req)
             dbmod.update_clip_variant(

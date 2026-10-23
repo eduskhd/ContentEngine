@@ -34,24 +34,28 @@ def x_offset_to_concat_transform(
 ) -> dict:
     """Return a ``clip_transform`` dict for Concat given the pipeline x_offset.
 
-    Args:
-        x_offset: horizontal center of subject in source pixels (from framing_plan)
-        src_w, src_h: source video dimensions
-        canvas_w, canvas_h: Concat project canvas (target output resolution)
+    x_offset is the LEFT EDGE of the 9:16 crop window in source pixels
+    (same meaning as the x parameter in FFmpeg's crop=w:h:x:y filter).
 
-    Returns:
-        dict suitable for the ``arguments`` of ``clip_transform`` MCP call:
-        ``{"scale": 1.0, "offsetX": <fraction>, "offsetY": 0.0, "rotation": 0.0}``
+    frameClip("fill") centers the source by default, showing:
+      [center_x, center_x + crop_w] of the source, where
+      center_x = (src_w - crop_w) // 2
+
+    offsetX shifts the clip horizontally in canvas fractions:
+      positive = clip moves right (canvas shows more of the left side of source)
+      negative = clip moves left  (canvas shows more of the right side of source)
+
+    To show [x_offset, x_offset + crop_w] instead of the default center window:
+      shift_source_px = center_x - x_offset
+      shift_scaled_px = shift_source_px * scale
+      offsetX         = shift_scaled_px / canvas_w
     """
     scale = canvas_h / src_h
-    scaled_src_w = src_w * scale
-    default_center = scaled_src_w / 2.0
-    subject_center = x_offset * scale
-    # Shift needed in scaled pixels to center subject in canvas
-    pixel_shift = subject_center - canvas_w / 2.0 - (default_center - canvas_w / 2.0)
-    # Concat offsetX: positive = move clip right; negative = move clip left
-    # To bring subject from right-of-center to canvas center, shift clip left (negative)
-    offset_x = -pixel_shift / canvas_w
+    crop_w = int(src_h * canvas_w / canvas_h)  # source pixels that fill the canvas width
+    center_x = (src_w - crop_w) // 2           # default center-crop left edge
+    shift_source_px = center_x - x_offset       # >0 = move clip right
+    shift_scaled_px = shift_source_px * scale
+    offset_x = shift_scaled_px / canvas_w
     # Clamp to ±3 (Concat documented limit)
     offset_x = max(-3.0, min(3.0, offset_x))
     return {

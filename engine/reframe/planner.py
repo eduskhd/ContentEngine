@@ -45,7 +45,7 @@ _TARGET_H = 1920
 _MIN_SHIFT_PX = 60          # suppress micro-jitter between keypoints
 _HEAD_MARGIN = 0.20         # fraction of face height added above for head-room
 _BODY_MARGIN = 0.08         # lateral margin when centering on a body box
-_MIN_FACE_AREA_FRAC = 0.01  # minimum face area as fraction of proxy frame (filters background artifacts)
+_MIN_FACE_AREA_FRAC = 0.003  # minimum face area as fraction of proxy frame; 0.003 ≈ 26×26px at 360p — catches corner webcam faces in gaming content
 
 
 # ── v1: original static plan (YuNet) ─────────────────────────────────────────
