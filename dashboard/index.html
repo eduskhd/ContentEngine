@@ -8000,7 +8000,7 @@ function renderBatchRow(b) {
   const isActive = b.derived_status === 'active';
   const isCancelled = b.derived_status === 'cancelled';
   const hasErr = b.derived_status === 'error' || err > 0;
-  const canCancel = !isCancelled && b.derived_status !== 'done';
+  const canCancel = !isCancelled;
   return `
   <div class="card" style="padding:12px 16px">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
@@ -8078,7 +8078,7 @@ function _renderBatchDetailItems(b) {
   const isPaused = b.derived_status === 'paused';
   const isCancelled = b.derived_status === 'cancelled';
   const hasErr = b.derived_status === 'error' || err > 0;
-  const canCancel = !isCancelled && b.derived_status !== 'done';
+  const canCancel = !isCancelled;
   const summaryLine = isCancelled
     ? `${published}/${total} publicados · ${cancelled_items} cancelados`
     : `${published}/${total} publicados${err?' · '+err+' error(es)':''}${isActive?' · actualizando…':''}`;
