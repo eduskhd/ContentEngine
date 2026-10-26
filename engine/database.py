@@ -2165,6 +2165,7 @@ def claim_yt_upload_session(worker_id: str) -> dict | None:
                         JOIN upload_batch_items ubi2 ON ubi2.pub_id = s2.pub_id
                         JOIN upload_batches b2 ON b2.id = ubi2.batch_id
                         WHERE b2.created_at < ?
+                          AND b2.cancelled = 0
                           AND s2.status NOT IN ('private','public','unlisted',
                                                'needs_check','error','cancelled')
                           AND NOT (s2.error_code='QUOTA_EXCEEDED'
