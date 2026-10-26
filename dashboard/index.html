@@ -8016,7 +8016,7 @@ function renderBatchRow(b) {
       ${isActive ? `<button class="btn btn-outline btn-sm" onclick="pauseBatch('${b.id}')">Pausar</button>` : ''}
       ${isPaused ? `<button class="btn btn-primary btn-sm" onclick="resumeBatch('${b.id}')">Reanudar</button>` : ''}
       ${hasErr ? `<button class="btn btn-outline btn-sm" onclick="retryBatchErrors('${b.id}')">Reintentar errores</button>` : ''}
-      ${canCancel ? `<button class="btn btn-sm" onclick="confirmCancelBatch('${b.id}',${JSON.stringify(_esc(b.name||'Lote sin nombre'))})" style="border:1px solid #4b5563;color:#9ca3af;background:transparent;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">🗑 Eliminar</button>` : ''}
+      ${canCancel ? `<button class="btn btn-sm" onclick="confirmCancelBatch('${b.id}',${JSON.stringify(_esc(b.name||'Lote sin nombre')).replace(/"/g,'&quot;')})" style="border:1px solid #4b5563;color:#9ca3af;background:transparent;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">🗑 Eliminar</button>` : ''}
     </div>
   </div>`;
 }
@@ -8090,7 +8090,7 @@ function _renderBatchDetailItems(b) {
       ${isActive ? `<button class="btn btn-outline btn-sm" onclick="pauseBatch('${b.id}')">Pausar</button>` : ''}
       ${isPaused ? `<button class="btn btn-primary btn-sm" onclick="resumeBatch('${b.id}')">Reanudar</button>` : ''}
       ${hasErr ? `<button class="btn btn-outline btn-sm" onclick="retryBatchErrors('${b.id}')">Reintentar errores</button>` : ''}
-      ${canCancel ? `<button class="btn btn-sm" onclick="confirmCancelBatch('${b.id}',${JSON.stringify(_esc(b.name||'Lote'))})" style="border:1px solid #4b5563;color:#9ca3af;background:transparent;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">🗑 Eliminar</button>` : ''}
+      ${canCancel ? `<button class="btn btn-sm" onclick="confirmCancelBatch('${b.id}',${JSON.stringify(_esc(b.name||'Lote')).replace(/"/g,'&quot;')})" style="border:1px solid #4b5563;color:#9ca3af;background:transparent;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">🗑 Eliminar</button>` : ''}
     </div>
     <div>${items}</div>
   </div>`;
