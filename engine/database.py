@@ -2042,7 +2042,7 @@ _YT_SESSION_ALLOWED_COLS = {
     "remote_privacy_status", "bytes_sent", "file_size", "file_path", "file_hash",
     "attempts", "last_attempt_at", "next_attempt_at", "error_message", "error_code",
     "locked_at", "locked_by", "updated_at", "series_id", "series_part",
-    "privacy_status", "description", "tags",
+    "privacy_status", "description", "tags", "finished_at",
 }
 
 
@@ -2168,8 +2168,7 @@ def claim_yt_upload_session(worker_id: str) -> dict | None:
                           AND b2.cancelled = 0
                           AND s2.status NOT IN ('private','public','unlisted',
                                                'needs_check','error','cancelled')
-                          AND NOT (s2.error_code='QUOTA_EXCEEDED'
-                                   AND s2.next_attempt_at IS NOT NULL
+                          AND NOT (s2.next_attempt_at IS NOT NULL
                                    AND s2.next_attempt_at > datetime('now'))
                           AND (
                             s2.series_id IS NULL
@@ -2245,7 +2244,9 @@ def list_stale_yt_sessions() -> list[dict]:
     with db() as conn:
         rows = conn.execute("""
             SELECT * FROM yt_upload_sessions
-            WHERE status IN ('uploading', 'processing') AND locked_at < ?
+            WHERE status IN ('uploading', 'processing', 'pending')
+              AND locked_at IS NOT NULL
+              AND locked_at < ?
         """, (threshold_iso,)).fetchall()
     return [dict(r) for r in rows]
 
