@@ -1,12 +1,13 @@
 """Convert Content Engine framing data → Concat crop + transform parameters.
 
-Content Engine stores framing as ``x_offset`` (horizontal center of the subject
-in source pixel coordinates) from YOLOX person detection.  Concat uses a
-different model: the project canvas is already set to the target resolution
-(1080×1920) and clips are placed with ``framing="fill"``, which scales the
-landscape source to fill the portrait canvas and crops the sides symmetrically.
-The horizontal position is then adjusted via ``clip_transform.offsetX``, which
-is expressed in *frame fractions* (1.0 = one full canvas width = 1080 px).
+Content Engine stores framing as ``x_offset`` (the LEFT EDGE of the 9:16 crop
+window in source pixels — same as the x parameter in FFmpeg's crop=w:h:x:y).
+Concat uses a different model: the project canvas is already set to the target
+resolution (1080×1920) and clips are placed with ``framing="fill"``, which
+scales the landscape source to fill the portrait canvas and crops the sides
+symmetrically.  The horizontal position is then adjusted via
+``clip_transform.offsetX``, which is expressed in *frame fractions*
+(1.0 = one full canvas width = 1080 px).
 
 Derivation (for a 1920×1080 source → 1080×1920 canvas):
   - scale_factor = canvas_h / src_h = 1920 / 1080 = 1.778

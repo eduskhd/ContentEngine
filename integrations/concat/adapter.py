@@ -70,6 +70,11 @@ class ConcatRenderRequest:
     # Gaming Stacked: set crop_preset="GAMING_STACKED_FIT" to trigger FFmpeg fallback
     crop_preset: Optional[str] = None
     gaming_top_ratio: float = 0.65   # 0.50 | 0.60 | 0.65 | 0.70
+    # Gaming Stacked region data (source pixels, [x, y, w, h]).
+    # main_region = gameplay, secondary_region = webcam/facecam.
+    # When None, _render_gaming_stacked_via_ffmpeg uses the full source frame.
+    main_region: Optional[list] = None
+    secondary_region: Optional[list] = None
 
 
 @dataclass
@@ -404,20 +409,25 @@ class ConcatAdapter:
         top_ratio = req.gaming_top_ratio or 0.65
         src_w, src_h = req.src_w, req.src_h
 
-        # Build main and secondary crop regions covering the full source frame
-        # (no region subdivision — show full source in both zones)
-        main_region  = [0, 0, src_w, src_h]                          # top: full frame
-        secondary_region = [0, 0, src_w, src_h]                      # bottom: full frame
+        if req.main_region and req.secondary_region:
+            main_region = req.main_region
+            secondary_region = req.secondary_region
+        else:
+            # Full-frame fallback — region data was not provided in the request.
+            # Both panels show the complete source frame (editorial quality degraded).
+            main_region = [0, 0, src_w, src_h]
+            secondary_region = [0, 0, src_w, src_h]
 
+        # _compute_stacked_fit_filter returns a complete filter_complex graph ending in [out].
+        # Use -filter_complex + -map [out], NOT -vf (which would double-wrap the graph).
         stacked_filter = _compute_stacked_fit_filter(
             main_region, secondary_region,
             src_w, src_h,
             top_fraction=top_ratio,
             bg="blurred",
         )
-        vf = f"[0:v]{stacked_filter}[final]"
 
-        encoder, enc_opts = detect_encoder()
+        encoder, enc_opts, _tier = detect_encoder()
         enc_args = ["-c:v", encoder] + enc_opts + ["-crf", str(req.crf)]
 
         ss = str(req.start_s)
@@ -425,8 +435,8 @@ class ConcatAdapter:
         cmd = [
             CONFIG.ffmpeg_path, "-y",
             "-ss", ss, "-t", dur, "-i", req.source_path,
-            "-filter_complex", vf,
-            "-map", "[final]",
+            "-filter_complex", stacked_filter,
+            "-map", "[out]",
             "-an",
             *enc_args,
             "-r", str(req.fps),

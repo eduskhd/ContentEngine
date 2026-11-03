@@ -1,0 +1,113 @@
+[
+  {
+    "clip_id": "519cb869-8cde-401b-ac32-c2f18b732ed9",
+    "clip_idx": 1,
+    "A": {
+      "variant": "A_broken",
+      "output_path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\audits\\gaming_crop_v3\\renders\\clip_01_A_broken.mp4",
+      "main_region": "full_frame",
+      "secondary_region": "full_frame",
+      "render_s": 37.7,
+      "size_kb": 20873,
+      "engine_version": "0.2.8+ffmpeg-stacked",
+      "width": 1080,
+      "height": 1920
+    },
+    "B": {
+      "variant": "B_fixed",
+      "output_path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\audits\\gaming_crop_v3\\renders\\clip_01_B_fixed.mp4",
+      "main_region": [
+        0.0,
+        10.917038900327166,
+        352.2076958913545,
+        327.5090252707581
+      ],
+      "secondary_region": [
+        349.09086045014266,
+        0.0,
+        1570.9091395498574,
+        1080.0
+      ],
+      "gaming_top_ratio": 0.65,
+      "render_s": 33.9,
+      "size_kb": 26921,
+      "engine_version": "0.2.8+ffmpeg-stacked",
+      "width": 1080,
+      "height": 1920
+    }
+  },
+  {
+    "clip_id": "24bb4817-08fd-4782-ae41-f04281bdbff4",
+    "clip_idx": 2,
+    "A": {
+      "variant": "A_broken",
+      "output_path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\audits\\gaming_crop_v3\\renders\\clip_02_A_broken.mp4",
+      "main_region": "full_frame",
+      "secondary_region": "full_frame",
+      "render_s": 27.7,
+      "size_kb": 41899,
+      "engine_version": "0.2.8+ffmpeg-stacked",
+      "width": 1080,
+      "height": 1920
+    },
+    "B": {
+      "variant": "B_fixed",
+      "output_path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\audits\\gaming_crop_v3\\renders\\clip_02_B_fixed.mp4",
+      "main_region": [
+        0.0,
+        10.917038900327166,
+        427.013113826413,
+        355.58115604552125
+      ],
+      "secondary_region": [
+        433.2467847088361,
+        10.917038900327166,
+        1486.753215291164,
+        1054.2671242173399
+      ],
+      "gaming_top_ratio": 0.65,
+      "render_s": 26.0,
+      "size_kb": 29534,
+      "engine_version": "0.2.8+ffmpeg-stacked",
+      "width": 1080,
+      "height": 1920
+    }
+  },
+  {
+    "clip_id": "0a4b9fab-f547-464a-9a01-fa40b4cbbb70",
+    "clip_idx": 3,
+    "A": {
+      "variant": "A_broken",
+      "output_path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\audits\\gaming_crop_v3\\renders\\clip_03_A_broken.mp4",
+      "main_region": "full_frame",
+      "secondary_region": "full_frame",
+      "render_s": 30.2,
+      "size_kb": 6074,
+      "engine_version": "0.2.8+ffmpeg-stacked",
+      "width": 1080,
+      "height": 1920
+    },
+    "B": {
+      "variant": "B_fixed",
+      "output_path": "C:\\Users\\edupo\\Desktop\\ContentEngine\\audits\\gaming_crop_v3\\renders\\clip_03_B_fixed.mp4",
+      "main_region": [
+        35.84414262236028,
+        441.35744831622293,
+        289.87015476956975,
+        311.913357400722
+      ],
+      "secondary_region": [
+        336.6234592354713,
+        0.0,
+        1583.3765407645287,
+        1080.0
+      ],
+      "gaming_top_ratio": 0.65,
+      "render_s": 28.9,
+      "size_kb": 7554,
+      "engine_version": "0.2.8+ffmpeg-stacked",
+      "width": 1080,
+      "height": 1920
+    }
+  }
+]
