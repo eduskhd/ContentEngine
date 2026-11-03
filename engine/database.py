@@ -2198,17 +2198,7 @@ def claim_yt_upload_session(worker_id: str) -> dict | None:
                 if blocking_series:
                     continue
 
-            # Rule 3: 8-minute minimum channel gap between successful uploads
-            channel_id = row.get("channel_id")
-            if channel_id:
-                gap_cutoff = (datetime.utcnow() - timedelta(minutes=8)).isoformat()
-                last_done = conn.execute(
-                    "SELECT MAX(finished_at) FROM yt_upload_sessions "
-                    "WHERE channel_id=? AND finished_at IS NOT NULL",
-                    (channel_id,),
-                ).fetchone()[0]
-                if last_done and last_done > gap_cutoff:
-                    continue  # gap hasn't expired yet; worker will retry on next poll
+            # Rule 3: channel gap — disabled per user request
 
             chosen = row
             break

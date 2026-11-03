@@ -28,6 +28,14 @@ logs/
 
 # ── Environment secrets ───────────────────────────────────────────────────
 .env
+tools/credentials.json
+tools/credentials_drive.json
+tools/credentials_youtube.json
+tools/.drive_token.json
+
+# ── Experiment renders (large binaries) ──────────────────────────────────
+audits/*/evidence/renders/
+experiments/*.mp4
 
 # ── pip install artifacts ─────────────────────────────────────────────────
 =*

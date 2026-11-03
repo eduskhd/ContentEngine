@@ -75,6 +75,7 @@ class EditPlan:
             caption_words=self.caption_words if self.caption_enabled else [],
             crf=self.crf,
             codec=self.codec,
+            crop_preset=self.crop_preset,
         )
 
     # ── Constructors ─────────────────────────────────────────────────────────

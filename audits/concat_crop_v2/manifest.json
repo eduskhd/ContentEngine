@@ -1,0 +1,23 @@
+{
+  "experiment_id": "concat_crop_v2",
+  "date": "2026-11-03",
+  "description": "Concat crop & smart composition V2 — root cause investigation and two-bug fix",
+  "clips": {
+    "rubius_z": {"variants": ["A_ffmpeg", "B_broken", "C_fixed"]},
+    "thegrefg": {"variants": ["A_ffmpeg", "B_broken", "C_fixed"]},
+    "illojuan": {"variants": ["A_ffmpeg", "B_broken", "C_fixed"]},
+    "iker_unzu": {"variants": ["A_ffmpeg", "B_broken", "C_fixed"]}
+  },
+  "tests": {
+    "count": 12,
+    "passed": 8,
+    "failed": 4
+  },
+  "bugs_fixed": 2,
+  "summary": {
+    "bug1": "Hardcoded clip_id='c1' — all Phase 2b ops were no-ops",
+    "bug2": "trimClip(start) advances timeline position — fixed with moveClips",
+    "gaming_stacked": "FFmpeg fallback — Concat zone geometry not suitable for clean splits",
+    "c_renders_correct": "4/4 at 20.0s exact, 1080x1920, portrait fill, no black bars"
+  }
+}

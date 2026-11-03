@@ -67,6 +67,9 @@ class ConcatRenderRequest:
     caption_words: list = field(default_factory=list)
     crf: int = 18
     codec: str = "h264"
+    # Gaming Stacked: set crop_preset="GAMING_STACKED_FIT" to trigger FFmpeg fallback
+    crop_preset: Optional[str] = None
+    gaming_top_ratio: float = 0.65   # 0.50 | 0.60 | 0.65 | 0.70
 
 
 @dataclass
@@ -113,9 +116,17 @@ class ConcatAdapter:
             return False
 
     def render(self, req: ConcatRenderRequest) -> ConcatRenderResult:
-        """Render a clip. Raises ConcatNotAvailable/ConcatTimeout on failure."""
+        """Render a clip. Raises ConcatNotAvailable/ConcatTimeout on failure.
+
+        Gaming Stacked presets (GAMING_STACKED_FIT etc.) are handled by FFmpeg
+        because Concat's fill+crop geometry does not support clean zone splits.
+        The call is transparently delegated to the FFmpeg renderer in that case.
+        """
         if not Path(self._cli).exists():
             raise ConcatNotAvailable(f"concat-cli not found: {self._cli}")
+
+        if req.crop_preset and "GAMING_STACKED" in req.crop_preset:
+            return self._render_gaming_stacked_via_ffmpeg(req)
 
         self._projects_dir.mkdir(parents=True, exist_ok=True)
         project_name = f"clip_{uuid.uuid4().hex[:12]}"
@@ -164,20 +175,12 @@ class ConcatAdapter:
 
         logger.debug("Phase1 done: media=%s dur=%.2fs track=%s", media_id, media_dur, track_id)
 
-        # ── Phase 2: edit + export ──────────────────────────────────────────────
-        clip_id = "c1"
-
-        head_delta = req.start_s
-        if media_dur and media_dur > 0:
-            tail_excess = media_dur - req.start_s - req.duration_s
-        else:
-            tail_excess = 0.0
-
-        transform = x_offset_to_concat_transform(
-            req.x_offset, req.src_w, req.src_h, req.canvas_w, req.canvas_h
-        )
-
-        p2_reqs: list[dict] = [
+        # ── Phase 2a: add clip to get real clip_id ─────────────────────────────
+        # IMPORTANT: Do NOT hardcode clip_id.  After project.open the IdMint
+        # adopts T1-T4 (counter→4) and m1 (no change), so the first addClip
+        # mints "c5" not "c1".  We capture createdId to be safe for any future
+        # project structure change.
+        p2a_reqs = [
             {
                 "jsonrpc": "2.0", "id": 1, "method": "project.open",
                 "params": {"path": project_dir},
@@ -194,8 +197,35 @@ class ConcatAdapter:
                     },
                 },
             },
+            {
+                "jsonrpc": "2.0", "id": 3, "method": "project.save",
+                "params": {"path": project_dir},
+            },
         ]
-        next_id = 3
+        r2a = client_api.run_batch(p2a_reqs)
+        _extract_result(r2a, 1, "project.open")
+        add_result = _extract_result(r2a, 2, "edit.apply (addClip)")
+        clip_id = add_result.get("createdId") or "c5"
+        logger.debug("Phase2a done: clip_id=%s", clip_id)
+
+        # ── Phase 2b: trim + frame + transform + export ─────────────────────
+        head_delta = req.start_s
+        if media_dur and media_dur > 0:
+            tail_excess = media_dur - req.start_s - req.duration_s
+        else:
+            tail_excess = 0.0
+
+        transform = x_offset_to_concat_transform(
+            req.x_offset, req.src_w, req.src_h, req.canvas_w, req.canvas_h
+        )
+
+        p2_reqs: list[dict] = [
+            {
+                "jsonrpc": "2.0", "id": 1, "method": "project.open",
+                "params": {"path": project_dir},
+            },
+        ]
+        next_id = 2
 
         if head_delta > 0:
             p2_reqs.append({
@@ -204,6 +234,18 @@ class ConcatAdapter:
                     "path": project_dir,
                     "command": {"op": "trimClip", "clipId": clip_id,
                                 "edge": "start", "delta": head_delta, "ripple": False},
+                },
+            })
+            next_id += 1
+            # trimClip(start) moves the clip's timeline position forward by head_delta.
+            # moveClips resets the timeline position back to 0 so export starts immediately.
+            p2_reqs.append({
+                "jsonrpc": "2.0", "id": next_id, "method": "edit.apply",
+                "params": {
+                    "path": project_dir,
+                    "command": {"op": "moveClips",
+                                "moves": [{"clipId": clip_id, "trackId": track_id, "start": 0.0}],
+                                "ripple": False},
                 },
             })
             next_id += 1
@@ -348,6 +390,76 @@ class ConcatAdapter:
             file_size_bytes=size,
         )
 
+    def _render_gaming_stacked_via_ffmpeg(self, req: ConcatRenderRequest) -> "ConcatRenderResult":
+        """Render a Gaming Stacked clip via FFmpeg (Concat limitation: fill+crop zone splits).
+
+        Uses the same FFmpeg stacked filter as the main pipeline (GAMING_STACKED_FIT).
+        Returns a ConcatRenderResult so the caller is unaware of the engine switch.
+        """
+        from engine.config import CONFIG
+        from engine.renderers.render_clip import _compute_stacked_fit_filter, TARGET_W, TARGET_H
+        from engine.hw_accel import detect_encoder
+
+        t0 = time.monotonic()
+        top_ratio = req.gaming_top_ratio or 0.65
+        src_w, src_h = req.src_w, req.src_h
+
+        # Build main and secondary crop regions covering the full source frame
+        # (no region subdivision — show full source in both zones)
+        main_region  = [0, 0, src_w, src_h]                          # top: full frame
+        secondary_region = [0, 0, src_w, src_h]                      # bottom: full frame
+
+        stacked_filter = _compute_stacked_fit_filter(
+            main_region, secondary_region,
+            src_w, src_h,
+            top_fraction=top_ratio,
+            bg="blurred",
+        )
+        vf = f"[0:v]{stacked_filter}[final]"
+
+        encoder, enc_opts = detect_encoder()
+        enc_args = ["-c:v", encoder] + enc_opts + ["-crf", str(req.crf)]
+
+        ss = str(req.start_s)
+        dur = str(req.duration_s)
+        cmd = [
+            CONFIG.ffmpeg_path, "-y",
+            "-ss", ss, "-t", dur, "-i", req.source_path,
+            "-filter_complex", vf,
+            "-map", "[final]",
+            "-an",
+            *enc_args,
+            "-r", str(req.fps),
+            req.output_path,
+        ]
+        logger.debug("Gaming Stacked FFmpeg cmd: %s", " ".join(cmd))
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        if result.returncode != 0:
+            raise ConcatExportFailed(
+                f"Gaming Stacked FFmpeg render failed:\n{result.stderr[-1000:]}"
+            )
+
+        render_time = time.monotonic() - t0
+        out = Path(req.output_path)
+        if not out.exists() or out.stat().st_size == 0:
+            raise ConcatExportFailed(f"Gaming Stacked output missing: {req.output_path}")
+
+        meta = self._probe(req.output_path)
+        logger.info(
+            "Gaming Stacked (FFmpeg) render done: %s in %.1fs",
+            out.name, render_time
+        )
+        return ConcatRenderResult(
+            output_path=req.output_path,
+            project_path="",
+            engine_version=f"{CONCAT_VERSION}+ffmpeg-stacked",
+            render_time_s=render_time,
+            duration_s=meta.get("duration", req.duration_s),
+            width=meta.get("width", req.canvas_w),
+            height=meta.get("height", req.canvas_h),
+            file_size_bytes=out.stat().st_size,
+        )
+
     def _probe(self, path: str) -> dict:
         from engine.config import CONFIG
         try:
@@ -375,12 +487,13 @@ class ConcatAdapter:
 def _get_media_duration(import_result: dict, media_id: str) -> float:
     """Extract duration of the imported media item from an EditorView."""
     try:
-        bin_items = import_result.get("project", {}).get("bin", [])
-        for item in bin_items:
+        # EditorView stores media under project.media, not project.bin
+        media_items = import_result.get("project", {}).get("media", [])
+        for item in media_items:
             if item.get("id") == media_id:
                 return float(item.get("duration") or 0)
-        if bin_items:
-            return float(bin_items[-1].get("duration") or 0)
+        if media_items:
+            return float(media_items[-1].get("duration") or 0)
     except Exception:
         pass
     return 0.0

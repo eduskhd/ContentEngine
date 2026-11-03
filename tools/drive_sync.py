@@ -134,6 +134,13 @@ REPORT_FILENAMES = {
     "KNOWN_LIMITATIONS.md",
     "LICENSE_REVIEW.md",
     "RENDER_COMPARISON.md",
+    # concat crop & smart composition V2
+    "API_GEOMETRY_CALIBRATION.md",
+    "COMPOSITION_MODEL.md",
+    "GAMING_STACKED_TESTS.md",
+    "FACE_FOCUS_TESTS.md",
+    "VISUAL_QA.md",
+    "REGRESSION_RESULTS.md",
 }
 
 

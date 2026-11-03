@@ -437,96 +437,37 @@ class YTUploadWorker(threading.Thread):
 
     # ── Failure handling ──────────────────────────────────────────────────────
 
-    # Retry intervals (minutes) — configurable per error class
-    QUOTA_RETRY_MINUTES = 30       # uploadLimitExceeded: per-channel daily limit
-    TRANSIENT_RETRY_MINUTES = 5    # network/server errors
-
     def _fail(self, sid: str, pub_id: str, message: str, error_code: str,
               fatal: bool = False, retry_after_seconds: int | None = None):
         logger.error("[YTUploadWorker] session %s failed: %s (%s)", sid, message, error_code)
 
         session = db.get_yt_upload_session(sid)
-        attempts = (session or {}).get("attempts") or 0
 
-        # Quota errors are time-limited, not attempt-limited — schedule retry, stay pending
-        if error_code == "QUOTA_EXCEEDED":
-            if retry_after_seconds and retry_after_seconds > 0:
-                delay_minutes = retry_after_seconds / 60
-            else:
-                delay_minutes = self.QUOTA_RETRY_MINUTES
-            next_attempt = (
-                datetime.now(tz=timezone.utc) + timedelta(minutes=delay_minutes)
-            ).isoformat()
-            logger.info(
-                "[YTUploadWorker] session %s QUOTA_EXCEEDED — scheduled retry at %s (delay=%.1fmin)",
-                sid, next_attempt, delay_minutes,
-            )
-            db.update_yt_upload_session(
-                sid,
-                status="pending",
-                error_message=message,
-                error_code=error_code,
-                next_attempt_at=next_attempt,
-                locked_at=None,
-                locked_by=None,
-                attempts=0,   # reset so MAX_ATTEMPTS doesn't kill quota-retried sessions
-                updated_at=_now(),
-            )
-            return
-
-        if error_code == "TRANSIENT" and not fatal:
-            if retry_after_seconds and retry_after_seconds > 0:
-                delay_minutes = retry_after_seconds / 60
-            else:
-                delay_minutes = self.TRANSIENT_RETRY_MINUTES
-            next_attempt = (
-                datetime.now(tz=timezone.utc) + timedelta(minutes=delay_minutes)
-            ).isoformat()
-            logger.info(
-                "[YTUploadWorker] session %s TRANSIENT — retry in %.1fmin at %s",
-                sid, delay_minutes, next_attempt,
-            )
-            db.update_yt_upload_session(
-                sid,
-                status="pending",
-                error_message=message,
-                error_code=error_code,
-                next_attempt_at=next_attempt,
-                locked_at=None,
-                locked_by=None,
-                updated_at=_now(),
-            )
-            return
-
-        # All other errors: respect MAX_ATTEMPTS, then mark error
-        if fatal or attempts >= self.MAX_ATTEMPTS:
-            status = "error"
-        else:
-            status = "pending"
-
+        # No automatic retries — all errors land in status='error'.
+        # Use the dashboard "Reintentar errores" button to retry manually.
         db.update_yt_upload_session(
             sid,
-            status=status,
+            status="error",
             error_message=message,
             error_code=error_code,
+            next_attempt_at=None,
             locked_at=None,
             locked_by=None,
             updated_at=_now(),
         )
-        if status == "error":
-            _update_pub_status(pub_id, "failed")
-            # Cascade-pause later parts of the same series ONLY when the file itself is
-            # permanently broken.  Auth or metadata errors are user-fixable and should not
-            # leave the whole series stuck in 'paused' forever.
-            series_id = (session or {}).get("series_id")
-            series_part = (session or {}).get("series_part") or 0
-            if series_id and series_part > 0 and error_code in _CASCADE_PAUSE_ERRORS:
-                paused = db.pause_series_subsequent(series_id, series_part)
-                if paused:
-                    logger.warning(
-                        "[YTUploadWorker] paused %d subsequent series parts for series=%s after part %d failed (%s)",
-                        paused, series_id, series_part, error_code,
-                    )
+        _update_pub_status(pub_id, "failed")
+        # Cascade-pause later parts of the same series ONLY when the file itself is
+        # permanently broken.  Auth or metadata errors are user-fixable and should not
+        # leave the whole series stuck in 'paused' forever.
+        series_id = (session or {}).get("series_id")
+        series_part = (session or {}).get("series_part") or 0
+        if series_id and series_part > 0 and error_code in _CASCADE_PAUSE_ERRORS:
+            paused = db.pause_series_subsequent(series_id, series_part)
+            if paused:
+                logger.warning(
+                    "[YTUploadWorker] paused %d subsequent series parts for series=%s after part %d failed (%s)",
+                    paused, series_id, series_part, error_code,
+                )
 
 
 def _extract_retry_after(exc: Exception) -> int | None:
