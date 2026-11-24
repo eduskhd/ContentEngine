@@ -61,6 +61,9 @@ def _safe_check(check, meta):
 
 
 def _visual_qa(path: str, meta: dict) -> tuple[str, list]:
+    if not isinstance(meta, dict) or meta.get("duration") is None or meta.get("size") is None:
+        return "FAIL", ["missing_metadata"]
+
     issues = []
     if meta["duration"] < 10:
         issues.append("too_short")
