@@ -64,6 +64,13 @@ def _visual_qa(path: str, meta: dict) -> tuple[str, list]:
     if not isinstance(meta, dict) or meta.get("duration") is None or meta.get("size") is None:
         return "FAIL", ["missing_metadata"]
 
+    for key in ("duration", "size"):
+        value = meta[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return "FAIL", ["invalid_metadata"]
+        if isinstance(value, float) and (value != value or abs(value) == float("inf")):
+            return "FAIL", ["invalid_metadata"]
+
     issues = []
     if meta["duration"] < 10:
         issues.append("too_short")
